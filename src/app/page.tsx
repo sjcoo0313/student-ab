@@ -183,7 +183,9 @@ export default function StudentMobilePage() {
 
   // Only the current authenticated student's records are accessible
   const studentRecords = myStudent ? records.filter(r => r.studentId === myStudent.id) : [];
-  const activeRecord = studentRecords.find(r => r.status !== 'APPROVED') || studentRecords[0];
+  // Only records that actually require paper document submission and are not yet approved
+  const pendingDocRecords = studentRecords.filter(r => r.requiresDocument !== false && r.status !== 'APPROVED');
+  const activeRecord = pendingDocRecords[0];
   const myApprovedRecords = studentRecords.filter(r => r.status === 'APPROVED');
 
   useEffect(() => {
@@ -253,10 +255,10 @@ export default function StudentMobilePage() {
             🌸
           </div>
           <h2 className="text-2xl font-bold text-[#121212] tracking-tight">
-            결석계 등교 알리미
+            스마트 출결 관리
           </h2>
           <p className="text-xs text-[#7e7e7d] mt-1">
-            교실 서류함에서 양식을 챙기고, 제출 후 알림 핑을 보내세요.
+            3학년 2반 출결 및 결석계·체험학습 알리미
           </p>
         </div>
 
@@ -727,31 +729,44 @@ export default function StudentMobilePage() {
         {studentRecords.length > 0 && (
           <div className="family-card">
             <h4 className="text-xs font-semibold text-[#7e7e7d] uppercase tracking-wider mb-3">
-              내 결석신고서 제출 내역
+              나의 전체 출결 내역 (총 {studentRecords.length}건)
             </h4>
             <div className="space-y-2">
-              {studentRecords.map((rec) => (
-                <div key={rec.id} className="p-3 bg-[#fcfbf9] rounded-[8px] border border-[#f2f0ed] text-xs flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center space-x-1.5">
-                      <span className="font-semibold text-[#121212]">{rec.typeName}</span>
-                      <span className="text-[11px] text-[#7e7e7d]">{rec.startDate}</span>
+              {studentRecords.map((rec) => {
+                const kind = rec.kind || '결석';
+                return (
+                  <div key={rec.id} className="p-3 bg-[#fcfbf9] rounded-[8px] border border-[#f2f0ed] text-xs flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center space-x-1.5">
+                        <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                          kind === '결석' ? 'bg-[#ffe4e6] text-[#e11d48]' :
+                          kind === '지각' ? 'bg-[#fef3c7] text-[#b45309]' :
+                          kind === '조퇴' ? 'bg-[#e0f2fe] text-[#0284c7]' :
+                          'bg-[#f3e8ff] text-[#7c3aed]'
+                        }`}>
+                          {kind}
+                        </span>
+                        <span className="font-semibold text-[#121212]">{rec.typeName}</span>
+                        <span className="text-[11px] text-[#7e7e7d]">{rec.startDate}</span>
+                      </div>
+                      <p className="text-[#7e7e7d] mt-0.5">{rec.reason}</p>
                     </div>
-                    <p className="text-[#7e7e7d] mt-0.5">{rec.reason}</p>
+                    <div>
+                      {!rec.requiresDocument ? (
+                        <span className="badge-pill badge-stone text-[10px]">출결 기록</span>
+                      ) : rec.status === 'APPROVED' ? (
+                        <span className="badge-pill badge-mint text-[10px]">승인 완료</span>
+                      ) : rec.status === 'SUBMITTED' ? (
+                        <span className="badge-pill badge-sky text-[10px]">확인 대기</span>
+                      ) : rec.status === 'FORM_PICKED_UP' ? (
+                        <span className="badge-pill badge-honey text-[10px]">작성 중</span>
+                      ) : (
+                        <span className="badge-pill badge-orange text-[10px]">미수령</span>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    {rec.status === 'APPROVED' ? (
-                      <span className="badge-pill badge-mint text-[10px]">승인 완료</span>
-                    ) : rec.status === 'SUBMITTED' ? (
-                      <span className="badge-pill badge-sky text-[10px]">확인 대기</span>
-                    ) : rec.status === 'FORM_PICKED_UP' ? (
-                      <span className="badge-pill badge-honey text-[10px]">작성 중</span>
-                    ) : (
-                      <span className="badge-pill badge-orange text-[10px]">미수령</span>
-                    )}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

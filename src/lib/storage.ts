@@ -1,4 +1,4 @@
-import { Student, AbsenceRecord, SystemNotification, AttachmentProof, VerificationMethod } from '@/types';
+import { Student, AbsenceRecord, SystemNotification, AttachmentProof, VerificationMethod, AttendanceKind } from '@/types';
 
 const STORAGE_KEYS = {
   STUDENTS: 'hoengseong_students_v1',
@@ -48,7 +48,8 @@ export const INITIAL_RECORDS: AbsenceRecord[] = [
     grade: 3,
     classNum: 2,
     studentNum: 2,
-    category: '출석 인정',
+    kind: '결석',
+    category: '출석인정',
     type: 'FIELD_EXPERIENCE',
     typeName: '현장체험학습 (NEIS)',
     startDate: getFormattedDate(-2),
@@ -57,6 +58,7 @@ export const INITIAL_RECORDS: AbsenceRecord[] = [
     periodText: '전일',
     reason: '가족동반 역사문화탐방 (경주)',
     status: 'ATTENDED_NOTIFIED',
+    requiresDocument: true,
     attachments: ['체험학습 보고서(NEIS)', '일자별 배경 사진(날짜당 1장)', '보호자 동반 사진'],
     createdAt: new Date(Date.now() - 172800000).toISOString(),
     attendedAt: new Date().toISOString(),
@@ -72,7 +74,8 @@ export const INITIAL_RECORDS: AbsenceRecord[] = [
     grade: 3,
     classNum: 2,
     studentNum: 3,
-    category: '출석 인정',
+    kind: '결석',
+    category: '출석인정',
     type: 'MENSTRUAL',
     typeName: '생리 인정결석',
     startDate: getFormattedDate(-1),
@@ -81,6 +84,7 @@ export const INITIAL_RECORDS: AbsenceRecord[] = [
     periodText: '전일',
     reason: '생리통으로 인한 출석인정 결석',
     status: 'ATTENDED_NOTIFIED', // 오늘 등교 확인됨, 결석계 챙겨야 함!
+    requiresDocument: true,
     attachments: ['학부모 의견서(생리)'],
     createdAt: new Date(Date.now() - 86400000).toISOString(),
     attendedAt: new Date().toISOString(),
@@ -95,6 +99,7 @@ export const INITIAL_RECORDS: AbsenceRecord[] = [
     grade: 3,
     classNum: 2,
     studentNum: 6,
+    kind: '결석',
     category: '질병',
     type: 'ILLNESS_UNDER_3',
     typeName: '질병결석 (2일 이내)',
@@ -104,6 +109,7 @@ export const INITIAL_RECORDS: AbsenceRecord[] = [
     periodText: '전일',
     reason: '급성 위장염 및 발열',
     status: 'FORM_PICKED_UP', // 양식 챙김, 작성 중
+    requiresDocument: true,
     attachments: ['진료확인서', '학부모 의견서'],
     createdAt: new Date(Date.now() - 86400000).toISOString(),
     attendedAt: new Date(Date.now() - 3600000).toISOString(),
@@ -118,6 +124,7 @@ export const INITIAL_RECORDS: AbsenceRecord[] = [
     grade: 3,
     classNum: 2,
     studentNum: 15,
+    kind: '결석',
     category: '질병',
     type: 'ILLNESS_UNDER_3',
     typeName: '질병결석 (2일 이내)',
@@ -127,6 +134,7 @@ export const INITIAL_RECORDS: AbsenceRecord[] = [
     periodText: '전일',
     reason: '감기몸살',
     status: 'SUBMITTED', // 학생이 제출함에 넣음! (교사 확인 대기)
+    requiresDocument: true,
     attachments: ['진료확인서', '학부모 의견서'],
     createdAt: new Date(Date.now() - 172800000).toISOString(),
     attendedAt: new Date(Date.now() - 7200000).toISOString(),
@@ -142,7 +150,8 @@ export const INITIAL_RECORDS: AbsenceRecord[] = [
     grade: 3,
     classNum: 2,
     studentNum: 1,
-    category: '출석 인정',
+    kind: '결석',
+    category: '출석인정',
     type: 'MENSTRUAL',
     typeName: '생리 인정결석',
     startDate: getFormattedDate(-7),
@@ -151,6 +160,7 @@ export const INITIAL_RECORDS: AbsenceRecord[] = [
     periodText: '전일',
     reason: '생리통',
     status: 'APPROVED',
+    requiresDocument: true,
     attachments: ['학부모 의견서(생리)'],
     createdAt: new Date(Date.now() - 604800000).toISOString(),
     attendedAt: new Date(Date.now() - 518400000).toISOString(),
@@ -167,7 +177,8 @@ export const INITIAL_RECORDS: AbsenceRecord[] = [
     grade: 3,
     classNum: 2,
     studentNum: 10,
-    category: '출석 인정',
+    kind: '결석',
+    category: '출석인정',
     type: 'OFFICIAL_FAMILY',
     typeName: '경조사 인정결석',
     startDate: getFormattedDate(-10),
@@ -176,6 +187,7 @@ export const INITIAL_RECORDS: AbsenceRecord[] = [
     periodText: '전일',
     reason: '조부상',
     status: 'APPROVED',
+    requiresDocument: true,
     attachments: ['사망진단서'],
     createdAt: new Date(Date.now() - 864000000).toISOString(),
     attendedAt: new Date(Date.now() - 691200000).toISOString(),
@@ -184,7 +196,73 @@ export const INITIAL_RECORDS: AbsenceRecord[] = [
     approvedAt: new Date(Date.now() - 680000000).toISOString(),
     verificationMethod: '학부모 연락',
     remindCount: 0,
-  }
+  },
+  {
+    id: 'rec-6',
+    studentId: 'std-30205',
+    studentName: '김하은',
+    grade: 3,
+    classNum: 2,
+    studentNum: 5,
+    kind: '지각',
+    category: '질병',
+    type: 'STANDARD_RECORD',
+    typeName: '질병 지각',
+    startDate: getFormattedDate(0),
+    endDate: getFormattedDate(0),
+    daysCount: 1,
+    periodText: '1교시 지각',
+    reason: '이비인후과 병원 진료 후 등교',
+    status: 'RECORDED',
+    requiresDocument: false,
+    attachments: [],
+    createdAt: new Date().toISOString(),
+    remindCount: 0,
+  },
+  {
+    id: 'rec-7',
+    studentId: 'std-30207',
+    studentName: '박지우',
+    grade: 3,
+    classNum: 2,
+    studentNum: 7,
+    kind: '조퇴',
+    category: '기타',
+    type: 'STANDARD_RECORD',
+    typeName: '기타 조퇴',
+    startDate: getFormattedDate(-1),
+    endDate: getFormattedDate(-1),
+    daysCount: 1,
+    periodText: '5교시 이후 조퇴',
+    reason: '가정 사정 (가족 행사)',
+    status: 'RECORDED',
+    requiresDocument: false,
+    attachments: [],
+    createdAt: new Date(Date.now() - 86400000).toISOString(),
+    remindCount: 0,
+  },
+  {
+    id: 'rec-8',
+    studentId: 'std-30208',
+    studentName: '배서영',
+    grade: 3,
+    classNum: 2,
+    studentNum: 8,
+    kind: '결과',
+    category: '미인정',
+    type: 'STANDARD_RECORD',
+    typeName: '미인정 결과',
+    startDate: getFormattedDate(-3),
+    endDate: getFormattedDate(-3),
+    daysCount: 1,
+    periodText: '6교시 결과',
+    reason: '무단 불참',
+    status: 'RECORDED',
+    requiresDocument: false,
+    attachments: [],
+    createdAt: new Date(Date.now() - 259200000).toISOString(),
+    remindCount: 0,
+  },
 ];
 
 let syncChannel: BroadcastChannel | null = null;
@@ -400,6 +478,18 @@ export function getAbsenceRecords(): AbsenceRecord[] {
     let changed = false;
     const migrated = list.map(r => {
       let updated = { ...r };
+      if (!updated.kind) {
+        changed = true;
+        updated.kind = '결석';
+      }
+      if (updated.requiresDocument === undefined) {
+        changed = true;
+        updated.requiresDocument = updated.status !== 'RECORDED';
+      }
+      if (updated.category === '출석 인정') {
+        changed = true;
+        updated.category = '출석인정';
+      }
       if (updated.grade === 2 && updated.classNum === 3) {
         changed = true;
         updated.studentId = updated.studentId.replace('std-203', 'std-302');
@@ -488,9 +578,10 @@ export function markNotificationsAsRead() {
   saveNotifications(updated);
 }
 
-// 1. 교사가 결석 등록
+// 1. 교사가 출결/결석 등록
 export function createAbsenceRecord(data: {
   student: Student;
+  kind?: AttendanceKind;
   category: AbsenceRecord['category'];
   type: AbsenceRecord['type'];
   typeName: string;
@@ -499,9 +590,14 @@ export function createAbsenceRecord(data: {
   daysCount: number;
   periodText?: string;
   reason: string;
+  requiresDocument?: boolean;
   memo?: string;
 }): AbsenceRecord {
   const records = getAbsenceRecords();
+  const requiresDoc = data.requiresDocument !== undefined 
+    ? data.requiresDocument 
+    : (data.kind === '결석' && data.category !== '미인정');
+
   const newRecord: AbsenceRecord = {
     id: `rec-${Date.now()}`,
     studentId: data.student.id,
@@ -509,6 +605,7 @@ export function createAbsenceRecord(data: {
     grade: data.student.grade,
     classNum: data.student.classNum,
     studentNum: data.student.studentNum,
+    kind: data.kind || '결석',
     category: data.category,
     type: data.type,
     typeName: data.typeName,
@@ -517,7 +614,8 @@ export function createAbsenceRecord(data: {
     daysCount: data.daysCount,
     periodText: data.periodText || '전일',
     reason: data.reason,
-    status: 'PENDING_ATTENDANCE', // 등교 전 대기 상태
+    requiresDocument: requiresDoc,
+    status: requiresDoc ? 'PENDING_ATTENDANCE' : 'RECORDED',
     attachments: data.type === 'MENSTRUAL' 
       ? ['학부모 의견서(생리)'] 
       : data.type === 'FIELD_EXPERIENCE'

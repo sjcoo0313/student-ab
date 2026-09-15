@@ -4,24 +4,26 @@ import { AbsenceRecord, Student } from '@/types';
 export function exportAbsenceStatisticsToExcel(
   records: AbsenceRecord[],
   students: Student[],
-  filename = '횡성여고_결석신고서_출결통계.xlsx'
+  filename = '3학년2반_스마트_출결마감_기록부.xlsx'
 ) {
   const wb = XLSX.utils.book_new();
 
-  // 1. 전체 결석신고서 상세 목록 시트
+  // 1. 전체 출결마감 상세 내역 시트
   const recordsData = records.map((r, idx) => ({
     연번: idx + 1,
     학년: r.grade,
     반: r.classNum,
     번호: r.studentNum,
     이름: r.studentName,
-    결석구분: r.category,
+    출결종류: r.kind || '결석',
+    출결구분: r.category,
     세부종류: r.typeName,
     시작일: r.startDate,
     종료일: r.endDate,
-    결석일수: r.daysCount,
+    일수: r.daysCount,
     교시: r.periodText || '전일',
     사유: r.reason,
+    서류알림여부: r.requiresDocument ? '서류제출알림(필수)' : '단순기록(서류불필요)',
     진행상태:
       r.status === 'APPROVED'
         ? '최종승인완료'
@@ -31,36 +33,48 @@ export function exportAbsenceStatisticsToExcel(
         ? '양식수령(작성중)'
         : r.status === 'ATTENDED_NOTIFIED'
         ? '등교확인(미수령)'
+        : r.status === 'RECORDED'
+        ? '출결기록완료'
         : '등교전(대기)',
-    첨부서류: r.attachments.join(', ') + (r.otherAttachmentText ? ` (${r.otherAttachmentText})` : ''),
+    첨부서류: r.attachments ? r.attachments.join(', ') + (r.otherAttachmentText ? ` (${r.otherAttachmentText})` : '') : '-',
     등교확인일시: r.attendedAt ? new Date(r.attendedAt).toLocaleString('ko-KR') : '-',
     서류수령일시: r.pickedUpAt ? new Date(r.pickedUpAt).toLocaleString('ko-KR') : '-',
     제출일시: r.submittedAt ? new Date(r.submittedAt).toLocaleString('ko-KR') : '-',
     교사승인일시: r.approvedAt ? new Date(r.approvedAt).toLocaleString('ko-KR') : '-',
     확인방법: r.verificationMethod || '-',
-    리마인드횟수: r.remindCount,
+    리마인드횟수: r.remindCount || 0,
     메모: r.memo || '',
   }));
   const wsRecords = XLSX.utils.json_to_sheet(recordsData);
-  XLSX.utils.book_append_sheet(wb, wsRecords, '결석신고서_상세내역');
+  XLSX.utils.book_append_sheet(wb, wsRecords, '출결마감_상세기록');
 
-  // 2. 월별/학생별 생리결석 및 질병결석 누적 통계 시트 (NEIS 마감용)
+  // 2. 월별/학생별 출결 집계 시트 (NEIS 마감용 4종류 x 4구분)
   const currentMonth = new Date().getMonth() + 1;
   const studentStats = students.map((s, idx) => {
     const sRecords = records.filter(r => r.studentId === s.id);
+    
+    // 종류별 집계
+    const absenceCount = sRecords.filter(r => (r.kind || '결석') === '결석').length;
+    const lateCount = sRecords.filter(r => r.kind === '지각').length;
+    const earlyLeaveCount = sRecords.filter(r => r.kind === '조퇴').length;
+    const skipCount = sRecords.filter(r => r.kind === '결과').length;
+
+    // 구분별 집계
+    const illnessCount = sRecords.filter(r => r.category === '질병').length;
+    const unexcusedCount = sRecords.filter(r => r.category === '미인정').length;
+    const otherCount = sRecords.filter(r => r.category === '기타').length;
+    const approvedCount = sRecords.filter(r => r.category === '출석인정' || r.category === '출석 인정').length;
+
     const menstrualRecords = sRecords.filter(r => r.type === 'MENSTRUAL');
     const menstrualThisMonth = menstrualRecords.filter(r => {
       const m = new Date(r.startDate).getMonth() + 1;
       return m === currentMonth;
     }).length;
 
-    const illnessRecords = sRecords.filter(r => r.category === '질병');
-    const totalIllnessDays = illnessRecords.reduce((acc, cur) => acc + cur.daysCount, 0);
-
     const fieldTripRecords = sRecords.filter(r => r.type === 'FIELD_EXPERIENCE');
     const totalFieldTripDays = fieldTripRecords.reduce((acc, cur) => acc + cur.daysCount, 0);
 
-    const pendingCount = sRecords.filter(r => r.status !== 'APPROVED').length;
+    const pendingDocCount = sRecords.filter(r => r.requiresDocument && r.status !== 'APPROVED').length;
 
     return {
       연번: idx + 1,
@@ -68,20 +82,25 @@ export function exportAbsenceStatisticsToExcel(
       반: s.classNum,
       번호: s.studentNum,
       이름: s.name,
-      '당월_생리결석(인정)_횟수': `${menstrualThisMonth}회`,
-      '생리결석_월1회_초과여부': menstrualThisMonth > 1 ? '⚠️ 초과 (확인필요)' : '정상(1회이내)',
-      누적_생리결석_총일수: menstrualRecords.reduce((acc, cur) => acc + cur.daysCount, 0),
-      누적_질병결석_총일수: totalIllnessDays,
-      '누적_현장체험학습_일수(한도 9.5일)': `${totalFieldTripDays}일`,
-      '현장체험학습_한도초과여부': totalFieldTripDays > 9.5 ? '⚠️ 9.5일 초과 (확인필요)' : '정상(9.5일 이내)',
-      총_결석_건수: sRecords.length,
-      현재_미제출_미승인_건수: pendingCount > 0 ? `⚠️ ${pendingCount}건 진행중` : '0건 (완료)',
+      '결석_총건수': absenceCount,
+      '지각_총건수': lateCount,
+      '조퇴_총건수': earlyLeaveCount,
+      '결과_총건수': skipCount,
+      '질병_합계': illnessCount,
+      '미인정_합계': unexcusedCount,
+      '기타_합계': otherCount,
+      '출석인정_합계': approvedCount,
+      '당월_생리결석_횟수': `${menstrualThisMonth}회`,
+      '생리결석_월1회_초과여부': menstrualThisMonth > 1 ? '⚠️ 초과 (확인필요)' : '정상',
+      '현장체험학습_누적일수': `${totalFieldTripDays}일`,
+      '현장체험학습_한도초과여부': totalFieldTripDays > 9.5 ? '⚠️ 9.5일 초과' : '정상(9.5일이내)',
+      '미제출_결석계_진행건수': pendingDocCount > 0 ? `⚠️ ${pendingDocCount}건 진행중` : '0건 (완료)',
       학생연락처: s.phone || '',
       학부모연락처: s.parentPhone || '',
     };
   });
   const wsStats = XLSX.utils.json_to_sheet(studentStats);
-  XLSX.utils.book_append_sheet(wb, wsStats, '학생별_누적_출결현황');
+  XLSX.utils.book_append_sheet(wb, wsStats, '학생별_출결통계_NEIS용');
 
   // 3. 파일 다운로드
   XLSX.writeFile(wb, filename);

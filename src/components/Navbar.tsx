@@ -224,10 +224,10 @@ export default function Navbar() {
                 </div>
                 <div>
                   <div className="flex items-center space-x-2">
-                    <span className="text-[11px] font-medium text-[#7e7e7d]">횡성여자고등학교</span>
+                    <span className="text-[11px] font-medium text-[#7e7e7d]">3학년 2반</span>
                   </div>
                   <h1 className="text-base font-semibold text-[#121212] tracking-tight leading-tight">
-                    스마트 결석신고서
+                    스마트 출결 관리
                   </h1>
                 </div>
               </Link>

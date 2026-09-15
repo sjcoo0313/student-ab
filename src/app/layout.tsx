@@ -3,8 +3,8 @@ import './globals.css';
 import Navbar from '@/components/Navbar';
 
 export const metadata: Metadata = {
-  title: '횡성여자고등학교 스마트 결석신고서 알리미',
-  description: '생리결석 및 질병결석 실시간 등교 알림 & 제출 추적 시스템',
+  title: '스마트 출결 관리 - 3학년 2반',
+  description: '3학년 2반 스마트 출결 관리 및 결석계·체험학습 실시간 알림 시스템',
 };
 
 export default function RootLayout({

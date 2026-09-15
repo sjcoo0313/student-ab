@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { getStudents, getAbsenceRecords, subscribeToSyncEvents } from '@/lib/storage';
 import { exportAbsenceStatisticsToExcel } from '@/lib/exportExcel';
-import { Student, AbsenceRecord } from '@/types';
+import { Student, AbsenceRecord, AttendanceKind, AttendanceCategory } from '@/types';
 import TeacherAuthGuard from '@/components/TeacherAuthGuard';
 
 export default function StatisticsPage() {
@@ -24,6 +24,18 @@ export default function StatisticsPage() {
   const [records, setRecords] = useState<AbsenceRecord[]>([]);
   const [activeTab, setActiveTab] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY'>('DAILY');
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
+
+  const getMatrixCount = (k: AttendanceKind, c: AttendanceCategory) => {
+    return records.filter(r => {
+      const matchKind = (r.kind || '결석') === k;
+      const matchCat = r.category === c || (c === '출석인정' && r.category === '출석 인정');
+      return matchKind && matchCat;
+    }).length;
+  };
+
+  const getTotalByCat = (c: AttendanceCategory) => {
+    return records.filter(r => r.category === c || (c === '출석인정' && r.category === '출석 인정')).length;
+  };
 
   const loadData = () => {
     setStudents(getStudents());
@@ -367,6 +379,86 @@ export default function StatisticsPage() {
                   <span>생리결석 월 1회 이내 정상 준수 중</span>
                 </div>
               )}
+            </div>
+
+            {/* NEIS 표준 4x4 매트릭스 표 */}
+            <div className="family-card p-4 shadow-xs">
+              <div className="mb-3">
+                <h3 className="text-sm font-bold text-[#121212] flex items-center gap-1.5">
+                  <BarChart3 className="w-4 h-4 text-[#0086fc]" />
+                  <span>나이스(NEIS) 출결마감구분 4×4 집계 매트릭스</span>
+                </h3>
+                <p className="text-[11px] text-[#7e7e7d] mt-0.5">
+                  나이스 출결 마감 입력 시 필요한 종류(결석/지각/조퇴/결과) × 구분(질병/미인정/기타/출석인정) 누적 마감 건수입니다.
+                </p>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-center text-xs border border-[#cbd5e1] rounded-[4px] overflow-hidden">
+                  <thead className="bg-[#f8fafc] text-[#334155] font-bold border-b border-[#cbd5e1]">
+                    <tr>
+                      <th className="py-2 px-3 border-r border-[#cbd5e1] text-left">종류 \ 구분</th>
+                      <th className="py-2 px-3 border-r border-[#cbd5e1] text-blue-700">질병</th>
+                      <th className="py-2 px-3 border-r border-[#cbd5e1] text-red-700">미인정</th>
+                      <th className="py-2 px-3 border-r border-[#cbd5e1] text-gray-700">기타</th>
+                      <th className="py-2 px-3 border-r border-[#cbd5e1] text-green-700">출석인정</th>
+                      <th className="py-2 px-3 bg-[#f1f5f9] font-black">계 (합계)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#cbd5e1]">
+                    {(['결석', '지각', '조퇴', '결과'] as AttendanceKind[]).map((k) => {
+                      const ill = getMatrixCount(k, '질병');
+                      const unex = getMatrixCount(k, '미인정');
+                      const oth = getMatrixCount(k, '기타');
+                      const app = getMatrixCount(k, '출석인정');
+                      const rowTotal = ill + unex + oth + app;
+                      return (
+                        <tr key={k} className="hover:bg-[#fcfbf9]">
+                          <td className="py-2 px-3 font-bold text-left border-r border-[#cbd5e1] bg-[#f8fafc]">
+                            {k}
+                          </td>
+                          <td className="py-2 px-3 border-r border-[#cbd5e1] font-semibold text-blue-700">
+                            {ill > 0 ? `${ill}건` : '-'}
+                          </td>
+                          <td className="py-2 px-3 border-r border-[#cbd5e1] font-semibold text-red-700">
+                            {unex > 0 ? `${unex}건` : '-'}
+                          </td>
+                          <td className="py-2 px-3 border-r border-[#cbd5e1] font-semibold text-gray-700">
+                            {oth > 0 ? `${oth}건` : '-'}
+                          </td>
+                          <td className="py-2 px-3 border-r border-[#cbd5e1] font-semibold text-green-700">
+                            {app > 0 ? `${app}건` : '-'}
+                          </td>
+                          <td className="py-2 px-3 font-bold bg-[#f1f5f9]">
+                            {rowTotal > 0 ? `${rowTotal}건` : '-'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {/* Grand Total Row */}
+                    <tr className="bg-[#f1f5f9] font-black border-t-2 border-[#cbd5e1]">
+                      <td className="py-2 px-3 text-left border-r border-[#cbd5e1]">
+                        합계 (총계)
+                      </td>
+                      <td className="py-2 px-3 border-r border-[#cbd5e1] text-blue-700">
+                        {getTotalByCat('질병')}건
+                      </td>
+                      <td className="py-2 px-3 border-r border-[#cbd5e1] text-red-700">
+                        {getTotalByCat('미인정')}건
+                      </td>
+                      <td className="py-2.5 px-3 border-r border-[#cbd5e1] text-gray-700">
+                        {getTotalByCat('기타')}건
+                      </td>
+                      <td className="py-2.5 px-3 border-r border-[#cbd5e1] text-green-700">
+                        {getTotalByCat('출석인정')}건
+                      </td>
+                      <td className="py-2.5 px-3 text-[#121212] bg-[#e2e8f0]">
+                        {records.length}건
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             <div className="family-card">

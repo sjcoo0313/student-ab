@@ -1,4 +1,7 @@
-export type AbsenceCategory = '출석 인정' | '질병' | '기타(사전결재)';
+export type AttendanceKind = '결석' | '지각' | '조퇴' | '결과';
+export type AttendanceCategory = '질병' | '미인정' | '기타' | '출석인정';
+
+export type AbsenceCategory = AttendanceCategory | '출석 인정' | '질병' | '기타(사전결재)';
 
 export type AbsenceType =
   | 'FIELD_EXPERIENCE' // 현장체험학습 (NEIS 출석인정, 1학기 9.5일 한도, 7일내 보고서)
@@ -8,14 +11,16 @@ export type AbsenceType =
   | 'OFFICIAL_FAMILY' // 경조사
   | 'OFFICIAL_INFECTIOUS' // 법정 전염병
   | 'OFFICIAL_OTHER' // 출석인정 기타
-  | 'OTHER_PRE_APPROVAL'; // 기타(사전결재)
+  | 'OTHER_PRE_APPROVAL' // 기타(사전결재)
+  | 'STANDARD_RECORD'; // 나이스 표준 출결마감 기록 (지각/조퇴/결과/미인정 등)
 
 export type AbsenceStatus =
   | 'PENDING_ATTENDANCE' // 결석 처리됨, 등교 확인 대기
   | 'ATTENDED_NOTIFIED' // 등교 확인됨 (학생에게 서류 챙기기 알림 발송됨, 미수령)
   | 'FORM_PICKED_UP' // 학생이 양식 수령함 (작성 중)
   | 'SUBMITTED' // 학생이 제출함에 넣고 앱에서 제출 완료 누름 (교사 확인 대기)
-  | 'APPROVED'; // 교사가 종이 서류 확인 후 최종 승인
+  | 'APPROVED' // 교사가 종이 서류 확인 후 최종 승인
+  | 'RECORDED'; // 단순 출결 기록 완료 (서류 제출 불필요 건)
 
 export type AttachmentProof =
   | '체험학습 보고서(NEIS)'
@@ -57,15 +62,17 @@ export interface AbsenceRecord {
   grade: number;
   classNum: number;
   studentNum: number;
-  category: AbsenceCategory;
+  kind?: AttendanceKind; // 결석 | 지각 | 조퇴 | 결과 (기본값: '결석')
+  category: AbsenceCategory; // 질병 | 미인정 | 기타 | 출석인정
   type: AbsenceType;
   typeName: string;
   startDate: string; // YYYY-MM-DD
   endDate: string; // YYYY-MM-DD
   daysCount: number;
-  periodText?: string; // e.g. "전일" or "1~4교시"
+  periodText?: string; // e.g. "전일", "1교시", "5~7교시"
   reason: string;
   status: AbsenceStatus;
+  requiresDocument?: boolean; // 결석계/증빙서류 제출 및 학생 알림 필요 여부 (기본: true)
   attachments: AttachmentProof[];
   otherAttachmentText?: string;
   createdAt: string; // ISO
