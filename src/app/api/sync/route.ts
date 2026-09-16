@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readServerDb, writeServerDb } from '@/lib/serverDb';
+import { readServerDb, writeServerDb, getStorageInfo } from '@/lib/serverDb';
 import { INITIAL_STUDENTS, INITIAL_RECORDS } from '@/lib/storage';
 import { AbsenceRecord } from '@/types';
 
@@ -7,8 +7,9 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const db = await readServerDb();
+  const storageInfo = getStorageInfo();
   return NextResponse.json(
-    { success: true, ...db },
+    { success: true, storageInfo, ...db },
     {
       headers: {
         'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
@@ -219,12 +220,23 @@ export async function POST(req: NextRequest) {
         break;
       }
 
+      case 'SYNC_PUSH': {
+        const patch: Record<string, unknown> = {};
+        if (Array.isArray(body.records) && body.records.length > 0) patch.records = body.records;
+        if (Array.isArray(body.students) && body.students.length > 0) patch.students = body.students;
+        if (Array.isArray(body.notifications)) patch.notifications = body.notifications;
+        if (typeof body.teacherPin === 'string') patch.teacherPin = body.teacherPin;
+        updated = await writeServerDb(patch);
+        break;
+      }
+
       default:
         break;
     }
 
+    const storageInfo = getStorageInfo();
     return NextResponse.json(
-      { success: true, ...updated },
+      { success: true, storageInfo, ...updated },
       {
         headers: {
           'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',

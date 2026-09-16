@@ -288,6 +288,11 @@ let lastServerTimestamp = 0;
 let isSyncing = false;
 let activeSyncInterval: NodeJS.Timeout | null = null;
 let activeListenerCount = 0;
+let currentServerStorageInfo: { type: string; isCloud: boolean; name: string } | null = null;
+
+export function getServerStorageInfo() {
+  return currentServerStorageInfo;
+}
 
 export async function fetchServerSync(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
@@ -298,6 +303,10 @@ export async function fetchServerSync(): Promise<boolean> {
     if (!res.ok) return false;
     const data = await res.json();
     if (!data.success) return false;
+
+    if (data.storageInfo) {
+      currentServerStorageInfo = data.storageInfo;
+    }
 
     if (data.lastUpdated && data.lastUpdated <= lastServerTimestamp) {
       return false;
@@ -310,12 +319,23 @@ export async function fetchServerSync(): Promise<boolean> {
     try { oldNotifs = JSON.parse(oldNotifsStr); } catch {}
     const newNotifs: SystemNotification[] = Array.isArray(data.notifications) ? data.notifications : [];
 
-    // Save to localStorage
-    if (Array.isArray(data.students)) {
-      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(data.students));
-    }
-    if (Array.isArray(data.records)) {
+    // Local records protection: if local has data but server is cold/empty, re-hydrate server!
+    const localRecordsStr = localStorage.getItem(STORAGE_KEYS.RECORDS);
+    let localRecords: AbsenceRecord[] = [];
+    try { localRecords = JSON.parse(localRecordsStr || '[]'); } catch {}
+
+    const serverRecords: AbsenceRecord[] = Array.isArray(data.records) ? data.records : [];
+
+    if (localRecords.length > 0 && serverRecords.length === 0) {
+      // Re-hydrate server from client
+      postServerSync('SYNC_PUSH', { records: localRecords });
+    } else if (Array.isArray(data.records)) {
       localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(data.records));
+    }
+
+    // Save students and notifications to localStorage
+    if (Array.isArray(data.students) && data.students.length > 0) {
+      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(data.students));
     }
     if (Array.isArray(data.notifications)) {
       localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(data.notifications));
@@ -349,8 +369,13 @@ export async function postServerSync(action: string, payload: Record<string, unk
     });
     if (res.ok) {
       const data = await res.json();
-      if (data.success && data.lastUpdated) {
-        lastServerTimestamp = data.lastUpdated;
+      if (data.success) {
+        if (data.storageInfo) {
+          currentServerStorageInfo = data.storageInfo;
+        }
+        if (data.lastUpdated) {
+          lastServerTimestamp = data.lastUpdated;
+        }
       }
     }
   } catch (err) {
@@ -380,19 +405,27 @@ export function subscribeToSyncEvents(callback: (type: string, payload?: unknown
     }
   };
 
+  const handleVisibilityOrFocus = () => {
+    if (document.visibilityState === 'visible') {
+      fetchServerSync();
+    }
+  };
+
   if (syncChannel) {
     syncChannel.addEventListener('message', handleChannelMsg);
   }
   window.addEventListener('hoengseong_absence_update', handleCustomEvent);
   window.addEventListener('storage', handleStorageEvent);
+  window.addEventListener('focus', handleVisibilityOrFocus);
+  document.addEventListener('visibilitychange', handleVisibilityOrFocus);
 
-  // Periodic server sync polling (2.5s) for real-time sync across different phones & PC
+  // Periodic server sync polling (2s) for real-time sync across different phones & PC
   activeListenerCount++;
   if (!activeSyncInterval) {
     fetchServerSync();
     activeSyncInterval = setInterval(() => {
       fetchServerSync();
-    }, 2500);
+    }, 2000);
   }
 
   return () => {
@@ -401,6 +434,8 @@ export function subscribeToSyncEvents(callback: (type: string, payload?: unknown
     }
     window.removeEventListener('hoengseong_absence_update', handleCustomEvent);
     window.removeEventListener('storage', handleStorageEvent);
+    window.removeEventListener('focus', handleVisibilityOrFocus);
+    document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
 
     activeListenerCount--;
     if (activeListenerCount <= 0 && activeSyncInterval) {

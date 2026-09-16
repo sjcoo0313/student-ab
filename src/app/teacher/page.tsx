@@ -36,7 +36,8 @@ import {
   triggerRemind, 
   subscribeToSyncEvents,
   checkStudentMenstrualMonthlyLimit,
-  getStudentConsecutiveIllnessDays
+  getStudentConsecutiveIllnessDays,
+  getServerStorageInfo
 } from '@/lib/storage';
 import { exportAbsenceStatisticsToExcel } from '@/lib/exportExcel';
 import { Student, AbsenceRecord, AbsenceStatus, AttendanceKind, AttendanceCategory, AbsenceType, VerificationMethod } from '@/types';
@@ -89,6 +90,9 @@ export default function TeacherDashboard() {
   const [approveMethod, setApproveMethod] = useState<VerificationMethod>('학생 사전 대면 보고');
   const [approveNote, setApproveNote] = useState('');
 
+  const [storageInfo, setStorageInfo] = useState(getServerStorageInfo());
+  const [isStorageModalOpen, setIsStorageModalOpen] = useState(false);
+
   const loadData = () => {
     const stds = getStudents();
     setStudents(stds);
@@ -97,6 +101,7 @@ export default function TeacherDashboard() {
     }
     setRecords(getAbsenceRecords());
     setReminderLog(getTodayReminderLog());
+    setStorageInfo(getServerStorageInfo());
   };
 
   useEffect(() => {
@@ -413,9 +418,22 @@ export default function TeacherDashboard() {
                 <span className="badge-pill badge-stone text-[11px]">
                   3학년 2반 교사용
                 </span>
-                <span className="badge-pill badge-mint text-[11px]">
-                  ● 실시간 서버 동기화
-                </span>
+                {storageInfo?.isCloud ? (
+                  <span className="badge-pill badge-mint text-[11px] flex items-center gap-1 font-semibold">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#00ca48] animate-pulse" />
+                    <span>☁️ {storageInfo.name}</span>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsStorageModalOpen(true)}
+                    className="badge-pill badge-honey text-[11px] flex items-center gap-1 font-semibold cursor-pointer hover:underline"
+                    title="클릭하여 Vercel 영구 실시간 동기화 설정 방법 보기"
+                  >
+                    <span>⚡ {storageInfo?.name || '임시 동기화 모드'}</span>
+                    <span className="underline ml-0.5">(설정 안내)</span>
+                  </button>
+                )}
               </div>
               <h2 className="text-xl sm:text-2xl font-bold text-[#121212] mt-1.5 tracking-tight">
                 스마트 출결 관리
@@ -1782,6 +1800,73 @@ export default function TeacherDashboard() {
                       </button>
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Cloud Storage Setup Guide Modal */}
+          {isStorageModalOpen && (
+            <div className="fixed inset-0 z-50 bg-[#121212]/40 backdrop-blur-2xs flex items-center justify-center p-4">
+              <div className="family-card max-w-lg w-full p-6 shadow-2xl animate-in fade-in space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-[#f2f0ed]">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-8 h-8 rounded-full bg-[#e6fbf1] text-[#00ca48] flex items-center justify-center font-bold">
+                      ☁️
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-base text-[#121212]">컴퓨터 ↔ 스마트폰 실시간 영구 동기화 설정</h3>
+                      <p className="text-[11px] text-[#7e7e7d]">Vercel 100% 무료 클라우드 스토리지 (Upstash Redis) 연결 안내</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setIsStorageModalOpen(false)}
+                    className="text-[#7e7e7d] hover:text-[#121212] font-semibold text-sm p-1"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="space-y-3 text-xs text-[#343433] leading-relaxed">
+                  <div className="p-3.5 bg-[#fff8e8] rounded-[10px] border border-[#ffcd6c] text-[#121212]">
+                    <p className="font-bold text-[#d48f00] mb-1">
+                      💡 왜 스마트폰과 컴퓨터가 따로 놀았을까요?
+                    </p>
+                    <p className="text-[11px] text-[#474645]">
+                      Vercel의 서버리스(Serverless) 특성상, 컴퓨터와 스마트폰이 각각 다른 임시 서버로 접속됩니다. 
+                      공유 클라우드 데이터베이스가 연결되어 있지 않으면 컴퓨터에서 입력한 출결이 스마트폰에 바로 전달되지 않습니다.
+                    </p>
+                  </div>
+
+                  <div className="p-4 bg-[#fcfbf9] rounded-[10px] border border-[#e5d5c3] space-y-2.5">
+                    <p className="font-bold text-sm text-[#121212]">
+                      🚀 3단계 해결 방법 (신용카드 불필요, 100% 무료):
+                    </p>
+                    <ol className="list-decimal list-inside space-y-2 text-xs text-[#343433] pl-1 font-medium">
+                      <li>
+                        <strong>Vercel 대시보드</strong>(<a href="https://vercel.com" target="_blank" rel="noopener noreferrer" className="text-[#0086fc] underline">vercel.com</a>)에 접속하여 배포된 프로젝트(<strong>student-ab2</strong>)를 클릭합니다.
+                      </li>
+                      <li>
+                        상단 메뉴에서 <strong>[Storage]</strong> 탭을 누르고, <strong>[Create Database]</strong>를 클릭합니다.
+                      </li>
+                      <li>
+                        목록에서 <strong>[Upstash Redis]</strong>를 선택하고 <strong>[Continue]</strong> → <strong>[Connect to Project]</strong>를 누르면 끝입니다!
+                      </li>
+                    </ol>
+                    <p className="text-[11px] text-[#0086fc] pt-1">
+                      ※ 연결 즉시 Vercel이 실시간 동기화 환경변수를 자동으로 주입하여 모든 기기가 실시간으로 100% 동기화됩니다!
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setIsStorageModalOpen(false)}
+                    className="btn-dark-pill text-xs py-2 px-4 cursor-pointer"
+                  >
+                    확인 및 닫기
+                  </button>
                 </div>
               </div>
             </div>

@@ -19,6 +19,7 @@ import {
 import { 
   getStudents, 
   getAbsenceRecords, 
+  markAttended,
   markFormPickedUp, 
   markSubmitted,
   updateAbsenceRecordStatus,
@@ -186,11 +187,29 @@ export default function StudentMobilePage() {
     }, 1200);
   };
 
-  // Only the current authenticated student's records are accessible
-  const studentRecords = myStudent ? records.filter(r => r.studentId === myStudent.id) : [];
+  // Only the current authenticated student's records are accessible (with fallback matching)
+  const studentRecords = myStudent ? records.filter(r => 
+    r.studentId === myStudent.id ||
+    (Number(r.grade) === Number(myStudent.grade) && 
+     Number(r.classNum) === Number(myStudent.classNum) && 
+     (Number(r.studentNum) === Number(myStudent.studentNum) || r.studentName?.trim().toLowerCase() === myStudent.name?.trim().toLowerCase()))
+  ) : [];
+
   // Only records that actually require paper document submission and are not yet approved
   const pendingDocRecords = studentRecords.filter(r => r.requiresDocument !== false && r.status !== 'APPROVED');
-  const activeRecord = pendingDocRecords[0];
+
+  // Prioritize active, actionable records:
+  // ATTENDED_NOTIFIED (2단계 서류 미수령) > FORM_PICKED_UP (3단계 작성중) > SUBMITTED (4단계 투입됨) > PENDING_ATTENDANCE (1단계 등교대기)
+  const activeRecord = [...pendingDocRecords].sort((a, b) => {
+    const priority = (s: string) => {
+      if (s === 'ATTENDED_NOTIFIED') return 1;
+      if (s === 'FORM_PICKED_UP') return 2;
+      if (s === 'SUBMITTED') return 3;
+      if (s === 'PENDING_ATTENDANCE') return 4;
+      return 5;
+    };
+    return priority(a.status) - priority(b.status);
+  })[0];
   const myApprovedRecords = studentRecords.filter(r => r.status === 'APPROVED');
 
   const consecutiveIllnessDays = activeRecord
@@ -488,6 +507,19 @@ export default function StudentMobilePage() {
               </p>
               다음 날 등교하여 선생님이 <strong>[등교 확인]</strong>을 누르시면, 교실 서류함에서 양식을 챙기라는 안내 카드가 활성화됩니다.
             </div>
+
+            {/* 학생 직접 등교 확인 & 서류 챙기기 시작 버튼 */}
+            <button
+              type="button"
+              onClick={() => {
+                markAttended(activeRecord.id);
+                loadData();
+              }}
+              className="btn-dark-pill w-full mt-3 py-2.5 text-xs flex items-center justify-center space-x-1.5 shadow-xs cursor-pointer"
+            >
+              <FileText className="w-4 h-4 text-[#ffcd6c]" />
+              <span>선생님, 오늘 등교했어요! (서류 챙기기 시작) 🏫</span>
+            </button>
           </div>
         ) : activeRecord.status === 'ATTENDED_NOTIFIED' ? (
           /* State 2: Attended! Storybook Ember Orange Alert Card */
