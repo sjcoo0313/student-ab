@@ -261,7 +261,7 @@ export default function ManageStudentsPage() {
           {/* Roster Table (2 Cols) */}
           <div className="lg:col-span-2 family-card">
             <h3 className="text-base font-bold text-[#121212] mb-4">
-              3학년 2반 학생 목록 ({students.length}명)
+              학급 학생 명단 ({students.length}명)
             </h3>
 
             <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
@@ -630,10 +630,10 @@ export default function ManageStudentsPage() {
             <div className="text-center border-b pb-4 border-[#f2f0ed]">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#fff8e8] text-[#d48f00] text-xs font-bold border border-[#ffcd6c]/50 mb-2">
                 <span>🌸</span>
-                <span>횡성여자고등학교 출결 알리미</span>
+                <span>스마트 출결 알리미</span>
               </div>
               <h2 className="text-2xl font-extrabold text-[#121212] tracking-tight">
-                3학년 2반 결석신고서 QR 코드
+                학급 결석신고서 접속 QR 코드
               </h2>
               <p className="text-xs text-[#7e7e7d] mt-1">
                 교실 서류함 옆 부착용 안내 포스터

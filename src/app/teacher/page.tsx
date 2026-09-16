@@ -448,7 +448,7 @@ export default function TeacherDashboard() {
             <div>
               <div className="flex items-center space-x-2">
                 <span className="badge-pill badge-stone text-[11px]">
-                  3학년 2반 교사용
+                  교사용 출결 대시보드
                 </span>
                 {storageInfo?.isCloud ? (
                   <span className="badge-pill badge-mint text-[11px] flex items-center gap-1 font-semibold">

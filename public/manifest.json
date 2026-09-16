@@ -1,0 +1,17 @@
+{
+  "name": "스마트 출결 관리 시스템",
+  "short_name": "출결관리",
+  "description": "스마트 출결 관리 및 결석계·체험학습 실시간 알림 시스템",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fbfaf9",
+  "theme_color": "#ffcd6c",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}

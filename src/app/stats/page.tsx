@@ -223,7 +223,7 @@ export default function StatisticsPage() {
                   출결 통계 & NEIS 마감
                 </span>
                 <span className="badge-pill badge-sky text-[11px]">
-                  3학년 2반
+                  학급 출결 현황
                 </span>
               </div>
               <h2 className="text-xl sm:text-2xl font-bold text-[#121212] mt-2 tracking-tight">

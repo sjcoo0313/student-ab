@@ -62,6 +62,8 @@ export default function StudentMobilePage() {
   const [studentMemo, setStudentMemo] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [isAppInstallGuideOpen, setIsAppInstallGuideOpen] = useState(false);
+
   const loadData = () => {
     try {
       const stds = getStudents();
@@ -69,6 +71,10 @@ export default function StudentMobilePage() {
       setRecords(getAbsenceRecords());
       const curr = getMyStudent();
       setMyStudent(curr);
+      if (stds.length > 0 && !curr) {
+        setAuthGrade(stds[0].grade);
+        setAuthClassNum(stds[0].classNum);
+      }
     } catch (e) {
       console.error('loadData error:', e);
     }
@@ -312,8 +318,18 @@ export default function StudentMobilePage() {
             스마트 출결 관리
           </h2>
           <p className="text-xs text-[#7e7e7d] mt-1">
-            3학년 2반 출결 및 결석계·체험학습 알리미
+            출결 및 결석계·체험학습 온라인 알리미
           </p>
+          <div className="mt-2.5">
+            <button
+              type="button"
+              onClick={() => setIsAppInstallGuideOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#f6f4ef] hover:bg-[#eae6dd] text-[#474645] text-xs font-semibold border border-[#e5d5c3] transition-colors cursor-pointer"
+            >
+              <span>📲</span>
+              <span>스마트폰 홈 화면에 앱으로 추가하기</span>
+            </button>
+          </div>
         </div>
 
         {/* If Not Authenticated: Student Identification Required */}
@@ -1092,6 +1108,79 @@ export default function StudentMobilePage() {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* App Install Guide Modal */}
+      {isAppInstallGuideOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-[#ffffff] rounded-[16px] border border-[#e5d5c3] max-w-sm w-full p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[#f2f0ed]">
+              <div className="flex items-center space-x-2">
+                <span className="text-xl">📲</span>
+                <div>
+                  <h3 className="font-bold text-sm text-[#121212]">스마트폰에 앱으로 설치하기</h3>
+                  <p className="text-[11px] text-[#7e7e7d]">홈 화면에 깔아두고 실시간 알림 받기</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAppInstallGuideOpen(false)}
+                className="text-[#7e7e7d] hover:text-[#121212] font-semibold text-sm p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs text-[#474645]">
+              {/* iPhone Guide */}
+              <div className="p-3 bg-[#fbfaf9] rounded-[10px] border border-[#f2f0ed] space-y-1.5">
+                <div className="font-bold text-[#121212] flex items-center gap-1.5">
+                  <span>🍎</span>
+                  <span>아이폰 (iPhone / Safari)</span>
+                </div>
+                <ol className="list-decimal list-inside space-y-1 text-[11px] text-[#474645] pl-1">
+                  <li><strong>Safari(사파리)</strong> 브라우저로 접속합니다.</li>
+                  <li>화면 하단 가운데 <strong>공유 버튼</strong>(네모에 위 화살표 모양 ⎋)을 누릅니다.</li>
+                  <li>메뉴를 조금 내려 <strong>[홈 화면에 추가]</strong>를 누릅니다.</li>
+                  <li>우측 상단 <strong>[추가]</strong>를 누르면 바탕화면에 앱 아이콘이 생성됩니다!</li>
+                </ol>
+              </div>
+
+              {/* Android Guide */}
+              <div className="p-3 bg-[#fbfaf9] rounded-[10px] border border-[#f2f0ed] space-y-1.5">
+                <div className="font-bold text-[#121212] flex items-center gap-1.5">
+                  <span>🤖</span>
+                  <span>갤럭시 / 안드로이드 (Chrome)</span>
+                </div>
+                <ol className="list-decimal list-inside space-y-1 text-[11px] text-[#474645] pl-1">
+                  <li><strong>Chrome(크롬)</strong> 또는 삼성 인터넷으로 접속합니다.</li>
+                  <li>화면 우측 상단 <strong>더보기 버튼(점 3개 ⋮)</strong>을 누릅니다.</li>
+                  <li><strong>[홈 화면에 추가]</strong> 또는 <strong>[앱 설치]</strong>를 누릅니다.</li>
+                  <li>바탕화면에 앱 아이콘이 설치되어 어플처럼 실행할 수 있습니다!</li>
+                </ol>
+              </div>
+
+              {/* Notification Permission Notice */}
+              <div className="p-2.5 bg-[#eff6ff] rounded-[8px] border border-[#bfdbfe] text-[#1e40af] text-[11px] space-y-1">
+                <div className="font-bold flex items-center gap-1">
+                  <span>🔔</span>
+                  <span>알림 수신 팁</span>
+                </div>
+                <p>
+                  앱 최초 접속 시 상단에 뜨는 <strong>&apos;알림 권한 요청&apos;</strong>에서 <strong>[허용]</strong>을 눌러주셔야 선생님의 9:30, 12:30 실시간 서류 알림이 팝업과 소리로 울립니다.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsAppInstallGuideOpen(false)}
+              className="w-full btn-dark-pill text-xs py-2.5 font-semibold cursor-pointer"
+            >
+              확인 완료
+            </button>
           </div>
         </div>
       )}

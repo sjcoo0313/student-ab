@@ -4,7 +4,7 @@ import { AbsenceRecord, Student } from '@/types';
 export function exportAbsenceStatisticsToExcel(
   records: AbsenceRecord[],
   students: Student[],
-  filename = '3학년2반_스마트_출결마감_기록부.xlsx'
+  filename = '학급_스마트_출결마감_기록부.xlsx'
 ) {
   const wb = XLSX.utils.book_new();
 
