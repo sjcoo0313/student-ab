@@ -860,7 +860,8 @@ export function markFormPickedUp(recordId: string): AbsenceRecord | null {
 export function markSubmitted(
   recordId: string,
   attachments: AttachmentProof[],
-  otherText?: string
+  otherText?: string,
+  memo?: string
 ): AbsenceRecord | null {
   const records = getAbsenceRecords();
   let updatedRecord: AbsenceRecord | null = null;
@@ -873,6 +874,7 @@ export function markSubmitted(
         attachments,
         otherAttachmentText: otherText,
         submittedAt: new Date().toISOString(),
+        memo: memo !== undefined ? memo : r.memo,
       };
       return updatedRecord;
     }

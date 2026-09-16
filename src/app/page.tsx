@@ -12,13 +12,16 @@ import {
   Smartphone, 
   Sparkles,
   ArrowRight,
-  GraduationCap
+  GraduationCap,
+  RotateCcw,
+  Edit3
 } from 'lucide-react';
 import { 
   getStudents, 
   getAbsenceRecords, 
   markFormPickedUp, 
   markSubmitted,
+  updateAbsenceRecordStatus,
   subscribeToSyncEvents,
   getMyStudent,
   setMyStudentId,
@@ -54,6 +57,7 @@ export default function StudentMobilePage() {
 
   const [checkedAttachments, setCheckedAttachments] = useState<AttachmentProof[]>([]);
   const [otherAttachmentText, setOtherAttachmentText] = useState('');
+  const [studentMemo, setStudentMemo] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const loadData = () => {
@@ -202,6 +206,7 @@ export default function StudentMobilePage() {
         setCheckedAttachments([]);
       }
       setOtherAttachmentText(activeRecord.otherAttachmentText || '');
+      setStudentMemo(activeRecord.memo || '');
     }
   }, [activeRecord?.id]);
 
@@ -214,7 +219,7 @@ export default function StudentMobilePage() {
     if (!activeRecord) return;
     setIsSubmitting(true);
 
-    markSubmitted(activeRecord.id, checkedAttachments, otherAttachmentText);
+    markSubmitted(activeRecord.id, checkedAttachments, otherAttachmentText, studentMemo);
 
     // Warm confetti sprinkle
     confetti({
@@ -227,6 +232,22 @@ export default function StudentMobilePage() {
     setTimeout(() => {
       setIsSubmitting(false);
     }, 500);
+  };
+
+  const handleRevertSubmission = () => {
+    if (!activeRecord) return;
+    if (confirm('제출을 취소하고 다시 작성하시겠습니까?\n동봉할 증빙서류 목록과 메모를 다시 수정하여 제출할 수 있습니다.')) {
+      updateAbsenceRecordStatus(activeRecord.id, 'FORM_PICKED_UP', '학생이 제출 취소 후 다시 작성');
+      loadData();
+    }
+  };
+
+  const handleRevertToNotified = () => {
+    if (!activeRecord) return;
+    if (confirm('서류 챙김을 취소하고 이전 안내 상태로 되돌리시겠습니까?')) {
+      updateAbsenceRecordStatus(activeRecord.id, 'ATTENDED_NOTIFIED', '학생이 서류 챙김 취소');
+      loadData();
+    }
   };
 
   const toggleAttachment = (item: AttachmentProof) => {
@@ -692,11 +713,25 @@ export default function StudentMobilePage() {
               </div>
             </div>
 
+            {/* Student optional message/memo to teacher */}
+            <div className="mt-3.5 bg-[#fcfbf9] rounded-[10px] p-3 border border-[#f2f0ed] text-xs">
+              <label className="block font-semibold text-[#121212] mb-1">
+                💬 선생님께 전달할 메모 (선택)
+              </label>
+              <input
+                type="text"
+                value={studentMemo}
+                onChange={(e) => setStudentMemo(e.target.value)}
+                placeholder="예: 진료확인서는 내일 가져갈게요, 서류 작성 완료 등"
+                className="w-full text-xs p-2.5 bg-white border border-[#e5d5c3] rounded-[6px] focus:outline-hidden focus:border-[#121212]"
+              />
+            </div>
+
             {/* Primary Action Button */}
             <button
               onClick={handleSubmitForm}
               disabled={isSubmitting}
-              className="btn-dark-pill w-full mt-4 py-3 text-sm"
+              className="btn-dark-pill w-full mt-4 py-3 text-sm cursor-pointer"
             >
               <Send className="w-4 h-4" />
               <span>
@@ -710,10 +745,23 @@ export default function StudentMobilePage() {
             <p className="text-center text-[11px] text-[#7e7e7d] mt-2">
               버튼을 누르면 선생님 대시보드에 즉시 실시간 알림음이 울립니다.
             </p>
+
+            {/* ↩ 전단계로 되돌리기 버튼 */}
+            <div className="mt-3 pt-3 border-t border-[#f2f0ed] flex justify-center">
+              <button
+                type="button"
+                onClick={handleRevertToNotified}
+                className="text-xs text-[#7e7e7d] hover:text-[#121212] hover:bg-[#f2f0ed] px-3.5 py-1.5 rounded-[6px] border border-[#e5d5c3] transition-colors cursor-pointer inline-flex items-center gap-1.5 font-medium bg-white"
+                title="서류 챙기기를 취소하고 이전 안내 화면으로 되돌아갑니다."
+              >
+                <RotateCcw className="w-3 h-3 text-[#64748b]" />
+                <span>↩ 전단계로 (서류 챙기기 전으로 되돌리기)</span>
+              </button>
+            </div>
           </div>
         ) : activeRecord.status === 'SUBMITTED' ? (
           /* State 4: Submitted -> Waiting for Teacher Inspection */
-          <div className="family-card text-center">
+          <div className="family-card text-center animate-in fade-in">
             <div className="w-12 h-12 bg-[#e6fbf1] text-[#00ca48] rounded-full flex items-center justify-center mx-auto mb-3">
               <Sparkles className="w-6 h-6" />
             </div>
@@ -732,7 +780,7 @@ export default function StudentMobilePage() {
                 : '종이 결석신고서를 교실 제출함에 넣었습니다. 담임선생님이 서류를 확인하신 후 최종 승인 처리하실 예정입니다.'}
             </p>
 
-            <div className="mt-4 bg-[#fbfaf9] rounded-[10px] p-3 border border-[#f2f0ed] text-xs space-y-1 text-left">
+            <div className="mt-4 bg-[#fbfaf9] rounded-[10px] p-3 border border-[#f2f0ed] text-xs space-y-1.5 text-left">
               <div className="flex justify-between text-[#7e7e7d]">
                 <span>제출 일시:</span>
                 <span className="font-medium text-[#121212]">{activeRecord.submittedAt ? new Date(activeRecord.submittedAt).toLocaleTimeString('ko-KR') : '방금 전'}</span>
@@ -741,6 +789,27 @@ export default function StudentMobilePage() {
                 <span>동봉한 증빙:</span>
                 <span className="font-semibold text-[#0086fc]">{activeRecord.attachments.join(', ') || '없음'}</span>
               </div>
+              {activeRecord.memo && (
+                <div className="flex justify-between text-[#7e7e7d] pt-1.5 border-t border-[#f2f0ed]">
+                  <span>전달한 메모:</span>
+                  <span className="text-[#121212] font-medium">{activeRecord.memo}</span>
+                </div>
+              )}
+            </div>
+
+            {/* ↩️ 전단계로 되돌리기 & 제출 내용 수정 버튼 */}
+            <div className="mt-4 pt-3.5 border-t border-[#f2f0ed] space-y-2">
+              <button
+                type="button"
+                onClick={handleRevertSubmission}
+                className="w-full py-2.5 px-3 bg-white hover:bg-[#fff0eb] text-[#ff3e00] border-2 border-[#ffcd6c] hover:border-[#ff3e00] rounded-[8px] text-xs font-bold transition-all flex items-center justify-center space-x-1.5 shadow-xs cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-[#ff3e00]" />
+                <span>↩ 제출 취소 및 내용 수정하기</span>
+              </button>
+              <p className="text-[11px] text-[#7e7e7d] text-center">
+                실수로 잘못 제출했거나 증빙서류를 다시 체크하려면 위 버튼을 눌러 수정하세요.
+              </p>
             </div>
           </div>
         ) : (
@@ -782,15 +851,47 @@ export default function StudentMobilePage() {
                       </div>
                       <p className="text-[#7e7e7d] mt-0.5">{rec.reason}</p>
                     </div>
-                    <div>
+                    <div className="flex items-center space-x-1.5 shrink-0">
                       {!rec.requiresDocument ? (
                         <span className="badge-pill badge-stone text-[10px]">출결 기록</span>
                       ) : rec.status === 'APPROVED' ? (
                         <span className="badge-pill badge-mint text-[10px]">승인 완료</span>
                       ) : rec.status === 'SUBMITTED' ? (
-                        <span className="badge-pill badge-sky text-[10px]">확인 대기</span>
+                        <div className="flex items-center space-x-1">
+                          <span className="badge-pill badge-sky text-[10px]">확인 대기</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm(`[${rec.typeName}] 제출을 취소하고 다시 작성하시겠습니까?`)) {
+                                updateAbsenceRecordStatus(rec.id, 'FORM_PICKED_UP', '학생이 제출 취소 후 재작성');
+                                loadData();
+                              }
+                            }}
+                            className="text-[10px] text-[#ff3e00] hover:bg-[#fff0eb] border border-[#ffcd6c] px-1.5 py-0.5 rounded font-medium cursor-pointer inline-flex items-center gap-0.5 bg-white shadow-2xs"
+                            title="제출 취소 및 내용 수정"
+                          >
+                            <RotateCcw className="w-2.5 h-2.5" />
+                            <span>수정/취소</span>
+                          </button>
+                        </div>
                       ) : rec.status === 'FORM_PICKED_UP' ? (
-                        <span className="badge-pill badge-honey text-[10px]">작성 중</span>
+                        <div className="flex items-center space-x-1">
+                          <span className="badge-pill badge-honey text-[10px]">작성 중</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm(`[${rec.typeName}] 서류 챙김을 취소하고 이전 안내로 되돌리시겠습니까?`)) {
+                                updateAbsenceRecordStatus(rec.id, 'ATTENDED_NOTIFIED', '학생이 서류 챙김 취소');
+                                loadData();
+                              }
+                            }}
+                            className="text-[10px] text-[#7e7e7d] hover:bg-[#f2f0ed] border border-[#e5d5c3] px-1.5 py-0.5 rounded font-medium cursor-pointer inline-flex items-center gap-0.5 bg-white shadow-2xs"
+                            title="서류 챙김 취소"
+                          >
+                            <RotateCcw className="w-2.5 h-2.5" />
+                            <span>취소</span>
+                          </button>
+                        </div>
                       ) : (
                         <span className="badge-pill badge-orange text-[10px]">미수령</span>
                       )}
