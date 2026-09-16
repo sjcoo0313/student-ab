@@ -292,14 +292,14 @@ export default function CalendarDatePicker({
   const is3DaysOrMore = currentDaysCount >= 3;
 
   return (
-    <div className="bg-[#ffffff] border border-[#cbd5e1] rounded-[10px] p-3 shadow-xs space-y-2.5 font-sans">
+    <div className="bg-[#ffffff] border border-[#cbd5e1] rounded-[8px] p-2 sm:p-2.5 shadow-2xs space-y-1.5 font-sans">
       {/* 1. 빠른 날짜 선택 & 초기화 바 */}
-      <div className="flex flex-wrap items-center justify-between gap-1.5 pb-2 border-b border-[#f1f5f9]">
+      <div className="flex flex-wrap items-center justify-between gap-1 pb-1.5 border-b border-[#f1f5f9]">
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => handleQuickJump('today')}
-            className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-colors cursor-pointer ${
+            className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border transition-colors cursor-pointer ${
               startDate === todayStr && endDate === todayStr
                 ? 'bg-[#1e293b] text-white border-[#1e293b]'
                 : 'bg-white text-[#475569] border-[#cbd5e1] hover:border-[#94a3b8]'
@@ -310,14 +310,14 @@ export default function CalendarDatePicker({
           <button
             type="button"
             onClick={() => handleQuickJump('yesterday')}
-            className="px-2 py-0.5 rounded text-[11px] font-medium bg-white text-[#475569] border border-[#cbd5e1] hover:border-[#94a3b8] cursor-pointer"
+            className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-white text-[#475569] border border-[#cbd5e1] hover:border-[#94a3b8] cursor-pointer"
           >
             어제
           </button>
           <button
             type="button"
             onClick={() => handleQuickJump('tomorrow')}
-            className="px-2 py-0.5 rounded text-[11px] font-medium bg-white text-[#475569] border border-[#cbd5e1] hover:border-[#94a3b8] cursor-pointer"
+            className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-white text-[#475569] border border-[#cbd5e1] hover:border-[#94a3b8] cursor-pointer"
           >
             내일
           </button>
@@ -327,44 +327,38 @@ export default function CalendarDatePicker({
           <button
             type="button"
             onClick={() => handleQuickJump('resetToOneDay')}
-            className="px-2 py-0.5 rounded text-[11px] font-medium bg-[#f8fafc] text-[#64748b] border border-[#cbd5e1] hover:bg-[#fee2e2] hover:text-[#dc2626] hover:border-[#fca5a5] transition-colors cursor-pointer flex items-center gap-1"
+            className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#f8fafc] text-[#64748b] border border-[#cbd5e1] hover:bg-[#fee2e2] hover:text-[#dc2626] hover:border-[#fca5a5] transition-colors cursor-pointer flex items-center gap-0.5"
             title="현재 시작일 기준 1일로 재설정"
           >
-            <RotateCcw className="w-3 h-3" />
-            <span>1일로 초기화</span>
+            <RotateCcw className="w-2.5 h-2.5" />
+            <span>1일 초기화</span>
           </button>
         )}
       </div>
 
-      {/* 2. 연속 클릭 안내 팁 */}
-      <div className="flex items-center gap-1.5 px-2 py-1.5 bg-[#f8fafc] rounded-[6px] border border-[#e2e8f0] text-[11px] text-[#475569]">
-        <span className="text-sm">👆</span>
-        <span>
-          달력에서 날짜를 <strong>연속 클릭</strong>하면 결석 기간이 늘어납니다.{' '}
-          <span className="text-[#dc2626] font-semibold">(토·일 주말 제외 계산 / 3일 이상 진단서 필수)</span>
-        </span>
-      </div>
-
-      {/* 3. Calendar Month Navigation Header */}
-      <div className="flex items-center justify-between px-1 pt-0.5">
+      {/* 2. Calendar Month Navigation Header */}
+      <div className="flex items-center justify-between px-0.5 pt-0.5">
         <div className="flex items-center space-x-1.5">
-          <CalendarIcon className="w-4 h-4 text-[#1e293b]" />
-          <span className="text-xs sm:text-sm font-bold text-[#0f172a]">
+          <CalendarIcon className="w-3.5 h-3.5 text-[#1e293b]" />
+          <span className="text-xs font-bold text-[#0f172a]">
             {currentYear}년 {currentMonth + 1}월
           </span>
           {is3DaysOrMore && (
-            <span className="text-[10px] bg-[#fee2e2] text-[#dc2626] font-extrabold px-1.5 py-0.5 rounded border border-[#fca5a5] flex items-center gap-1">
-              <AlertCircle className="w-3 h-3" />
+            <span className="text-[9px] bg-[#fee2e2] text-[#dc2626] font-extrabold px-1.5 py-0.2 rounded border border-[#fca5a5] flex items-center gap-0.5">
+              <AlertCircle className="w-2.5 h-2.5" />
               <span>연속 {currentDaysCount}일 (진단서 필수)</span>
             </span>
           )}
         </div>
 
         <div className="flex items-center space-x-1">
+          <span className="text-[9px] text-[#64748b] hidden sm:inline mr-1">
+            연속 클릭 시 기간 확장 (주말 제외)
+          </span>
           <button
             type="button"
             onClick={goToToday}
-            className="text-[11px] font-semibold text-[#334155] px-2 py-0.5 bg-white rounded border border-[#cbd5e1] hover:bg-[#f1f5f9] cursor-pointer"
+            className="text-[10px] font-semibold text-[#334155] px-1.5 py-0.5 bg-white rounded border border-[#cbd5e1] hover:bg-[#f1f5f9] cursor-pointer"
             title="오늘 날짜로 이동"
           >
             오늘
@@ -372,35 +366,35 @@ export default function CalendarDatePicker({
           <button
             type="button"
             onClick={goToPrevMonth}
-            className="p-1 rounded text-[#475569] hover:bg-[#f1f5f9] cursor-pointer"
+            className="p-0.5 rounded text-[#475569] hover:bg-[#f1f5f9] cursor-pointer"
             title="이전 달"
           >
-            <ChevronLeft className="w-4 h-4" />
+            <ChevronLeft className="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
             onClick={goToNextMonth}
-            className="p-1 rounded text-[#475569] hover:bg-[#f1f5f9] cursor-pointer"
+            className="p-0.5 rounded text-[#475569] hover:bg-[#f1f5f9] cursor-pointer"
             title="다음 달"
           >
-            <ChevronRight className="w-4 h-4" />
+            <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
-      {/* 4. Day of week headers */}
-      <div className="grid grid-cols-7 gap-0 text-center text-[11px] font-bold text-[#64748b] pt-0.5">
-        <div className="text-[#ef4444]">일 (제외)</div>
+      {/* 3. Day of week headers */}
+      <div className="grid grid-cols-7 gap-0 text-center text-[10px] font-bold text-[#64748b] pt-0.5">
+        <div className="text-[#ef4444]">일</div>
         <div>월</div>
         <div>화</div>
         <div>수</div>
         <div>목</div>
         <div>금</div>
-        <div className="text-[#2563eb]">토 (제외)</div>
+        <div className="text-[#2563eb]">토</div>
       </div>
 
-      {/* 5. Continuous Days Grid */}
-      <div className="grid grid-cols-7 gap-y-1 gap-x-0">
+      {/* 4. Continuous Days Grid (Compact) */}
+      <div className="grid grid-cols-7 gap-y-0.5 gap-x-0">
         {daysGrid.map((item, idx) => {
           const inRange = isInRange(item.dateStr);
           const isStart = isSelectedStart(item.dateStr);
@@ -438,13 +432,13 @@ export default function CalendarDatePicker({
               <button
                 type="button"
                 onClick={() => handleDateClick(item.dateStr)}
-                className={`relative z-10 w-8 h-8 rounded-[6px] flex flex-col items-center justify-center text-xs font-semibold transition-all cursor-pointer ${
+                className={`relative z-10 w-7 h-7 sm:w-7.5 sm:h-7.5 rounded-[4px] flex flex-col items-center justify-center text-[11px] font-semibold transition-all cursor-pointer ${
                   isStart || isEnd
                     ? isWeekend
-                      ? 'bg-[#64748b] text-white shadow-xs font-bold'
+                      ? 'bg-[#64748b] text-white shadow-2xs font-bold'
                       : is3DaysOrMore
-                      ? 'bg-[#dc2626] text-white shadow-xs font-bold'
-                      : 'bg-[#1e293b] text-white shadow-xs font-bold'
+                      ? 'bg-[#dc2626] text-white shadow-2xs font-bold'
+                      : 'bg-[#1e293b] text-white shadow-2xs font-bold'
                     : inRange
                     ? isWeekend
                       ? 'text-[#94a3b8] font-medium'
@@ -472,10 +466,10 @@ export default function CalendarDatePicker({
         })}
       </div>
 
-      {/* 6. Selected Date Summary Footer & Stepper */}
-      <div className="p-2 bg-[#f8fafc] rounded-[6px] border border-[#e2e8f0] flex items-center justify-between text-xs">
+      {/* 5. Selected Date Summary Footer & Stepper (Compact) */}
+      <div className="p-1.5 bg-[#f8fafc] rounded-[4px] border border-[#e2e8f0] flex items-center justify-between text-[11px]">
         <div className="space-y-0.5">
-          <div className="font-bold text-[#0f172a] flex items-center gap-1 text-xs">
+          <div className="font-bold text-[#0f172a] flex items-center gap-1 text-[11px]">
             <span>{formatKoreanDate(startDate)}</span>
             {startDate !== endDate && (
               <>
@@ -484,10 +478,10 @@ export default function CalendarDatePicker({
               </>
             )}
           </div>
-          <div className="text-[10px] text-[#64748b]">
+          <div className="text-[9px] text-[#64748b]">
             {is3DaysOrMore
-              ? '🏥 3일 이상 질병결석: 의사 진단서 또는 소견서 필수'
-              : '달력 날짜를 클릭하여 결석 기간을 지정하세요'}
+              ? '🏥 3일 이상: 의사 진단서/소견서 필수'
+              : '달력 날짜를 클릭하여 결석 기간 지정'}
           </div>
         </div>
 
@@ -499,24 +493,24 @@ export default function CalendarDatePicker({
                 type="button"
                 onClick={() => handleAdjustDays(-1)}
                 disabled={currentDaysCount <= 1}
-                className="p-1 text-[#475569] hover:text-[#0f172a] disabled:text-[#cbd5e1] cursor-pointer disabled:cursor-not-allowed"
+                className="p-0.5 text-[#475569] hover:text-[#0f172a] disabled:text-[#cbd5e1] cursor-pointer disabled:cursor-not-allowed"
                 title="1일 줄이기 (평일 기준)"
               >
-                <Minus className="w-3 h-3" />
+                <Minus className="w-2.5 h-2.5" />
               </button>
               <button
                 type="button"
                 onClick={() => handleAdjustDays(1)}
-                className="p-1 text-[#475569] hover:text-[#0f172a] cursor-pointer"
+                className="p-0.5 text-[#475569] hover:text-[#0f172a] cursor-pointer"
                 title="1일 늘리기 (평일 기준)"
               >
-                <Plus className="w-3 h-3" />
+                <Plus className="w-2.5 h-2.5" />
               </button>
             </div>
           )}
 
           <div className="flex flex-col items-end">
-            <span className={`px-2 py-0.5 rounded text-xs font-extrabold border ${
+            <span className={`px-1.5 py-0.5 rounded text-[11px] font-extrabold border ${
               is3DaysOrMore
                 ? 'bg-[#fee2e2] text-[#dc2626] border-[#fca5a5]'
                 : 'bg-[#fef3c7] text-[#b45309] border-[#fde68a]'
@@ -524,8 +518,8 @@ export default function CalendarDatePicker({
               총 {currentDaysCount}일간
             </span>
             {weekendDaysCount > 0 && (
-              <span className="text-[9px] text-[#64748b] font-medium mt-0.5">
-                (토·일 주말 {weekendDaysCount}일 제외)
+              <span className="text-[9px] text-[#64748b] font-medium">
+                (주말 {weekendDaysCount}일 제외)
               </span>
             )}
           </div>

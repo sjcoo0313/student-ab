@@ -1270,11 +1270,11 @@ export default function TeacherDashboard() {
           {/* Modal 1: 출결마감구분 (NEIS 표준 팝업 매핑 - media_1789514327311.png 100% 동일) */}
           {/* ========================================================================= */}
           {isNewModalOpen && (
-            <div className="fixed inset-0 z-50 bg-black/45 backdrop-blur-2xs flex items-center justify-center p-4 overflow-y-auto">
-              <div className="bg-white max-w-lg w-full rounded-[6px] shadow-2xl border border-[#b8c4d4] overflow-hidden animate-in fade-in">
+            <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-2xs flex justify-center items-start sm:items-center p-2 sm:p-4 overflow-y-auto">
+              <div className="bg-white max-w-lg w-full rounded-[6px] shadow-2xl border border-[#b8c4d4] flex flex-col max-h-[94vh] overflow-hidden animate-in fade-in my-auto">
                 
-                {/* Modal Title Bar */}
-                <div className="flex items-center justify-between px-4 py-2.5 bg-[#f8fafc] border-b border-[#cbd5e1]">
+                {/* Modal Title Bar - STICKY TOP */}
+                <div className="shrink-0 flex items-center justify-between px-4 py-2.5 bg-[#f8fafc] border-b border-[#cbd5e1] z-10">
                   <h3 className="font-bold text-sm text-[#1e293b] tracking-tight flex items-center gap-1.5">
                     {editingRecordId ? (
                       <>
@@ -1297,24 +1297,26 @@ export default function TeacherDashboard() {
                   </button>
                 </div>
 
-                <form onSubmit={handleSubmitRecord} className="p-4 sm:p-5 space-y-4 text-xs">
-                  {/* Target Student Selection */}
-                  <div>
-                    <label className="block text-[11px] font-bold text-[#334155] mb-1">
-                      대상 학생 선택 (3학년 2반)
-                    </label>
-                    <select
-                      value={newStudentId}
-                      onChange={(e) => setNewStudentId(e.target.value)}
-                      className="w-full bg-[#f8fafc] border border-[#cbd5e1] text-[#0f172a] text-xs rounded-[4px] p-2 font-medium"
-                    >
-                      {students.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.grade}학년 {s.classNum}반 {s.studentNum}번 {s.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                <form onSubmit={handleSubmitRecord} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                  {/* Scrollable Form Body */}
+                  <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 text-xs">
+                    {/* Target Student Selection - PROMINENT & COMPACT */}
+                    <div className="bg-[#f1f5f9] p-2 rounded-[4px] border border-[#cbd5e1] flex items-center gap-2">
+                      <label className="text-[11px] font-bold text-[#1e293b] shrink-0">
+                        👤 대상 학생:
+                      </label>
+                      <select
+                        value={newStudentId}
+                        onChange={(e) => setNewStudentId(e.target.value)}
+                        className="flex-1 bg-white border border-[#cbd5e1] text-[#0f172a] text-xs font-bold rounded-[3px] py-1 px-2 cursor-pointer"
+                      >
+                        {students.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.grade}학년 {s.classNum}반 {s.studentNum}번 {s.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
                   {/* NEIS Grid Form Table (사진과 동일한 레이아웃) */}
                   <div className="border border-[#cbd5e1] rounded-[4px] overflow-hidden text-xs">
@@ -1520,24 +1522,18 @@ export default function TeacherDashboard() {
                       const effectiveDays = Math.max(newDaysCount, consecutive);
 
                       return effectiveDays >= 3 ? (
-                        <div className="p-3 bg-[#fef2f2] border border-[#fca5a5] rounded-[6px] text-xs space-y-1 mt-2 animate-in fade-in">
-                          <div className="font-bold text-[#b91c1c] flex items-center gap-1.5">
-                            <AlertTriangle className="w-4 h-4 text-[#dc2626] shrink-0" />
-                            <span>연속 {effectiveDays}일 질병결석 서류 규정 안내 (&lt;서식 1호&gt; 결석신고서 기준)</span>
+                        <div className="p-2 bg-[#fef2f2] border border-[#fca5a5] rounded-[4px] text-xs space-y-0.5 mt-1.5 animate-in fade-in">
+                          <div className="font-bold text-[#b91c1c] flex items-center gap-1">
+                            <AlertTriangle className="w-3.5 h-3.5 text-[#dc2626] shrink-0" />
+                            <span>연속 {effectiveDays}일 질병결석: 의사 진단서 또는 소견서 필수 (&lt;서식 1호&gt;)</span>
                           </div>
-                          <p className="text-[11px] text-[#7f1d1d] leading-relaxed">
-                            • 연속 결석 기간이 <strong>{effectiveDays}일(3일 이상)</strong>이므로 결석신고서 규정에 따라 반드시 <strong>의사 진단서</strong> 또는 <strong>의사 소견서</strong> 중 1부를 제출해야 합니다.<br />
-                            • 2일 이내에 사용되는 단순 진료확인서·처방전은 3일 이상 결석 시 증빙으로 인정되지 않으며, 학생 모바일 앱에도 <strong>진단서/소견서 지참 필수 안내</strong>가 자동으로 전달됩니다.
+                          <p className="text-[10px] text-[#7f1d1d] leading-snug">
+                            • 연속 3일 이상 질병결석은 학교 규정에 따라 <strong>의사 진단서</strong> 또는 <strong>소견서</strong> 필수 지참 대상입니다. (단순 처방전/진료확인서 불가)
                           </p>
                         </div>
                       ) : (
-                        <div className="p-2.5 bg-[#f0f9ff] border border-[#bae6fd] rounded-[6px] text-xs space-y-0.5 mt-2 animate-in fade-in">
-                          <div className="font-bold text-[#0369a1] flex items-center gap-1">
-                            <span>📋 2일 이내 질병결석 서류 안내</span>
-                          </div>
-                          <p className="text-[11px] text-[#0c4a6e]">
-                            2일 이내 질병결석은 진료확인서, 학부모 의견서, 처방전/약봉투 등으로 제출 가능합니다. (연속 3일 이상 클릭 시 진단서 필수로 자동 전환됩니다)
-                          </p>
+                        <div className="p-1.5 bg-[#f0f9ff] border border-[#bae6fd] rounded-[4px] text-[11px] mt-1.5 animate-in fade-in text-[#0369a1]">
+                          <span className="font-bold">📋 2일 이내 질병결석:</span> 진료확인서, 학부모 의견서, 처방전 등으로 제출 가능합니다.
                         </div>
                       );
                     })()}
@@ -1623,55 +1619,56 @@ export default function TeacherDashboard() {
                       className="w-full bg-white border border-[#cbd5e1] rounded-[2px] px-2.5 py-1.5 text-xs text-[#0f172a] focus:outline-hidden focus:border-[#2563eb]"
                     />
                   </div>
+                </div>
 
-                  {/* Modal Action Buttons matching NEIS screenshot */}
-                  <div className="pt-3 flex items-center justify-between border-t border-[#f1f5f9] mt-2">
-                    {editingRecordId ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const currentRec = records.find(r => r.id === editingRecordId);
-                          if (currentRec) {
-                            handleDeleteRecord(currentRec.id, currentRec.studentName);
-                            setIsNewModalOpen(false);
-                            setEditingRecordId(null);
-                          }
-                        }}
-                        className="bg-white hover:bg-[#fee2e2] text-[#e11d48] border border-[#fca5a5] px-3 py-1.5 rounded-[3px] text-xs font-semibold cursor-pointer flex items-center gap-1 transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>기록 삭제</span>
-                      </button>
-                    ) : (
-                      <div></div>
-                    )}
-
-                    <div className="flex items-center space-x-2">
-                      <button
-                        type="submit"
-                        disabled={isMenstrualExceeded}
-                        className={`px-5 py-1.5 rounded-[3px] text-xs font-bold shadow-xs cursor-pointer min-w-[70px] ${
-                          isMenstrualExceeded
-                            ? 'bg-[#94a3b8] text-white cursor-not-allowed opacity-70'
-                            : 'bg-[#243757] hover:bg-[#1d2d47] text-white'
-                        }`}
-                        title={isMenstrualExceeded ? '생리 인정결석은 월 1회를 초과하여 등록할 수 없습니다.' : ''}
-                      >
-                        {isMenstrualExceeded ? '🚫 월 1회 한도 초과' : (editingRecordId ? '수정 완료' : '적용')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
+                {/* Modal Fixed/Sticky Bottom Action Bar */}
+                <div className="shrink-0 bg-[#f8fafc] px-4 py-2.5 flex items-center justify-between border-t border-[#cbd5e1] z-10">
+                  {editingRecordId ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const currentRec = records.find(r => r.id === editingRecordId);
+                        if (currentRec) {
+                          handleDeleteRecord(currentRec.id, currentRec.studentName);
                           setIsNewModalOpen(false);
                           setEditingRecordId(null);
-                        }}
-                        className="bg-white hover:bg-[#f1f5f9] text-[#334155] border border-[#cbd5e1] px-5 py-1.5 rounded-[3px] text-xs font-medium cursor-pointer min-w-[70px]"
-                      >
-                        닫기
-                      </button>
-                    </div>
+                        }
+                      }}
+                      className="bg-white hover:bg-[#fee2e2] text-[#e11d48] border border-[#fca5a5] px-3 py-1.5 rounded-[3px] text-xs font-semibold cursor-pointer flex items-center gap-1 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>기록 삭제</span>
+                    </button>
+                  ) : (
+                    <div></div>
+                  )}
+
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="submit"
+                      disabled={isMenstrualExceeded}
+                      className={`px-5 py-1.5 rounded-[3px] text-xs font-bold shadow-xs cursor-pointer min-w-[70px] ${
+                        isMenstrualExceeded
+                          ? 'bg-[#94a3b8] text-white cursor-not-allowed opacity-70'
+                          : 'bg-[#243757] hover:bg-[#1d2d47] text-white'
+                      }`}
+                      title={isMenstrualExceeded ? '생리 인정결석은 월 1회를 초과하여 등록할 수 없습니다.' : ''}
+                    >
+                      {isMenstrualExceeded ? '🚫 월 1회 한도 초과' : (editingRecordId ? '수정 완료' : '적용')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsNewModalOpen(false);
+                        setEditingRecordId(null);
+                      }}
+                      className="bg-white hover:bg-[#f1f5f9] text-[#334155] border border-[#cbd5e1] px-5 py-1.5 rounded-[3px] text-xs font-medium cursor-pointer min-w-[70px]"
+                    >
+                      닫기
+                    </button>
                   </div>
-                </form>
+                </div>
+              </form>
               </div>
             </div>
           )}
