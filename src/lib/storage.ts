@@ -328,16 +328,27 @@ export async function fetchServerSync(): Promise<boolean> {
     const serverRecords: AbsenceRecord[] = Array.isArray(data.records) ? data.records : [];
 
     if (localRecords.length > 0 && serverRecords.length === 0) {
-      // Re-hydrate server from client
+      // Re-hydrate server records from client
       postServerSync('SYNC_PUSH', { records: localRecords });
     } else if (Array.isArray(data.records)) {
       localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(data.records));
     }
 
-    // Save students and notifications to localStorage
-    if (Array.isArray(data.students) && data.students.length > 0) {
-      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(data.students));
+    // Local students protection: if local has students but server is empty or cold, re-hydrate server!
+    const localStudentsStr = localStorage.getItem(STORAGE_KEYS.STUDENTS);
+    let localStudents: Student[] = [];
+    try { localStudents = JSON.parse(localStudentsStr || '[]'); } catch {}
+    const serverStudents: Student[] = Array.isArray(data.students) ? data.students : [];
+
+    if (localStudents.length > 0 && serverStudents.length === 0) {
+      // Re-hydrate server students from client
+      postServerSync('SYNC_PUSH', { students: localStudents });
+    } else if (serverStudents.length > 0) {
+      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(serverStudents));
+    } else if (localStudents.length === 0) {
+      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(INITIAL_STUDENTS));
     }
+
     if (Array.isArray(data.notifications)) {
       localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(data.notifications));
     }
@@ -454,21 +465,14 @@ export function getStudents(): Student[] {
   if (typeof window === 'undefined') return INITIAL_STUDENTS;
   const stored = localStorage.getItem(STORAGE_KEYS.STUDENTS);
   if (stored === null) {
-    const hasRun = localStorage.getItem('hoengseong_app_has_run_v1');
-    if (!hasRun) {
-      localStorage.setItem('hoengseong_app_has_run_v1', 'true');
-      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(INITIAL_STUDENTS));
-      return INITIAL_STUDENTS;
-    }
-    return [];
+    localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(INITIAL_STUDENTS));
+    return INITIAL_STUDENTS;
   }
   try {
     const list: Student[] = JSON.parse(stored);
-    if (!Array.isArray(list)) {
-      return [];
-    }
-    if (list.length === 0) {
-      return [];
+    if (!Array.isArray(list) || list.length === 0) {
+      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(INITIAL_STUDENTS));
+      return INITIAL_STUDENTS;
     }
     // 자동 마이그레이션: 기존 2학년 3반 샘플 데이터가 있다면 3학년 2반으로 자동 전환
     let hasGrade2Class3 = false;
@@ -491,7 +495,7 @@ export function getStudents(): Student[] {
     }
     return list.map(s => ({ ...s, pin: s.pin || '1234' }));
   } catch {
-    return [];
+    return INITIAL_STUDENTS;
   }
 }
 
@@ -544,29 +548,10 @@ export function getAbsenceRecords(): AbsenceRecord[] {
       return updated;
     });
 
-    // 💡 우리 반 실제 학생 목록과 대조: 우리 반에 존재하지 않는 학생의 결석 기록은 자동 삭제
-    let validRecords = migrated;
-    const currentStudents = getStudents();
-    if (currentStudents.length > 0) {
-      const studentIds = new Set(currentStudents.map(s => s.id));
-      const studentNames = new Set(currentStudents.map(s => s.name));
-      const filtered = migrated.filter(r => {
-        const belongs = studentIds.has(r.studentId) || studentNames.has(r.studentName);
-        if (!belongs) {
-          changed = true;
-          return false;
-        }
-        return true;
-      });
-      validRecords = filtered;
-    }
-
     if (changed) {
-      localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(validRecords));
-      postServerSync('SAVE_RECORDS', { records: validRecords });
-      return validRecords;
+      localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(migrated));
     }
-    return validRecords;
+    return migrated;
   } catch {
     return [];
   }
@@ -577,6 +562,16 @@ export function saveAbsenceRecords(records: AbsenceRecord[]) {
   localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(records));
   broadcastUpdate('RECORDS_UPDATED', records);
   postServerSync('SAVE_RECORDS', { records });
+}
+
+// 💡 레코드와 알림을 단일 네트워크 요청으로 일괄 동기화 (경쟁 상태 방지)
+export function saveRecordsAndNotifications(records: AbsenceRecord[], notifications: SystemNotification[]) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(records));
+  localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(notifications));
+  broadcastUpdate('RECORDS_UPDATED', records);
+  broadcastUpdate('NOTIFICATIONS_UPDATED', notifications);
+  postServerSync('BATCH_SYNC', { records, notifications });
 }
 
 export function getNotifications(): SystemNotification[] {
@@ -604,27 +599,10 @@ export function getNotifications(): SystemNotification[] {
       return n;
     });
 
-    // 💡 우리 반에 실제로 등록된 학생의 알림만 유지하고, 우리 반에 없는 학생 알림은 즉시 자동 삭제
-    let validNotifs = migrated;
-    const currentStudents = getStudents();
-    if (currentStudents.length > 0) {
-      const studentNames = new Set(currentStudents.map(s => s.name));
-      const filtered = migrated.filter(n => {
-        if (n.studentName && !studentNames.has(n.studentName)) {
-          changed = true;
-          return false;
-        }
-        return true;
-      });
-      validNotifs = filtered;
-    }
-
     if (changed) {
-      localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(validNotifs));
-      postServerSync('SAVE_NOTIFICATIONS', { notifications: validNotifs });
-      return validNotifs;
+      localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(migrated));
     }
-    return validNotifs;
+    return migrated;
   } catch {
     return [];
   }

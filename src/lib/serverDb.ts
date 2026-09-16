@@ -192,56 +192,82 @@ export async function readServerDb(): Promise<ServerDatabase> {
   return globalThis._studentServerDbCache;
 }
 
+let writeQueue = Promise.resolve();
+
 export async function writeServerDb(updates: Partial<ServerDatabase>): Promise<ServerDatabase> {
-  const current = await readServerDb();
-  const updated: ServerDatabase = {
-    ...current,
-    ...updates,
-    lastUpdated: Date.now(),
-  };
+  return new Promise((resolve, reject) => {
+    writeQueue = writeQueue.then(async () => {
+      try {
+        const current = await readServerDb();
 
-  globalThis._studentServerDbCache = updated;
+        // 💡 안전 가드: 부분 업데이트 시 기존 학생 명단 및 결석 기록이 비어있는 값으로 덮어써지지 않도록 엄격 보존
+        const mergedStudents = Array.isArray(updates.students)
+          ? updates.students
+          : (current.students && current.students.length > 0 ? current.students : INITIAL_STUDENTS);
 
-  // 1. Try Upstash Redis / Vercel KV
-  const upstashOk = await writeToUpstash(updated);
-  if (upstashOk) {
-    return updated;
-  }
+        const mergedRecords = Array.isArray(updates.records)
+          ? updates.records
+          : (current.records || []);
 
-  // 2. Try Netlify Blobs
-  const blobStore = await getNetlifyBlobStore();
-  if (blobStore) {
-    try {
-      await blobStore.setJSON('db', updated);
-      return updated;
-    } catch (e) {
-      console.warn('Netlify blobs write error:', e);
-    }
-  }
+        const mergedNotifications = Array.isArray(updates.notifications)
+          ? updates.notifications
+          : (current.notifications || []);
 
-  // 3. Write to /tmp (Safe in AWS Lambda / Vercel serverless)
-  try {
-    if (!fs.existsSync(TMP_DB_DIR)) {
-      fs.mkdirSync(TMP_DB_DIR, { recursive: true });
-    }
-    const tempTmpFile = `${TMP_DB_FILE}.tmp.${Date.now()}`;
-    fs.writeFileSync(tempTmpFile, JSON.stringify(updated, null, 2), 'utf-8');
-    fs.renameSync(tempTmpFile, TMP_DB_FILE);
-  } catch (e) {
-    // ignore
-  }
+        const updated: ServerDatabase = {
+          ...current,
+          ...updates,
+          students: mergedStudents,
+          records: mergedRecords,
+          notifications: mergedNotifications,
+          lastUpdated: Date.now(),
+        };
 
-  // 4. Try writing to local project directory
-  try {
-    if (!fs.existsSync(LOCAL_DB_DIR)) {
-      fs.mkdirSync(LOCAL_DB_DIR, { recursive: true });
-    }
-    const tempFile = `${LOCAL_DB_FILE}.tmp.${Date.now()}`;
-    fs.writeFileSync(tempFile, JSON.stringify(updated, null, 2), 'utf-8');
-    fs.renameSync(tempFile, LOCAL_DB_FILE);
-  } catch (e) {
-    // In read-only serverless filesystem, /tmp and in-memory cache maintain state
-  }
+        globalThis._studentServerDbCache = updated;
 
-  return updated;
+        // 1. Try Upstash Redis / Vercel KV
+        const upstashOk = await writeToUpstash(updated);
+        if (upstashOk) {
+          resolve(updated);
+          return;
+        }
+
+        // 2. Try Netlify Blobs
+        const blobStore = await getNetlifyBlobStore();
+        if (blobStore) {
+          try {
+            await blobStore.setJSON('db', updated);
+            resolve(updated);
+            return;
+          } catch (e) {
+            console.warn('Netlify blobs write error:', e);
+          }
+        }
+
+        // 3. Write to /tmp (Safe in AWS Lambda / Vercel serverless)
+        try {
+          if (!fs.existsSync(TMP_DB_DIR)) {
+            fs.mkdirSync(TMP_DB_DIR, { recursive: true });
+          }
+          fs.writeFileSync(TMP_DB_FILE, JSON.stringify(updated, null, 2), 'utf-8');
+        } catch (e) {
+          // ignore
+        }
+
+        // 4. Try writing to local project directory
+        try {
+          if (!fs.existsSync(LOCAL_DB_DIR)) {
+            fs.mkdirSync(LOCAL_DB_DIR, { recursive: true });
+          }
+          fs.writeFileSync(LOCAL_DB_FILE, JSON.stringify(updated, null, 2), 'utf-8');
+        } catch (e) {
+          // In read-only serverless filesystem, /tmp and in-memory cache maintain state
+        }
+
+        resolve(updated);
+      } catch (err) {
+        console.error('writeServerDb error:', err);
+        reject(err);
+      }
+    });
+  });
 }

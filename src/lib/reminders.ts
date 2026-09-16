@@ -2,6 +2,8 @@ import { AbsenceRecord, SystemNotification, ReminderSlotInfo, ReminderSettings, 
 import { 
   getAbsenceRecords, 
   saveAbsenceRecords, 
+  saveRecordsAndNotifications,
+  getNotifications,
   getStudents,
   addNotification,
   getStudentConsecutiveIllnessDays,
@@ -137,18 +139,11 @@ export function clearReminderLog() {
   localStorage.removeItem(REMINDER_LOG_KEY);
 }
 
-// 미이행 학생 레코드 목록 (우리 반 실제 학생 검증 및 누적 관리)
+// 미이행 학생 레코드 목록 (누적 관리)
 export function getUnfulfilledAbsenceRecords(): AbsenceRecord[] {
   const records = getAbsenceRecords();
-  const currentStudents = getStudents();
-  const studentIds = new Set(currentStudents.map(s => s.id));
-  const studentNames = new Set(currentStudents.map(s => s.name));
 
   return records.filter(r => {
-    // 💡 우리 반 실제 학생 목록에 존재하는 학생인지 엄격 검증
-    if (currentStudents.length > 0 && !studentIds.has(r.studentId) && !studentNames.has(r.studentName)) {
-      return false;
-    }
     // 서류 제출이 불필요한 건은 제외
     if (r.requiresDocument === false) {
       return false;
@@ -240,20 +235,11 @@ export function dispatchScheduledReminder(
 
   const dispatchedNames: string[] = [];
   const nowIso = new Date().toISOString();
-
-  // 모든 미이행 학생에게 맞춤형 리마인드 발송
-  const currentStudents = getStudents();
-  const studentIds = new Set(currentStudents.map(s => s.id));
-  const studentNames = new Set(currentStudents.map(s => s.name));
+  const newNotifications: SystemNotification[] = [];
 
   const updatedRecords = allRecords.map(rec => {
     const isTarget = unfulfilled.some(u => u.id === rec.id);
     if (!isTarget) return rec;
-
-    // 우리 반에 없는 학생이면 알림 발송 건너뜀
-    if (currentStudents.length > 0 && !studentIds.has(rec.studentId) && !studentNames.has(rec.studentName)) {
-      return rec;
-    }
 
     dispatchedNames.push(`${rec.studentNum}번 ${rec.studentName}`);
 
@@ -282,7 +268,8 @@ export function dispatchScheduledReminder(
       ? `⏰ [${slot.title}] 현장체험학습: 보고서를 7일이내 NEIS로 제출 알림`
       : `⏰ [${slot.title}] 결석계 단계 미이행 알림`;
 
-    addNotification({
+    newNotifications.push({
+      id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       type: 'SCHEDULED_REMIND',
       title: notifTitle,
       message: messageBody,
@@ -292,6 +279,8 @@ export function dispatchScheduledReminder(
       studentNum: rec.studentNum,
       recordId: rec.id,
       attachments: rec.attachments,
+      timestamp: nowIso,
+      read: false,
     });
 
     triggerBrowserPush(
@@ -306,7 +295,10 @@ export function dispatchScheduledReminder(
     };
   });
 
-  saveAbsenceRecords(updatedRecords);
+  // 💡 경쟁 상태(Race Condition) 원천 차단: 레코드와 신규 알림을 단일 BATCH_SYNC 네트워크 요청으로 일괄 원자적 동기화
+  const currentNotifs = getNotifications();
+  const mergedNotifs = [...newNotifications, ...currentNotifs];
+  saveRecordsAndNotifications(updatedRecords, mergedNotifs);
 
   // 사운드 알림 효과음
   playRemindSound();
