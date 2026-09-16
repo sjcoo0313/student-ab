@@ -1488,6 +1488,46 @@ export function resetStudentPinToDefault(studentId: string): boolean {
   return updateStudentPin(studentId, '1234');
 }
 
+// 학생 로그인 접속 이력 기록
+export function recordStudentLogin(studentId: string): void {
+  if (typeof window === 'undefined') return;
+  const students = getStudents();
+  const nowIso = new Date().toISOString();
+  let updated = false;
+  const newStudents = students.map((s) => {
+    if (s.id === studentId) {
+      updated = true;
+      return { ...s, lastLoginAt: nowIso };
+    }
+    return s;
+  });
+  if (updated) {
+    saveStudents(newStudents);
+    broadcastUpdate('STUDENT_LOGIN_RECORDED', { studentId, lastLoginAt: nowIso });
+    postServerSync('STUDENT_LOGIN_PING', { studentId, lastLoginAt: nowIso });
+  }
+}
+
+// 학생 로그인 접속 이력 초기화 (필요시 교사가 개별/전체 초기화)
+export function resetStudentLoginStatus(studentId: string): void {
+  if (typeof window === 'undefined') return;
+  const students = getStudents();
+  let updated = false;
+  const newStudents = students.map((s) => {
+    if (s.id === studentId) {
+      updated = true;
+      const copy = { ...s };
+      delete copy.lastLoginAt;
+      return copy;
+    }
+    return s;
+  });
+  if (updated) {
+    saveStudents(newStudents);
+    broadcastUpdate('STUDENT_LOGIN_RECORDED', { studentId, lastLoginAt: null });
+  }
+}
+
 // 8. 데이터 초기화 및 완전 삭제
 export async function clearAllAbsenceData(): Promise<void> {
   if (typeof window === 'undefined') return;

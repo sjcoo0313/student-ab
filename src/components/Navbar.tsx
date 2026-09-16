@@ -49,7 +49,7 @@ export default function Navbar() {
 
   useEffect(() => {
     setNotifications(getNotifications());
-    setIsTeacher(isTeacherRoute && isTeacherLoggedIn());
+    setIsTeacher(isTeacherLoggedIn());
 
     // ⏰ 3차례 정기 자동 리마인드 (09:30, 12:30, 14:30) 20초 주기 자동 검사
     checkAndRunAutomatedReminders();
@@ -60,7 +60,7 @@ export default function Navbar() {
     const unsubscribe = subscribeToSyncEvents((type, payload) => {
       setNotifications(getNotifications());
       if (type === 'TEACHER_AUTH_CHANGED' || type === 'RESET_ALL') {
-        setIsTeacher(isTeacherRoute && isTeacherLoggedIn());
+        setIsTeacher(isTeacherLoggedIn());
       }
 
       if (type === 'NOTIFICATIONS_UPDATED' && Array.isArray(payload) && payload.length > 0) {
@@ -393,6 +393,27 @@ export default function Navbar() {
           </div>
         )}
       </header>
+
+      {/* Teacher Mode Alert Banner on Student Screen */}
+      {isTeacher && pathname === '/' && (
+        <div className="bg-[#1e293b] text-white px-4 py-2.5 text-xs flex items-center justify-between shadow-md border-b border-white/10 sticky top-18 z-30 animate-in fade-in">
+          <div className="flex items-center space-x-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#22c55e] animate-pulse" />
+            <span className="font-semibold text-xs sm:text-sm text-white">
+              👩‍🏫 교사 모드로 학생 모바일 화면 둘러보는 중
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/teacher"
+              className="bg-[#ffcd6c] hover:bg-[#ffe082] text-[#121212] px-3.5 py-1 rounded-full font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs active:scale-95"
+            >
+              <span>교사 대시보드로 복귀</span>
+              <span>➔</span>
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Data Reset Modal */}
       {isResetModalOpen && (

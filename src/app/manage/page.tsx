@@ -25,10 +25,30 @@ const VERCEL_URL = 'https://student-ab2.vercel.app';
 const PUBLIC_TUNNEL_URL = 'https://arch-reception-comparable-eligibility.trycloudflare.com';
 const LOCAL_WIFI_URL = 'http://10.95.25.25:3000';
 
+function formatLoginTime(isoString?: string): string {
+  if (!isoString) return '';
+  try {
+    const d = new Date(isoString);
+    const now = new Date();
+    const isToday = d.toDateString() === now.toDateString();
+    const timeStr = d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+    if (isToday) {
+      return `오늘 ${timeStr}`;
+    }
+    const month = d.getMonth() + 1;
+    const day = d.getDate();
+    return `${month}/${day} ${timeStr}`;
+  } catch {
+    return '';
+  }
+}
+
 export default function ManageStudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+
+  const loggedInCount = students.filter(s => !!s.lastLoginAt).length;
 
   const [grade, setGrade] = useState(3);
   const [classNum, setClassNum] = useState(2);
@@ -190,12 +210,19 @@ export default function ManageStudentsPage() {
         {/* Top Header Card */}
         <div className="family-card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 flex-wrap gap-y-1">
               <span className="badge-pill badge-stone text-[11px]">
                 학급 명단 관리
               </span>
-              <span className="badge-pill badge-mint text-[11px]">
+              <span className="badge-pill badge-mint text-[11px] font-bold">
                 총 {students.length}명
+              </span>
+              <span className="badge-pill bg-[#e6fbf1] text-[#008730] border border-[#00ca48]/30 text-[11px] font-bold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#00ca48] animate-pulse" />
+                로그인 완료 {loggedInCount}명
+              </span>
+              <span className="badge-pill bg-[#f2f0ed] text-[#7e7e7d] text-[11px] font-semibold">
+                미접속 {students.length - loggedInCount}명
               </span>
             </div>
             <h2 className="text-xl sm:text-2xl font-bold text-[#121212] mt-2 tracking-tight">
@@ -260,9 +287,21 @@ export default function ManageStudentsPage() {
 
           {/* Roster Table (2 Cols) */}
           <div className="lg:col-span-2 family-card">
-            <h3 className="text-base font-bold text-[#121212] mb-4">
-              학급 학생 명단 ({students.length}명)
-            </h3>
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+              <h3 className="text-base font-bold text-[#121212]">
+                학급 학생 명단 ({students.length}명)
+              </h3>
+              <div className="flex items-center gap-2 text-xs">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#e6fbf1] text-[#008730] font-bold border border-[#00ca48]/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#00ca48]" />
+                  로그인: {loggedInCount}명
+                </span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#f2f0ed] text-[#7e7e7d] font-semibold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#a8a29e]" />
+                  미접속: {students.length - loggedInCount}명
+                </span>
+              </div>
+            </div>
 
             <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
               <table className="w-full text-left text-xs">
@@ -270,6 +309,7 @@ export default function ManageStudentsPage() {
                   <tr className="text-[#7e7e7d] font-semibold">
                     <th className="py-3 px-3">번호</th>
                     <th className="py-3 px-3">이름</th>
+                    <th className="py-3 px-3">로그인 상태</th>
                     <th className="py-3 px-3">비밀번호</th>
                     <th className="py-3 px-3">학생 연락처</th>
                     <th className="py-3 px-3">학부모 연락처</th>
@@ -279,7 +319,7 @@ export default function ManageStudentsPage() {
                 <tbody className="divide-y divide-[#f2f0ed]">
                   {students.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-12 text-center text-[#7e7e7d]">
+                      <td colSpan={7} className="py-12 text-center text-[#7e7e7d]">
                         <div className="space-y-1.5">
                           <p className="text-sm font-semibold text-[#121212]">등록된 학생이 없습니다 (0명)</p>
                           <p className="text-xs text-[#7e7e7d]">
@@ -293,6 +333,24 @@ export default function ManageStudentsPage() {
                       <tr key={s.id} className="hover:bg-[#fcfbf9]">
                         <td className="py-3 px-3 font-semibold text-[#7e7e7d]">{s.studentNum}번</td>
                         <td className="py-3 px-3 font-bold text-[#121212]">{s.name}</td>
+                        <td className="py-3 px-3">
+                          {s.lastLoginAt ? (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#008730] bg-[#e6fbf1] border border-[#00ca48]/30 px-2 py-0.5 rounded-full w-fit">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#00ca48]" />
+                                로그인 완료
+                              </span>
+                              <span className="text-[10px] text-[#7e7e7d] pl-0.5">
+                                {formatLoginTime(s.lastLoginAt)}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#7e7e7d] bg-[#f2f0ed] px-2 py-0.5 rounded-full">
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#a8a29e]" />
+                              미접속
+                            </span>
+                          )}
+                        </td>
                         <td className="py-3 px-3">
                           <div className="flex items-center space-x-1.5">
                             <span className="font-mono bg-[#f2f0ed] px-1.5 py-0.5 rounded text-[11px] font-bold text-[#121212]">

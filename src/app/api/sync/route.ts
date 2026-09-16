@@ -197,6 +197,19 @@ export async function POST(req: NextRequest) {
         break;
       }
 
+      case 'STUDENT_LOGIN_PING': {
+        const { studentId, lastLoginAt } = body;
+        const nowIso = lastLoginAt || new Date().toISOString();
+        const newStudents = current.students.map((s) => {
+          if (s.id === studentId) {
+            return { ...s, lastLoginAt: nowIso };
+          }
+          return s;
+        });
+        updated = await writeServerDb({ students: newStudents });
+        break;
+      }
+
       case 'VERIFY_TEACHER_PIN': {
         const { pin } = body;
         const serverPin = current.teacherPin || '1234';

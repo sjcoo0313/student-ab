@@ -53,6 +53,7 @@ export interface Student {
   phone?: string;
   parentPhone?: string;
   pin?: string; // 학생 비밀번호 (기본: '1234')
+  lastLoginAt?: string; // 학생 마지막 로그인/접속 시각 (ISO string)
 }
 
 export interface AbsenceRecord {

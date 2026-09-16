@@ -29,7 +29,8 @@ import {
   setMyStudentId,
   saveMyStudentProfile,
   updateStudentPin,
-  getStudentConsecutiveIllnessDays
+  getStudentConsecutiveIllnessDays,
+  recordStudentLogin
 } from '@/lib/storage';
 import { Student, AbsenceRecord, AttachmentProof } from '@/types';
 import { Lock, LogOut, UserCheck, ShieldCheck, KeyRound } from 'lucide-react';
@@ -67,6 +68,9 @@ export default function StudentMobilePage() {
       setRecords(getAbsenceRecords());
       const curr = getMyStudent();
       setMyStudent(curr);
+      if (curr) {
+        recordStudentLogin(curr.id);
+      }
       if (stds.length > 0 && !curr) {
         setAuthGrade(stds[0].grade);
         setAuthClassNum(stds[0].classNum);
@@ -132,6 +136,7 @@ export default function StudentMobilePage() {
     saveMyStudentProfile(found);
     setMyStudent(found);
     setAuthError(null);
+    recordStudentLogin(found.id);
 
     confetti({
       particleCount: 50,
@@ -724,6 +729,17 @@ export default function StudentMobilePage() {
           </div>
         </div>
       )}
+
+        {/* Discreet Teacher Entry Link */}
+        <div className="pt-8 pb-4 text-center">
+          <Link
+            href="/teacher"
+            className="text-[11px] text-[#a8a29e] hover:text-[#78716c] inline-flex items-center gap-1.5 transition-colors py-1 px-3 rounded-full hover:bg-[#f2f0ed]"
+          >
+            <Lock className="w-3 h-3 text-[#a8a29e]" />
+            <span>교직원 전용 로그인</span>
+          </Link>
+        </div>
 
       </div>
     </main>
