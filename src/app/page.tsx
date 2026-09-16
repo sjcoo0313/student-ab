@@ -8,6 +8,7 @@ import {
   FileText, 
   Send, 
   AlertCircle, 
+  AlertTriangle,
   Clock, 
   Smartphone, 
   Sparkles,
@@ -56,11 +57,6 @@ export default function StudentMobilePage() {
   const [confirmPin, setConfirmPin] = useState('');
   const [changePinError, setChangePinError] = useState<string | null>(null);
   const [changePinSuccess, setChangePinSuccess] = useState(false);
-
-  const [checkedAttachments, setCheckedAttachments] = useState<AttachmentProof[]>([]);
-  const [otherAttachmentText, setOtherAttachmentText] = useState('');
-  const [studentMemo, setStudentMemo] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [isAppInstallGuideOpen, setIsAppInstallGuideOpen] = useState(false);
 
@@ -153,8 +149,6 @@ export default function StudentMobilePage() {
       setAuthName('');
       setAuthPin('1234');
       setAuthError(null);
-      setCheckedAttachments([]);
-      setOtherAttachmentText('');
     }
   };
 
@@ -202,108 +196,17 @@ export default function StudentMobilePage() {
   ) : [];
 
   // Only records that actually require paper document submission and are not yet approved
-  const pendingDocRecords = studentRecords.filter(r => r.requiresDocument !== false && r.status !== 'APPROVED');
-
-  // Prioritize active, actionable records:
-  // ATTENDED_NOTIFIED (2단계 서류 미수령) > FORM_PICKED_UP (3단계 작성중) > SUBMITTED (4단계 투입됨) > PENDING_ATTENDANCE (1단계 등교대기)
-  const activeRecord = [...pendingDocRecords].sort((a, b) => {
-    const priority = (s: string) => {
-      if (s === 'ATTENDED_NOTIFIED') return 1;
-      if (s === 'FORM_PICKED_UP') return 2;
-      if (s === 'SUBMITTED') return 3;
-      if (s === 'PENDING_ATTENDANCE') return 4;
-      return 5;
-    };
-    return priority(a.status) - priority(b.status);
-  })[0];
-  const myApprovedRecords = studentRecords.filter(r => r.status === 'APPROVED');
-
-  const consecutiveIllnessDays = activeRecord
-    ? getStudentConsecutiveIllnessDays(activeRecord.studentId, activeRecord)
-    : 1;
-
-  const isIllnessOver3 = activeRecord?.type === 'ILLNESS_OVER_3' || 
-    (activeRecord?.category === '질병' && ((activeRecord?.daysCount || 1) >= 3 || consecutiveIllnessDays >= 3));
-
-  useEffect(() => {
-    if (activeRecord) {
-      if (activeRecord.attachments && activeRecord.attachments.length > 0) {
-        setCheckedAttachments(activeRecord.attachments);
-      } else if (activeRecord.type === 'FIELD_EXPERIENCE') {
-        setCheckedAttachments(['체험학습 보고서(NEIS)', '일자별 배경 사진(날짜당 1장)', '보호자 동반 사진']);
-      } else if (activeRecord.type === 'MENSTRUAL') {
-        setCheckedAttachments(['학부모 의견서(생리)']);
-      } else if (isIllnessOver3) {
-        // 3일 이상 연속 질병결석: 학교 결석신고서 <서식 1호> 규정 (의사 진단서 또는 의사 소견서 필수 지참)
-        setCheckedAttachments(['의사 진단서']);
-      } else if (activeRecord.category === '질병') {
-        // 2일 이내 질병결석
-        setCheckedAttachments(['진료확인서', '학부모 의견서']);
-      } else {
-        setCheckedAttachments([]);
-      }
-      setOtherAttachmentText(activeRecord.otherAttachmentText || '');
-      setStudentMemo(activeRecord.studentMemo || activeRecord.memo || '');
-    }
-  }, [activeRecord?.id, isIllnessOver3]);
-
-  const handlePickUp = () => {
-    if (!activeRecord) return;
-    markFormPickedUp(activeRecord.id);
-  };
-
-  const handleSubmitForm = () => {
-    if (!activeRecord) return;
-    setIsSubmitting(true);
-
-    markSubmitted(activeRecord.id, checkedAttachments, otherAttachmentText, studentMemo);
-
-    // Warm confetti sprinkle
-    confetti({
-      particleCount: 80,
-      spread: 70,
-      origin: { y: 0.65 },
-      colors: ['#ffcd6c', '#00c978', '#64c6ff', '#ff3e00', '#ff58ae'],
+  const pendingDocRecords = studentRecords
+    .filter(r => r.requiresDocument !== false && r.status !== 'APPROVED')
+    .sort((a, b) => {
+      // 1) Action required (non-submitted) before submitted
+      const isSubA = a.status === 'SUBMITTED' ? 1 : 0;
+      const isSubB = b.status === 'SUBMITTED' ? 1 : 0;
+      if (isSubA !== isSubB) return isSubA - isSubB;
+      // 2) Earlier dates first so older absences are handled first
+      return a.startDate.localeCompare(b.startDate);
     });
-
-    setTimeout(() => {
-      setIsSubmitting(false);
-    }, 500);
-  };
-
-  const handleRevertSubmission = () => {
-    if (!activeRecord) return;
-    if (confirm('제출을 취소하고 다시 작성하시겠습니까?\n동봉할 증빙서류 목록과 메모를 다시 수정하여 제출할 수 있습니다.')) {
-      updateAbsenceRecordStatus(activeRecord.id, 'FORM_PICKED_UP', '학생이 제출 취소 후 다시 작성');
-      loadData();
-    }
-  };
-
-  const handleRevertToNotified = () => {
-    if (!activeRecord) return;
-    if (confirm('서류 챙김을 취소하고 이전 안내 상태로 되돌리시겠습니까?')) {
-      updateAbsenceRecordStatus(activeRecord.id, 'ATTENDED_NOTIFIED', '학생이 서류 챙김 취소');
-      loadData();
-    }
-  };
-
-  const toggleAttachment = (item: AttachmentProof) => {
-    if (checkedAttachments.includes(item)) {
-      setCheckedAttachments(checkedAttachments.filter(a => a !== item));
-    } else {
-      setCheckedAttachments([...checkedAttachments, item]);
-    }
-  };
-
-  const availableAttachments: AttachmentProof[] = activeRecord?.type === 'FIELD_EXPERIENCE'
-    ? ['체험학습 보고서(NEIS)', '일자별 배경 사진(날짜당 1장)', '보호자 동반 사진', '인솔자 위임장', '담임교사 확인서', '기타']
-    : activeRecord?.type === 'MENSTRUAL'
-    ? ['학부모 의견서(생리)', '담임교사 확인서', '기타']
-    : isIllnessOver3
-    ? ['의사 진단서', '의사 소견서', '학부모 의견서', '담임교사 확인서', '기타']
-    : activeRecord?.category === '질병'
-    ? ['진료확인서', '학부모 의견서', '약봉투/처방전', '의사 소견서', '의사 진단서', '담임교사 확인서', '기타']
-    : ['청첩장', '사망진단서', '학부모 의견서', '담임교사 확인서', '기타'];
+  const myApprovedRecords = studentRecords.filter(r => r.status === 'APPROVED');
 
   return (
     <main className="min-h-[calc(100vh-4.5rem)] bg-[#fbfaf9] py-5 sm:py-8 px-3 sm:px-6">
@@ -490,7 +393,8 @@ export default function StudentMobilePage() {
             </div>
 
             {/* Dynamic Action Area for Authenticated Student */}
-            {!activeRecord ? (
+            {/* Dynamic Action Area for Authenticated Student */}
+            {pendingDocRecords.length === 0 ? (
               <div className="family-card text-center py-10">
                 <div className="w-12 h-12 rounded-full bg-[#e6fbf1] text-[#00ca48] flex items-center justify-center mx-auto mb-3">
                   <CheckCircle2 className="w-6 h-6" />
@@ -500,427 +404,72 @@ export default function StudentMobilePage() {
                   현재 {myStudent.name} 학생은 미제출된 결석계가 없습니다.
                 </p>
               </div>
-        ) : activeRecord.status === 'PENDING_ATTENDANCE' ? (
-          /* State 1: Registered, Waiting for Teacher Attendance Check */
-          <div className="family-card">
-            <div className="flex items-center space-x-2 text-[#7e7e7d] mb-3">
-              <Clock className="w-4 h-4 text-[#d48f00]" />
-              <span className="text-xs font-semibold text-[#121212]">등교 확인 대기 중</span>
-            </div>
-            <div className="bg-[#fcfbf9] rounded-[10px] p-4 border border-[#f2f0ed] mb-4">
-              <div className="flex items-center justify-between mb-1">
-                <span className="badge-pill badge-sky">
-                  {activeRecord.typeName}
-                </span>
-                <span className="text-xs text-[#7e7e7d]">{activeRecord.startDate}</span>
-              </div>
-              <h4 className="text-sm font-semibold text-[#121212] mt-1.5">{activeRecord.reason}</h4>
-            </div>
-            <div className="p-3.5 bg-[#fff8e8] rounded-[10px] border border-[#e5d5c3] text-[#343433] text-xs leading-relaxed">
-              <p className="font-semibold text-[#d48f00] flex items-center gap-1.5 mb-1">
-                <AlertCircle className="w-4 h-4" />
-                등교 시 결석계 알림이 울립니다
-              </p>
-              다음 날 등교하여 선생님이 <strong>[등교 확인]</strong>을 누르시면, 교실 서류함에서 양식을 챙기라는 안내 카드가 활성화됩니다.
-            </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Multiple Unfulfilled Items Alert Summary Banner */}
+                {pendingDocRecords.length > 1 && (
+                  <div className="bg-[#fff0eb] border-2 border-[#ff3e00]/50 rounded-[12px] p-4 space-y-3 shadow-xs animate-in fade-in">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <AlertTriangle className="w-5 h-5 text-[#ff3e00]" />
+                        <span className="font-bold text-sm text-[#ff3e00]">
+                          미이행 결석계가 총 {pendingDocRecords.length}건 있습니다!
+                        </span>
+                      </div>
+                      <span className="badge-pill badge-orange text-[10px] font-bold">
+                        모두 제출 필요
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#474645] leading-relaxed">
+                      아래 <strong>{pendingDocRecords.length}건의 출결</strong> 모두 각각 서류를 챙겨 담임선생님께 제출해야 합니다. 각 카드의 단계를 확인하고 서류 챙김 및 제출을 진행해주세요.
+                    </p>
 
-            {/* 학생 직접 등교 확인 & 서류 챙기기 시작 버튼 */}
-            <button
-              type="button"
-              onClick={() => {
-                markAttended(activeRecord.id);
-                loadData();
-              }}
-              className="btn-dark-pill w-full mt-3 py-2.5 text-xs flex items-center justify-center space-x-1.5 shadow-xs cursor-pointer"
-            >
-              <FileText className="w-4 h-4 text-[#ffcd6c]" />
-              <span>선생님, 오늘 등교했어요! (서류 챙기기 시작) 🏫</span>
-            </button>
-          </div>
-        ) : activeRecord.status === 'ATTENDED_NOTIFIED' ? (
-          /* State 2: Attended! Storybook Ember Orange Alert Card */
-          <div className="family-card border-2 border-[#ff3e00]/40 bg-[#ffffff]">
-            <div className="flex items-center justify-between pb-3 border-b border-[#f2f0ed]">
-              <div className="flex items-center space-x-2">
-                <Bell className="w-5 h-5 text-[#ff3e00] animate-bounce" />
-                <span className="badge-pill badge-orange font-semibold">
-                  등교 확인 완료 · 서류 챙기기
-                </span>
-              </div>
-              <span className="text-[11px] text-[#7e7e7d]">
-                {activeRecord.remindCount > 1 ? `${activeRecord.remindCount}회 리마인드` : '방금 전 알림'}
-              </span>
-            </div>
-
-            <div className="mt-4">
-              <h3 className="text-lg font-bold text-[#121212] leading-snug">
-                {activeRecord.type === 'FIELD_EXPERIENCE' ? (
-                  <>
-                    현장체험학습은 결석계가 아니며<br />
-                    <span className="text-[#d48f00] underline underline-offset-4 decoration-[#d48f00]/30">
-                      [보고서를 7일이내 NEIS로 제출]
-                    </span> 해야 합니다!
-                  </>
-                ) : (
-                  <>
-                    교실 서류함에서<br />
-                    <span className="text-[#ff3e00] underline underline-offset-4 decoration-[#ff3e00]/30">
-                      [{activeRecord.typeName}]
-                    </span> 서류를 챙기세요!
-                  </>
+                    <div className="space-y-1.5 pt-0.5">
+                      {pendingDocRecords.map((r, idx) => (
+                        <a
+                          key={r.id}
+                          href={`#action-card-${r.id}`}
+                          className="p-2.5 rounded-[8px] bg-white border border-[#fecaca] hover:border-[#ff3e00] flex items-center justify-between text-xs transition-colors block cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <span className="w-5 h-5 rounded-full bg-[#ff3e00] text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+                              {idx + 1}
+                            </span>
+                            <span className="font-bold text-[#121212] shrink-0">{r.startDate}</span>
+                            <span className="text-[#474645] truncate font-medium">({r.daysCount}일) {r.typeName}</span>
+                          </div>
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-bold shrink-0 ml-2 ${
+                            r.status === 'ATTENDED_NOTIFIED' ? 'bg-[#fef3c7] text-[#b45309]' :
+                            r.status === 'FORM_PICKED_UP' ? 'bg-[#e0f2fe] text-[#0284c7]' :
+                            r.status === 'SUBMITTED' ? 'bg-[#dcfce7] text-[#15803d]' :
+                            'bg-[#f1f5f9] text-[#64748b]'
+                          }`}>
+                            {r.status === 'ATTENDED_NOTIFIED' ? '2단계 서류 미수령' :
+                             r.status === 'FORM_PICKED_UP' ? '3단계 작성 중' :
+                             r.status === 'SUBMITTED' ? '4단계 제출 완료' :
+                             '1단계 등교 대기'}
+                          </span>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
                 )}
-              </h3>
-              <p className="text-xs text-[#474645] mt-2 leading-relaxed">
-                {activeRecord.type === 'FIELD_EXPERIENCE' ? (
-                  <>
-                    {myStudent?.name} 학생! 현장체험학습은 결석계가 아니며, <strong>보고서를 7일이내 NEIS로 제출</strong>해야 합니다.
-                  </>
-                ) : (
-                  <>
-                    {myStudent?.name} 학생! 교실 앞 서류함에서 <strong>결석신고서</strong>를 1장 챙겨서 자필로 작성해주세요.
-                  </>
-                )}
-              </p>
-            </div>
 
-            <div className="mt-3.5 bg-[#fbfaf9] rounded-[10px] p-3.5 border border-[#f2f0ed] text-xs text-[#474645] space-y-1">
-              <div className="flex justify-between">
-                <span>결석 일자:</span>
-                <span className="font-medium text-[#121212]">{activeRecord.startDate} ({activeRecord.daysCount}일간)</span>
-              </div>
-              <div className="flex justify-between">
-                <span>결석 사유:</span>
-                <span className="font-medium text-[#121212]">{activeRecord.reason}</span>
-              </div>
-              {activeRecord.type === 'MENSTRUAL' && (
-                <div className="mt-2 pt-2 border-t border-[#f2f0ed] text-[#ff3e00] text-[11px] font-semibold">
-                  ⚠️ 생리인정결석: 학부모 의견서 자필 작성이 필수입니다.
-                </div>
-              )}
-              {activeRecord.type === 'FIELD_EXPERIENCE' && (
-                <div className="mt-2 pt-2 border-t border-[#f2f0ed] space-y-1 text-[11px]">
-                  <p className="font-bold text-[#d48f00] flex items-center gap-1">
-                    <span>🎒</span>
-                    <span>[안내] 현장체험학습: 보고서를 7일이내 NEIS로 제출</span>
-                  </p>
-                  <ul className="list-disc list-inside text-[#474645] space-y-0.5 pl-0.5">
-                    <li><strong>보고서 마감:</strong> 결석계가 아니며 복귀 후 <strong>7일 이내 NEIS 보고서 제출</strong> {activeRecord.fieldTripDeadline ? `(${activeRecord.fieldTripDeadline}까지)` : ''}</li>
-                    <li><strong>첨부 사진:</strong> 다녀온 날짜마다 1장 ({activeRecord.daysCount}일간 ➔ <strong>총 {activeRecord.daysCount}장</strong>)</li>
-                    <li><strong>필수 사항:</strong> 체험학습 배경 + <strong>동행 보호자 사진 필수!</strong></li>
-                    <li><strong>인솔자 위임장:</strong> 보호자 외 인솔 시 위임장 제출 필요</li>
-                  </ul>
-                </div>
-              )}
-            </div>
-
-            {/* ⏰ 3차례 정기 독려 알림 작동 안내 (아침 09:30, 정오 12:30, 오후 14:30) */}
-            <div className="mt-3.5 p-3 bg-[#fff8e8] rounded-[10px] border border-[#ffcd6c]/60 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-[#d48f00] flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>3차례 정기 알림 작동 중</span>
-                </span>
-                <span className="badge-pill badge-orange text-[9px] font-semibold">
-                  미이행 알림
-                </span>
-              </div>
-              <p className="text-[11px] text-[#474645] leading-snug">
-                {activeRecord.type === 'FIELD_EXPERIENCE'
-                  ? '보고서를 7일이내 NEIS로 제출할 때까지 아침 09:30 · 정오 12:30 · 오후 14:30에 독려 핑이 울립니다.'
-                  : '서류를 챙겨 제출할 때까지 아침 09:30 · 정오 12:30 · 오후 14:30에 3차례 독려 핑이 울립니다.'}
-              </p>
-              <div className="grid grid-cols-3 gap-1.5 text-center text-[10px] font-semibold pt-0.5">
-                <div className={`p-1.5 rounded-[6px] border ${currentTime >= '09:30' ? 'bg-[#ffcd6c]/30 text-[#d48f00] border-[#ffcd6c]' : 'bg-[#ffffff] text-[#7e7e7d] border-[#f2f0ed]'}`}>
-                  🌅 1차 09:30
-                </div>
-                <div className={`p-1.5 rounded-[6px] border ${currentTime >= '12:30' ? 'bg-[#ffcd6c]/30 text-[#d48f00] border-[#ffcd6c]' : 'bg-[#ffffff] text-[#7e7e7d] border-[#f2f0ed]'}`}>
-                  🍱 2차 12:30
-                </div>
-                <div className={`p-1.5 rounded-[6px] border ${currentTime >= '14:30' ? 'bg-[#ffcd6c]/30 text-[#d48f00] border-[#ffcd6c]' : 'bg-[#ffffff] text-[#7e7e7d] border-[#f2f0ed]'}`}>
-                  🌇 3차 14:30
-                </div>
-              </div>
-            </div>
-
-            {/* Primary Action Dark Pill */}
-            <button
-              onClick={handlePickUp}
-              className="btn-dark-pill w-full mt-4 py-3 text-sm"
-            >
-              <FileText className="w-4 h-4" />
-              <span>
-                {activeRecord.type === 'FIELD_EXPERIENCE' 
-                  ? '1단계: 보고서를 7일이내 NEIS로 제출 확인 🎒' 
-                  : '1단계: 결석신고서 챙겼어요 📄'}
-              </span>
-            </button>
-          </div>
-        ) : activeRecord.status === 'FORM_PICKED_UP' ? (
-          /* State 3: Form Picked Up -> Writing & Checklist & Submit Ping */
-          <div className="family-card">
-            <div className="flex items-center justify-between pb-3 border-b border-[#f2f0ed]">
-              <div className="flex items-center space-x-2">
-                <FileText className="w-4 h-4 text-[#0086fc]" />
-                <span className="badge-pill badge-sky">
-                  {activeRecord.type === 'FIELD_EXPERIENCE' ? '2단계: 보고서를 7일이내 NEIS로 제출' : '2단계: 서류 작성 및 제출'}
-                </span>
-              </div>
-              <span className="text-[11px] text-[#7e7e7d]">작성 중</span>
-            </div>
-
-            <div className="mt-4">
-              <h3 className="text-base font-bold text-[#121212]">
-                {activeRecord.type === 'FIELD_EXPERIENCE' 
-                  ? '보고서를 7일이내 NEIS로 제출 & 사진 첨부' 
-                  : '종이 서류 작성 후 제출함에 넣기'}
-              </h3>
-              <p className="text-xs text-[#474645] mt-1 leading-relaxed">
-                {activeRecord.type === 'FIELD_EXPERIENCE' 
-                  ? '보고서를 7일이내 NEIS로 제출하고, 동행 보호자 사진(일자당 1장)을 점검한 뒤 제출 완료 핑을 보내세요.' 
-                  : '작성 후 동봉할 증빙서류를 아래에서 체크하고 교실 제출함에 넣은 뒤 버튼을 누르세요.'}
-              </p>
-            </div>
-
-            {activeRecord.type === 'FIELD_EXPERIENCE' && (
-              <div className="mt-3 p-3 bg-[#fff8e8] rounded-[8px] border border-[#e5d5c3] text-xs text-[#343433] space-y-1">
-                <p className="font-bold text-[#d48f00]">📸 사진 첨부 점검 (다녀온 일수: {activeRecord.daysCount}일)</p>
-                <p className="text-[11px] text-[#474645]">
-                  • 날짜마다 1장씩 사진 (총 <strong>{activeRecord.daysCount}장</strong>, 배경 포함)<br />
-                  • 동행한 <strong>보호자 얼굴이 나온 사진</strong> 포함 필수<br />
-                  • 보고서 마감: <strong>복귀 후 7일 이내</strong> {activeRecord.fieldTripDeadline ? `(${activeRecord.fieldTripDeadline}까지)` : ''}
-                </p>
+                {/* Render each unfulfilled card */}
+                {pendingDocRecords.map((rec, idx) => (
+                  <StudentActionCard
+                    key={rec.id}
+                    record={rec}
+                    student={myStudent}
+                    currentTime={currentTime}
+                    allStudentRecords={studentRecords}
+                    index={idx}
+                    totalPendingCount={pendingDocRecords.length}
+                    onRefresh={loadData}
+                  />
+                ))}
               </div>
             )}
-
-            {/* Attachment Checklist */}
-            <div className="mt-4 bg-[#fcfbf9] rounded-[10px] p-3.5 border border-[#f2f0ed]">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-[#121212]">
-                  📎 동봉한 증빙서류 체크
-                </span>
-                <span className="text-[11px] text-[#7e7e7d]">다중 선택 가능</span>
-              </div>
-
-              {/* 3일 이상 질병결석 시 서식 1호 경고 안내 */}
-              {isIllnessOver3 && (
-                <div className="mb-3 p-3 bg-[#fff0eb] rounded-[8px] border border-[#ff3e00]/30 text-xs text-[#121212] space-y-1.5">
-                  <div className="flex items-center gap-1.5 font-bold text-[#ff3e00]">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>연속 {Math.max(activeRecord.daysCount || 1, consecutiveIllnessDays)}일 질병결석 서류 규정 안내 (&lt;서식 1호&gt; 결석신고서, 주말 제외)</span>
-                  </div>
-                  <p className="text-[11px] text-[#474645] leading-relaxed">
-                    • 토·일 주말을 제외한 <strong>연속 3일 이상 질병결석</strong>(또는 지필평가 기간)은 학교 규정에 따라 반드시 <strong>[의사 진단서]</strong> 또는 <strong>[의사 소견서]</strong> 중 1부를 첨부해야 합니다.<br />
-                    • <span className="text-[#ff3e00] font-semibold">단순 진료확인서나 처방전(약봉투)은 3일 이상 결석 증빙서류로 인정되지 않습니다.</span>
-                  </p>
-                </div>
-              )}
-
-              {/* 2일 이내 질병결석 안내 */}
-              {!isIllnessOver3 && activeRecord.category === '질병' && (
-                <div className="mb-3 p-2.5 bg-[#f0f9ff] rounded-[8px] border border-[#0086fc]/20 text-xs text-[#121212] space-y-1">
-                  <div className="flex items-center gap-1.5 font-bold text-[#0086fc]">
-                    <span>💡 2일 이내 질병결석 증빙 안내 (&lt;서식 1호&gt;)</span>
-                  </div>
-                  <p className="text-[11px] text-[#474645] leading-relaxed">
-                    • 진료확인서, 처방전(약봉투), 학부모 의견서, 의사 소견서/진단서 중 1부 이상 제출
-                  </p>
-                </div>
-              )}
-
-              <div className="space-y-1.5 mt-2">
-                {availableAttachments.map((att) => {
-                  const isChecked = checkedAttachments.includes(att);
-                  const isCrucial = (activeRecord.type === 'MENSTRUAL' && att === '학부모 의견서(생리)') ||
-                                    (isIllnessOver3 && (att === '의사 진단서' || att === '의사 소견서')) ||
-                                    (!isIllnessOver3 && activeRecord.category === '질병' && (att === '진료확인서' || att === '학부모 의견서'));
-                  const badgeText = isIllnessOver3 && (att === '의사 진단서' || att === '의사 소견서')
-                    ? '3일이상 필수(택1)'
-                    : '필수/권장';
-
-                  return (
-                    <label
-                      key={att}
-                      onClick={() => toggleAttachment(att)}
-                      className={`flex items-center justify-between p-2.5 rounded-[8px] border text-xs font-medium cursor-pointer transition-all ${
-                        isChecked
-                          ? 'bg-[#ffffff] border-[#121212] text-[#121212] shadow-xs'
-                          : 'bg-[#ffffff] border-[#f2f0ed] text-[#474645] hover:border-[#e5d5c3]'
-                      }`}
-                    >
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => {}}
-                          className="w-4 h-4 text-[#121212] rounded-[4px] border-[#e5d5c3] focus:ring-0 cursor-pointer accent-[#121212]"
-                        />
-                        <span>{att}</span>
-                      </div>
-                      {isCrucial && (
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-[4px] font-semibold ${
-                          isIllnessOver3 && (att === '의사 진단서' || att === '의사 소견서')
-                            ? 'bg-[#ff3e00] text-white'
-                            : 'bg-[#fff0eb] text-[#ff3e00]'
-                        }`}>
-                          {badgeText}
-                        </span>
-                      )}
-                    </label>
-                  );
-                })}
-              </div>
-
-              {checkedAttachments.includes('기타') && (
-                <div className="mt-2">
-                  <input
-                    type="text"
-                    value={otherAttachmentText}
-                    onChange={(e) => setOtherAttachmentText(e.target.value)}
-                    placeholder="기타 증빙서류 명칭을 입력하세요"
-                    className="w-full text-xs p-2.5 bg-white border border-[#e5d5c3] rounded-[8px] focus:outline-hidden focus:border-[#121212]"
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* ⏰ 3차례 정기 독려 알림 작동 안내 */}
-            <div className="mt-3.5 p-3 bg-[#fff8e8] rounded-[10px] border border-[#ffcd6c]/60 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-[#d48f00] flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>2단계 미제출 알림 작동 중</span>
-                </span>
-                <span className="badge-pill badge-orange text-[9px] font-semibold">
-                  미제출 시 알림
-                </span>
-              </div>
-              <p className="text-[11px] text-[#474645] leading-snug">
-                서류 작성 후 제출함에 넣기 전까지 <strong>아침 09:30 · 정오 12:30 · 오후 14:30</strong>에 독려 핑이 울립니다.
-              </p>
-              <div className="grid grid-cols-3 gap-1.5 text-center text-[10px] font-semibold pt-0.5">
-                <div className={`p-1.5 rounded-[6px] border ${currentTime >= '09:30' ? 'bg-[#ffcd6c]/30 text-[#d48f00] border-[#ffcd6c]' : 'bg-[#ffffff] text-[#7e7e7d] border-[#f2f0ed]'}`}>
-                  🌅 1차 09:30
-                </div>
-                <div className={`p-1.5 rounded-[6px] border ${currentTime >= '12:30' ? 'bg-[#ffcd6c]/30 text-[#d48f00] border-[#ffcd6c]' : 'bg-[#ffffff] text-[#7e7e7d] border-[#f2f0ed]'}`}>
-                  🍱 2차 12:30
-                </div>
-                <div className={`p-1.5 rounded-[6px] border ${currentTime >= '14:30' ? 'bg-[#ffcd6c]/30 text-[#d48f00] border-[#ffcd6c]' : 'bg-[#ffffff] text-[#7e7e7d] border-[#f2f0ed]'}`}>
-                  🌇 3차 14:30
-                </div>
-              </div>
-            </div>
-
-            {/* Student optional message/memo to teacher */}
-            <div className="mt-3.5 bg-[#fcfbf9] rounded-[10px] p-3 border border-[#f2f0ed] text-xs">
-              <label className="block font-semibold text-[#121212] mb-1">
-                💬 선생님께 전달할 메모 (선택)
-              </label>
-              <input
-                type="text"
-                value={studentMemo}
-                onChange={(e) => setStudentMemo(e.target.value)}
-                placeholder="예: 진료확인서는 내일 가져갈게요, 서류 작성 완료 등"
-                className="w-full text-xs p-2.5 bg-white border border-[#e5d5c3] rounded-[6px] focus:outline-hidden focus:border-[#121212]"
-              />
-            </div>
-
-            {/* Primary Action Button */}
-            <button
-              onClick={handleSubmitForm}
-              disabled={isSubmitting}
-              className="btn-dark-pill w-full mt-4 py-3 text-sm cursor-pointer"
-            >
-              <Send className="w-4 h-4" />
-              <span>
-                {isSubmitting
-                  ? '전송 중...'
-                  : activeRecord.type === 'FIELD_EXPERIENCE'
-                  ? '보고서를 7일이내 NEIS로 제출 완료했어요! 📨'
-                  : '제출함에 넣었어요! (선생님께 핑) 📨'}
-              </span>
-            </button>
-            <p className="text-center text-[11px] text-[#7e7e7d] mt-2">
-              버튼을 누르면 선생님 대시보드에 즉시 실시간 알림음이 울립니다.
-            </p>
-
-            {/* ↩ 전단계로 되돌리기 버튼 */}
-            <div className="mt-3 pt-3 border-t border-[#f2f0ed] flex justify-center">
-              <button
-                type="button"
-                onClick={handleRevertToNotified}
-                className="text-xs text-[#7e7e7d] hover:text-[#121212] hover:bg-[#f2f0ed] px-3.5 py-1.5 rounded-[6px] border border-[#e5d5c3] transition-colors cursor-pointer inline-flex items-center gap-1.5 font-medium bg-white"
-                title="서류 챙기기를 취소하고 이전 안내 화면으로 되돌아갑니다."
-              >
-                <RotateCcw className="w-3 h-3 text-[#64748b]" />
-                <span>↩ 전단계로 (서류 챙기기 전으로 되돌리기)</span>
-              </button>
-            </div>
-          </div>
-        ) : activeRecord.status === 'SUBMITTED' ? (
-          /* State 4: Submitted -> Waiting for Teacher Inspection */
-          <div className="family-card text-center animate-in fade-in">
-            <div className="w-12 h-12 bg-[#e6fbf1] text-[#00ca48] rounded-full flex items-center justify-center mx-auto mb-3">
-              <Sparkles className="w-6 h-6" />
-            </div>
-
-            <span className="badge-pill badge-mint mb-2">
-              선생님께 제출 알림 완료 (정기 리마인드 해제)
-            </span>
-            <h3 className="text-base font-bold text-[#121212] mt-1">
-              {activeRecord.type === 'FIELD_EXPERIENCE'
-                ? '선생님이 NEIS 보고서 및 사진을 확인 중입니다'
-                : '선생님이 실물 서류를 확인 중입니다'}
-            </h3>
-            <p className="text-xs text-[#474645] mt-1.5 leading-relaxed">
-              {activeRecord.type === 'FIELD_EXPERIENCE'
-                ? '현장체험학습 보고서를 7일이내 NEIS로 제출 완료했습니다. 담임선생님이 NEIS 대조 후 최종 승인 처리하실 예정입니다.'
-                : '종이 결석신고서를 교실 제출함에 넣었습니다. 담임선생님이 서류를 확인하신 후 최종 승인 처리하실 예정입니다.'}
-            </p>
-
-            <div className="mt-4 bg-[#fbfaf9] rounded-[10px] p-3 border border-[#f2f0ed] text-xs space-y-1.5 text-left">
-              <div className="flex justify-between text-[#7e7e7d]">
-                <span>제출 일시:</span>
-                <span className="font-medium text-[#121212]">{activeRecord.submittedAt ? new Date(activeRecord.submittedAt).toLocaleTimeString('ko-KR') : '방금 전'}</span>
-              </div>
-              <div className="flex justify-between text-[#7e7e7d]">
-                <span>동봉한 증빙:</span>
-                <span className="font-semibold text-[#0086fc]">{activeRecord.attachments.join(', ') || '없음'}</span>
-              </div>
-              {(activeRecord.studentMemo || activeRecord.memo) && (
-                <div className="flex justify-between text-[#7e7e7d] pt-1.5 border-t border-[#f2f0ed]">
-                  <span>전달한 메모:</span>
-                  <span className="text-[#121212] font-medium">{activeRecord.studentMemo || activeRecord.memo}</span>
-                </div>
-              )}
-            </div>
-
-            {/* ↩️ 전단계로 되돌리기 & 제출 내용 수정 버튼 */}
-            <div className="mt-4 pt-3.5 border-t border-[#f2f0ed] space-y-2">
-              <button
-                type="button"
-                onClick={handleRevertSubmission}
-                className="w-full py-2.5 px-3 bg-white hover:bg-[#fff0eb] text-[#ff3e00] border-2 border-[#ffcd6c] hover:border-[#ff3e00] rounded-[8px] text-xs font-bold transition-all flex items-center justify-center space-x-1.5 shadow-xs cursor-pointer"
-              >
-                <RotateCcw className="w-3.5 h-3.5 text-[#ff3e00]" />
-                <span>↩ 제출 취소 및 내용 수정하기</span>
-              </button>
-              <p className="text-[11px] text-[#7e7e7d] text-center">
-                실수로 잘못 제출했거나 증빙서류를 다시 체크하려면 위 버튼을 눌러 수정하세요.
-              </p>
-            </div>
-          </div>
-        ) : (
-          /* State 5: Approved */
-          <div className="family-card text-center py-8">
-            <div className="w-12 h-12 bg-[#e6fbf1] text-[#00ca48] rounded-full flex items-center justify-center mx-auto mb-3">
-              <CheckCircle2 className="w-6 h-6" />
-            </div>
-            <h3 className="text-base font-bold text-[#121212]">결석신고서 승인 완료!</h3>
-            <p className="text-xs text-[#7e7e7d] mt-1">
-              {activeRecord.startDate} ({activeRecord.typeName}) 결석신고서가 정상 처리되었습니다.
-            </p>
-          </div>
-        )}
 
         {/* Previous History Card */}
         {studentRecords.length > 0 && (
@@ -1187,5 +736,564 @@ export default function StudentMobilePage() {
 
       </div>
     </main>
+  );
+}
+
+function StudentActionCard({
+  record,
+  student,
+  currentTime,
+  allStudentRecords,
+  index,
+  totalPendingCount,
+  onRefresh,
+}: {
+  record: AbsenceRecord;
+  student: Student | null;
+  currentTime: string;
+  allStudentRecords: AbsenceRecord[];
+  index: number;
+  totalPendingCount: number;
+  onRefresh: () => void;
+}) {
+  const consecutiveIllnessDays = getStudentConsecutiveIllnessDays(record.studentId, record);
+  const isIllnessOver3 = record.type === 'ILLNESS_OVER_3' || 
+    (record.category === '질병' && ((record.daysCount || 1) >= 3 || consecutiveIllnessDays >= 3));
+
+  const [checkedAttachments, setCheckedAttachments] = useState<AttachmentProof[]>(() => {
+    if (record.attachments && record.attachments.length > 0) {
+      return record.attachments;
+    }
+    if (record.type === 'FIELD_EXPERIENCE') {
+      return ['체험학습 보고서(NEIS)', '일자별 배경 사진(날짜당 1장)', '보호자 동반 사진'];
+    }
+    if (record.type === 'MENSTRUAL') {
+      return ['학부모 의견서(생리)'];
+    }
+    if (isIllnessOver3) {
+      return ['의사 진단서'];
+    }
+    if (record.category === '질병') {
+      return ['진료확인서', '학부모 의견서'];
+    }
+    return [];
+  });
+  const [otherAttachmentText, setOtherAttachmentText] = useState(record.otherAttachmentText || '');
+  const [studentMemo, setStudentMemo] = useState(record.studentMemo || record.memo || '');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (record.attachments && record.attachments.length > 0) {
+      setCheckedAttachments(record.attachments);
+    }
+    if (record.otherAttachmentText !== undefined) {
+      setOtherAttachmentText(record.otherAttachmentText || '');
+    }
+    if (record.studentMemo !== undefined || record.memo !== undefined) {
+      setStudentMemo(record.studentMemo || record.memo || '');
+    }
+  }, [record.id, record.attachments, record.otherAttachmentText, record.studentMemo, record.memo]);
+
+  const toggleAttachment = (item: AttachmentProof) => {
+    if (checkedAttachments.includes(item)) {
+      setCheckedAttachments(checkedAttachments.filter(a => a !== item));
+    } else {
+      setCheckedAttachments([...checkedAttachments, item]);
+    }
+  };
+
+  const availableAttachments: AttachmentProof[] = record.type === 'FIELD_EXPERIENCE'
+    ? ['체험학습 보고서(NEIS)', '일자별 배경 사진(날짜당 1장)', '보호자 동반 사진', '인솔자 위임장', '담임교사 확인서', '기타']
+    : record.type === 'MENSTRUAL'
+    ? ['학부모 의견서(생리)', '담임교사 확인서', '기타']
+    : isIllnessOver3
+    ? ['의사 진단서', '의사 소견서', '학부모 의견서', '담임교사 확인서', '기타']
+    : record.category === '질병'
+    ? ['진료확인서', '학부모 의견서', '약봉투/처방전', '의사 소견서', '의사 진단서', '담임교사 확인서', '기타']
+    : ['청첩장', '사망진단서', '학부모 의견서', '담임교사 확인서', '기타'];
+
+  const handlePickUp = () => {
+    markFormPickedUp(record.id);
+    onRefresh();
+  };
+
+  const handleSubmitForm = () => {
+    setIsSubmitting(true);
+    markSubmitted(record.id, checkedAttachments, otherAttachmentText, studentMemo);
+    confetti({
+      particleCount: 80,
+      spread: 70,
+      origin: { y: 0.65 },
+      colors: ['#ffcd6c', '#00c978', '#64c6ff', '#ff3e00', '#ff58ae'],
+    });
+    setTimeout(() => {
+      setIsSubmitting(false);
+      onRefresh();
+    }, 500);
+  };
+
+  const handleRevertSubmission = () => {
+    if (confirm(`[${record.typeName}] 제출을 취소하고 다시 작성하시겠습니까?\n동봉할 증빙서류 목록과 메모를 다시 수정하여 제출할 수 있습니다.`)) {
+      updateAbsenceRecordStatus(record.id, 'FORM_PICKED_UP', '학생이 제출 취소 후 다시 작성');
+      onRefresh();
+    }
+  };
+
+  const handleRevertToNotified = () => {
+    if (confirm(`[${record.typeName}] 서류 챙김을 취소하고 이전 안내 상태로 되돌리시겠습니까?`)) {
+      updateAbsenceRecordStatus(record.id, 'ATTENDED_NOTIFIED', '학생이 서류 챙김 취소');
+      onRefresh();
+    }
+  };
+
+  const handleMarkAttended = () => {
+    markAttended(record.id);
+    onRefresh();
+  };
+
+  const badgeOrder = totalPendingCount > 1 ? (
+    <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-[#f2f0ed]">
+      <div className="flex items-center space-x-2">
+        <span className="w-5 h-5 rounded-full bg-[#ff3e00] text-white text-[11px] font-bold flex items-center justify-center shadow-2xs">
+          {index + 1}
+        </span>
+        <span className="text-xs font-bold text-[#121212]">
+          미이행 건 ({index + 1} / 총 {totalPendingCount}건)
+        </span>
+      </div>
+      <span className="badge-pill badge-stone text-[10px] font-bold">
+        {record.startDate} ({record.daysCount}일간)
+      </span>
+    </div>
+  ) : null;
+
+  return (
+    <div id={`action-card-${record.id}`} className="scroll-mt-6">
+      {record.status === 'PENDING_ATTENDANCE' ? (
+        /* State 1: Registered, Waiting for Teacher Attendance Check */
+        <div className="family-card">
+          {badgeOrder}
+          <div className="flex items-center space-x-2 text-[#7e7e7d] mb-3">
+            <Clock className="w-4 h-4 text-[#d48f00]" />
+            <span className="text-xs font-semibold text-[#121212]">등교 확인 대기 중</span>
+          </div>
+          <div className="bg-[#fcfbf9] rounded-[10px] p-4 border border-[#f2f0ed] mb-4">
+            <div className="flex items-center justify-between mb-1">
+              <span className="badge-pill badge-sky">
+                {record.typeName}
+              </span>
+              <span className="text-xs text-[#7e7e7d]">{record.startDate}</span>
+            </div>
+            <h4 className="text-sm font-semibold text-[#121212] mt-1.5">{record.reason}</h4>
+          </div>
+          <div className="p-3.5 bg-[#fff8e8] rounded-[10px] border border-[#e5d5c3] text-[#343433] text-xs leading-relaxed">
+            <p className="font-semibold text-[#d48f00] flex items-center gap-1.5 mb-1">
+              <AlertCircle className="w-4 h-4" />
+              등교 시 결석계 알림이 울립니다
+            </p>
+            다음 날 등교하여 선생님이 <strong>[등교 확인]</strong>을 누르시면, 교실 서류함에서 양식을 챙기라는 안내 카드가 활성화됩니다.
+          </div>
+
+          {/* 학생 직접 등교 확인 & 서류 챙기기 시작 버튼 */}
+          <button
+            type="button"
+            onClick={handleMarkAttended}
+            className="btn-dark-pill w-full mt-3 py-2.5 text-xs flex items-center justify-center space-x-1.5 shadow-xs cursor-pointer"
+          >
+            <FileText className="w-4 h-4 text-[#ffcd6c]" />
+            <span>선생님, 오늘 등교했어요! (서류 챙기기 시작) 🏫</span>
+          </button>
+        </div>
+      ) : record.status === 'ATTENDED_NOTIFIED' ? (
+        /* State 2: Attended! Storybook Ember Orange Alert Card */
+        <div className="family-card border-2 border-[#ff3e00]/40 bg-[#ffffff]">
+          {badgeOrder}
+          <div className="flex items-center justify-between pb-3 border-b border-[#f2f0ed]">
+            <div className="flex items-center space-x-2">
+              <Bell className="w-5 h-5 text-[#ff3e00] animate-bounce" />
+              <span className="badge-pill badge-orange font-semibold">
+                등교 확인 완료 · 서류 챙기기
+              </span>
+            </div>
+            <span className="text-[11px] text-[#7e7e7d]">
+              {record.remindCount > 1 ? `${record.remindCount}회 리마인드` : '방금 전 알림'}
+            </span>
+          </div>
+
+          <div className="mt-4">
+            <h3 className="text-lg font-bold text-[#121212] leading-snug">
+              {record.type === 'FIELD_EXPERIENCE' ? (
+                <>
+                  현장체험학습은 결석계가 아니며<br />
+                  <span className="text-[#d48f00] underline underline-offset-4 decoration-[#d48f00]/30">
+                    [보고서를 7일이내 NEIS로 제출]
+                  </span> 해야 합니다!
+                </>
+              ) : (
+                <>
+                  교실 서류함에서<br />
+                  <span className="text-[#ff3e00] underline underline-offset-4 decoration-[#ff3e00]/30">
+                    [{record.typeName}]
+                  </span> 서류를 챙기세요!
+                </>
+              )}
+            </h3>
+            <p className="text-xs text-[#474645] mt-2 leading-relaxed">
+              {record.type === 'FIELD_EXPERIENCE' ? (
+                <>
+                  {student?.name} 학생! 현장체험학습은 결석계가 아니며, <strong>보고서를 7일이내 NEIS로 제출</strong>해야 합니다.
+                </>
+              ) : (
+                <>
+                  {student?.name} 학생! 교실 앞 서류함에서 <strong>결석신고서</strong>를 1장 챙겨서 자필로 작성해주세요.
+                </>
+              )}
+            </p>
+          </div>
+
+          <div className="mt-3.5 bg-[#fbfaf9] rounded-[10px] p-3.5 border border-[#f2f0ed] text-xs text-[#474645] space-y-1">
+            <div className="flex justify-between">
+              <span>결석 일자:</span>
+              <span className="font-medium text-[#121212]">{record.startDate} ({record.daysCount}일간)</span>
+            </div>
+            <div className="flex justify-between">
+              <span>결석 사유:</span>
+              <span className="font-medium text-[#121212]">{record.reason}</span>
+            </div>
+            {record.type === 'MENSTRUAL' && (
+              <div className="mt-2 pt-2 border-t border-[#f2f0ed] text-[#ff3e00] text-[11px] font-semibold">
+                ⚠️ 생리인정결석: 학부모 의견서 자필 작성이 필수입니다.
+              </div>
+            )}
+            {record.type === 'FIELD_EXPERIENCE' && (
+              <div className="mt-2 pt-2 border-t border-[#f2f0ed] space-y-1 text-[11px]">
+                <p className="font-bold text-[#d48f00] flex items-center gap-1">
+                  <span>🎒</span>
+                  <span>[안내] 현장체험학습: 보고서를 7일이내 NEIS로 제출</span>
+                </p>
+                <ul className="list-disc list-inside text-[#474645] space-y-0.5 pl-0.5">
+                  <li><strong>보고서 마감:</strong> 결석계가 아니며 복귀 후 <strong>7일 이내 NEIS 보고서 제출</strong> {record.fieldTripDeadline ? `(${record.fieldTripDeadline}까지)` : ''}</li>
+                  <li><strong>첨부 사진:</strong> 다녀온 날짜마다 1장 ({record.daysCount}일간 ➔ <strong>총 {record.daysCount}장</strong>)</li>
+                  <li><strong>필수 사항:</strong> 체험학습 배경 + <strong>동행 보호자 사진 필수!</strong></li>
+                  <li><strong>인솔자 위임장:</strong> 보호자 외 인솔 시 위임장 제출 필요</li>
+                </ul>
+              </div>
+            )}
+          </div>
+
+          {/* ⏰ 3차례 정기 독려 알림 작동 안내 (아침 09:30, 정오 12:30, 오후 14:30) */}
+          <div className="mt-3.5 p-3 bg-[#fff8e8] rounded-[10px] border border-[#ffcd6c]/60 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-[#d48f00] flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5" />
+                <span>3차례 정기 알림 작동 중</span>
+              </span>
+              <span className="badge-pill badge-orange text-[9px] font-semibold">
+                미이행 알림
+              </span>
+            </div>
+            <p className="text-[11px] text-[#474645] leading-snug">
+              {record.type === 'FIELD_EXPERIENCE'
+                ? '보고서를 7일이내 NEIS로 제출할 때까지 아침 09:30 · 정오 12:30 · 오후 14:30에 독려 핑이 울립니다.'
+                : '서류를 챙겨 제출할 때까지 아침 09:30 · 정오 12:30 · 오후 14:30에 3차례 독려 핑이 울립니다.'}
+            </p>
+            <div className="grid grid-cols-3 gap-1.5 text-center text-[10px] font-semibold pt-0.5">
+              <div className={`p-1.5 rounded-[6px] border ${currentTime >= '09:30' ? 'bg-[#ffcd6c]/30 text-[#d48f00] border-[#ffcd6c]' : 'bg-[#ffffff] text-[#7e7e7d] border-[#f2f0ed]'}`}>
+                🌅 1차 09:30
+              </div>
+              <div className={`p-1.5 rounded-[6px] border ${currentTime >= '12:30' ? 'bg-[#ffcd6c]/30 text-[#d48f00] border-[#ffcd6c]' : 'bg-[#ffffff] text-[#7e7e7d] border-[#f2f0ed]'}`}>
+                🍱 2차 12:30
+              </div>
+              <div className={`p-1.5 rounded-[6px] border ${currentTime >= '14:30' ? 'bg-[#ffcd6c]/30 text-[#d48f00] border-[#ffcd6c]' : 'bg-[#ffffff] text-[#7e7e7d] border-[#f2f0ed]'}`}>
+                🌇 3차 14:30
+              </div>
+            </div>
+          </div>
+
+          {/* Primary Action Dark Pill */}
+          <button
+            type="button"
+            onClick={handlePickUp}
+            className="btn-dark-pill w-full mt-4 py-3 text-sm cursor-pointer"
+          >
+            <FileText className="w-4 h-4" />
+            <span>
+              {record.type === 'FIELD_EXPERIENCE' 
+                ? '1단계: 보고서를 7일이내 NEIS로 제출 확인 🎒' 
+                : '1단계: 결석신고서 챙겼어요 📄'}
+            </span>
+          </button>
+        </div>
+      ) : record.status === 'FORM_PICKED_UP' ? (
+        /* State 3: Form Picked Up -> Writing & Checklist & Submit Ping */
+        <div className="family-card">
+          {badgeOrder}
+          <div className="flex items-center justify-between pb-3 border-b border-[#f2f0ed]">
+            <div className="flex items-center space-x-2">
+              <FileText className="w-4 h-4 text-[#0086fc]" />
+              <span className="badge-pill badge-sky">
+                {record.type === 'FIELD_EXPERIENCE' ? '2단계: 보고서를 7일이내 NEIS로 제출' : '2단계: 서류 작성 및 제출'}
+              </span>
+            </div>
+            <span className="text-[11px] text-[#7e7e7d]">작성 중</span>
+          </div>
+
+          <div className="mt-4">
+            <h3 className="text-base font-bold text-[#121212]">
+              {record.type === 'FIELD_EXPERIENCE' 
+                ? '보고서를 7일이내 NEIS로 제출 & 사진 첨부' 
+                : '종이 서류 작성 후 제출함에 넣기'}
+            </h3>
+            <p className="text-xs text-[#474645] mt-1 leading-relaxed">
+              {record.type === 'FIELD_EXPERIENCE' 
+                ? '보고서를 7일이내 NEIS로 제출하고, 동행 보호자 사진(일자당 1장)을 점검한 뒤 제출 완료 핑을 보내세요.' 
+                : '작성 후 동봉할 증빙서류를 아래에서 체크하고 교실 제출함에 넣은 뒤 버튼을 누르세요.'}
+            </p>
+          </div>
+
+          {record.type === 'FIELD_EXPERIENCE' && (
+            <div className="mt-3 p-3 bg-[#fff8e8] rounded-[8px] border border-[#e5d5c3] text-xs text-[#343433] space-y-1">
+              <p className="font-bold text-[#d48f00]">📸 사진 첨부 점검 (다녀온 일수: {record.daysCount}일)</p>
+              <p className="text-[11px] text-[#474645]">
+                • 날짜마다 1장씩 사진 (총 <strong>{record.daysCount}장</strong>, 배경 포함)<br />
+                • 동행한 <strong>보호자 얼굴이 나온 사진</strong> 포함 필수<br />
+                • 보고서 마감: <strong>복귀 후 7일 이내</strong> {record.fieldTripDeadline ? `(${record.fieldTripDeadline}까지)` : ''}
+              </p>
+            </div>
+          )}
+
+          {/* Attachment Checklist */}
+          <div className="mt-4 bg-[#fcfbf9] rounded-[10px] p-3.5 border border-[#f2f0ed]">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-[#121212]">
+                📎 동봉한 증빙서류 체크
+              </span>
+              <span className="text-[11px] text-[#7e7e7d]">다중 선택 가능</span>
+            </div>
+
+            {/* 3일 이상 질병결석 시 서식 1호 경고 안내 */}
+            {isIllnessOver3 && (
+              <div className="mb-3 p-3 bg-[#fff0eb] rounded-[8px] border border-[#ff3e00]/30 text-xs text-[#121212] space-y-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-[#ff3e00]">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>연속 {Math.max(record.daysCount || 1, consecutiveIllnessDays)}일 질병결석 서류 규정 안내 (&lt;서식 1호&gt; 결석신고서, 주말 제외)</span>
+                </div>
+                <p className="text-[11px] text-[#474645] leading-relaxed">
+                  • 토·일 주말을 제외한 <strong>연속 3일 이상 질병결석</strong>(또는 지필평가 기간)은 학교 규정에 따라 반드시 <strong>[의사 진단서]</strong> 또는 <strong>[의사 소견서]</strong> 중 1부를 첨부해야 합니다.<br />
+                  • <span className="text-[#ff3e00] font-semibold">단순 진료확인서나 처방전(약봉투)은 3일 이상 결석 증빙서류로 인정되지 않습니다.</span>
+                </p>
+              </div>
+            )}
+
+            {/* 2일 이내 질병결석 안내 */}
+            {!isIllnessOver3 && record.category === '질병' && (
+              <div className="mb-3 p-2.5 bg-[#f0f9ff] rounded-[8px] border border-[#0086fc]/20 text-xs text-[#121212] space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-[#0086fc]">
+                  <span>💡 2일 이내 질병결석 증빙 안내 (&lt;서식 1호&gt;)</span>
+                </div>
+                <p className="text-[11px] text-[#474645] leading-relaxed">
+                  • 진료확인서, 처방전(약봉투), 학부모 의견서, 의사 소견서/진단서 중 1부 이상 제출
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-1.5 mt-2">
+              {availableAttachments.map((att) => {
+                const isChecked = checkedAttachments.includes(att);
+                const isCrucial = (record.type === 'MENSTRUAL' && att === '학부모 의견서(생리)') ||
+                                  (isIllnessOver3 && (att === '의사 진단서' || att === '의사 소견서')) ||
+                                  (!isIllnessOver3 && record.category === '질병' && (att === '진료확인서' || att === '학부모 의견서'));
+                const badgeText = isIllnessOver3 && (att === '의사 진단서' || att === '의사 소견서')
+                  ? '3일이상 필수(택1)'
+                  : '필수/권장';
+
+                return (
+                  <label
+                    key={att}
+                    onClick={() => toggleAttachment(att)}
+                    className={`flex items-center justify-between p-2.5 rounded-[8px] border text-xs font-medium cursor-pointer transition-all ${
+                      isChecked
+                        ? 'bg-[#ffffff] border-[#121212] text-[#121212] shadow-xs'
+                        : 'bg-[#ffffff] border-[#f2f0ed] text-[#474645] hover:border-[#e5d5c3]'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => {}}
+                        className="w-4 h-4 text-[#121212] rounded-[4px] border-[#e5d5c3] focus:ring-0 cursor-pointer accent-[#121212]"
+                      />
+                      <span>{att}</span>
+                    </div>
+                    {isCrucial && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-[4px] font-semibold ${
+                        isIllnessOver3 && (att === '의사 진단서' || att === '의사 소견서')
+                          ? 'bg-[#ff3e00] text-white'
+                          : 'bg-[#fff0eb] text-[#ff3e00]'
+                      }`}>
+                        {badgeText}
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+
+            {checkedAttachments.includes('기타') && (
+              <div className="mt-2">
+                <input
+                  type="text"
+                  value={otherAttachmentText}
+                  onChange={(e) => setOtherAttachmentText(e.target.value)}
+                  placeholder="기타 증빙서류 명칭을 입력하세요"
+                  className="w-full text-xs p-2.5 bg-white border border-[#e5d5c3] rounded-[8px] focus:outline-hidden focus:border-[#121212]"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* ⏰ 3차례 정기 독려 알림 작동 안내 */}
+          <div className="mt-3.5 p-3 bg-[#fff8e8] rounded-[10px] border border-[#ffcd6c]/60 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-[#d48f00] flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5" />
+                <span>2단계 미제출 알림 작동 중</span>
+              </span>
+              <span className="badge-pill badge-orange text-[9px] font-semibold">
+                미제출 시 알림
+              </span>
+            </div>
+            <p className="text-[11px] text-[#474645] leading-snug">
+              서류 작성 후 제출함에 넣기 전까지 <strong>아침 09:30 · 정오 12:30 · 오후 14:30</strong>에 독려 핑이 울립니다.
+            </p>
+            <div className="grid grid-cols-3 gap-1.5 text-center text-[10px] font-semibold pt-0.5">
+              <div className={`p-1.5 rounded-[6px] border ${currentTime >= '09:30' ? 'bg-[#ffcd6c]/30 text-[#d48f00] border-[#ffcd6c]' : 'bg-[#ffffff] text-[#7e7e7d] border-[#f2f0ed]'}`}>
+                🌅 1차 09:30
+              </div>
+              <div className={`p-1.5 rounded-[6px] border ${currentTime >= '12:30' ? 'bg-[#ffcd6c]/30 text-[#d48f00] border-[#ffcd6c]' : 'bg-[#ffffff] text-[#7e7e7d] border-[#f2f0ed]'}`}>
+                🍱 2차 12:30
+              </div>
+              <div className={`p-1.5 rounded-[6px] border ${currentTime >= '14:30' ? 'bg-[#ffcd6c]/30 text-[#d48f00] border-[#ffcd6c]' : 'bg-[#ffffff] text-[#7e7e7d] border-[#f2f0ed]'}`}>
+                🌇 3차 14:30
+              </div>
+            </div>
+          </div>
+
+          {/* Student optional message/memo to teacher */}
+          <div className="mt-3.5 bg-[#fcfbf9] rounded-[10px] p-3 border border-[#f2f0ed] text-xs">
+            <label className="block font-semibold text-[#121212] mb-1">
+              💬 선생님께 전달할 메모 (선택)
+            </label>
+            <input
+              type="text"
+              value={studentMemo}
+              onChange={(e) => setStudentMemo(e.target.value)}
+              placeholder="예: 진료확인서는 내일 가져갈게요, 서류 작성 완료 등"
+              className="w-full text-xs p-2.5 bg-white border border-[#e5d5c3] rounded-[6px] focus:outline-hidden focus:border-[#121212]"
+            />
+          </div>
+
+          {/* Primary Action Button */}
+          <button
+            type="button"
+            onClick={handleSubmitForm}
+            disabled={isSubmitting}
+            className="btn-dark-pill w-full mt-4 py-3 text-sm cursor-pointer"
+          >
+            <Send className="w-4 h-4" />
+            <span>
+              {isSubmitting
+                ? '전송 중...'
+                : record.type === 'FIELD_EXPERIENCE'
+                ? '보고서를 7일이내 NEIS로 제출 완료했어요! 📨'
+                : '제출함에 넣었어요! (선생님께 핑) 📨'}
+            </span>
+          </button>
+          <p className="text-center text-[11px] text-[#7e7e7d] mt-2">
+            버튼을 누르면 선생님 대시보드에 즉시 실시간 알림음이 울립니다.
+          </p>
+
+          {/* ↩ 전단계로 되돌리기 버튼 */}
+          <div className="mt-3 pt-3 border-t border-[#f2f0ed] flex justify-center">
+            <button
+              type="button"
+              onClick={handleRevertToNotified}
+              className="text-xs text-[#7e7e7d] hover:text-[#121212] hover:bg-[#f2f0ed] px-3.5 py-1.5 rounded-[6px] border border-[#e5d5c3] transition-colors cursor-pointer inline-flex items-center gap-1.5 font-medium bg-white"
+              title="서류 챙기기를 취소하고 이전 안내 화면으로 되돌아갑니다."
+            >
+              <RotateCcw className="w-3 h-3 text-[#64748b]" />
+              <span>↩ 전단계로 (서류 챙기기 전으로 되돌리기)</span>
+            </button>
+          </div>
+        </div>
+      ) : record.status === 'SUBMITTED' ? (
+        /* State 4: Submitted -> Waiting for Teacher Inspection */
+        <div className="family-card text-center animate-in fade-in">
+          {badgeOrder}
+          <div className="w-12 h-12 bg-[#e6fbf1] text-[#00ca48] rounded-full flex items-center justify-center mx-auto mb-3">
+            <Sparkles className="w-6 h-6" />
+          </div>
+
+          <span className="badge-pill badge-mint mb-2">
+            선생님께 제출 알림 완료 (정기 리마인드 해제)
+          </span>
+          <h3 className="text-base font-bold text-[#121212] mt-1">
+            {record.type === 'FIELD_EXPERIENCE'
+              ? '선생님이 NEIS 보고서 및 사진을 확인 중입니다'
+              : '선생님이 실물 서류를 확인 중입니다'}
+          </h3>
+          <p className="text-xs text-[#474645] mt-1.5 leading-relaxed">
+            {record.type === 'FIELD_EXPERIENCE'
+              ? '현장체험학습 보고서를 7일이내 NEIS로 제출 완료했습니다. 담임선생님이 NEIS 대조 후 최종 승인 처리하실 예정입니다.'
+              : '종이 결석신고서를 교실 제출함에 넣었습니다. 담임선생님이 서류를 확인하신 후 최종 승인 처리하실 예정입니다.'}
+          </p>
+
+          <div className="mt-4 bg-[#fbfaf9] rounded-[10px] p-3 border border-[#f2f0ed] text-xs space-y-1.5 text-left">
+            <div className="flex justify-between text-[#7e7e7d]">
+              <span>제출 일시:</span>
+              <span className="font-medium text-[#121212]">{record.submittedAt ? new Date(record.submittedAt).toLocaleTimeString('ko-KR') : '방금 전'}</span>
+            </div>
+            <div className="flex justify-between text-[#7e7e7d]">
+              <span>동봉한 증빙:</span>
+              <span className="font-semibold text-[#0086fc]">{record.attachments?.join(', ') || '없음'}</span>
+            </div>
+            {(record.studentMemo || record.memo) && (
+              <div className="flex justify-between text-[#7e7e7d] pt-1.5 border-t border-[#f2f0ed]">
+                <span>전달한 메모:</span>
+                <span className="text-[#121212] font-medium">{record.studentMemo || record.memo}</span>
+              </div>
+            )}
+          </div>
+
+          {/* ↩️ 전단계로 되돌리기 & 제출 내용 수정 버튼 */}
+          <div className="mt-4 pt-3.5 border-t border-[#f2f0ed] space-y-2">
+            <button
+              type="button"
+              onClick={handleRevertSubmission}
+              className="w-full py-2.5 px-3 bg-white hover:bg-[#fff0eb] text-[#ff3e00] border-2 border-[#ffcd6c] hover:border-[#ff3e00] rounded-[8px] text-xs font-bold transition-all flex items-center justify-center space-x-1.5 shadow-xs cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-[#ff3e00]" />
+              <span>↩ 제출 취소 및 내용 수정하기</span>
+            </button>
+            <p className="text-[11px] text-[#7e7e7d] text-center">
+              실수로 잘못 제출했거나 증빙서류를 다시 체크하려면 위 버튼을 눌러 수정하세요.
+            </p>
+          </div>
+        </div>
+      ) : (
+        /* State 5: Approved */
+        <div className="family-card text-center py-8">
+          {badgeOrder}
+          <div className="w-12 h-12 bg-[#e6fbf1] text-[#00ca48] rounded-full flex items-center justify-center mx-auto mb-3">
+            <CheckCircle2 className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-bold text-[#121212]">결석신고서 승인 완료!</h3>
+          <p className="text-xs text-[#7e7e7d] mt-1">
+            {record.startDate} ({record.typeName}) 결석신고서가 정상 처리되었습니다.
+          </p>
+        </div>
+      )}
+    </div>
   );
 }
