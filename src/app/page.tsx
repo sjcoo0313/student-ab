@@ -698,17 +698,24 @@ export default function StudentMobilePage() {
               </div>
 
               {/* Android Guide */}
-              <div className="p-3 bg-[#fbfaf9] rounded-[10px] border border-[#f2f0ed] space-y-1.5">
+              <div className="p-3 bg-[#fbfaf9] rounded-[10px] border border-[#f2f0ed] space-y-2">
                 <div className="font-bold text-[#121212] flex items-center gap-1.5">
                   <span>🤖</span>
-                  <span>갤럭시 / 안드로이드 (Chrome)</span>
+                  <span>갤럭시 / 안드로이드 (삼성 인터넷 & 크롬)</span>
                 </div>
-                <ol className="list-decimal list-inside space-y-1 text-[11px] text-[#474645] pl-1">
-                  <li><strong>Chrome(크롬)</strong> 또는 삼성 인터넷으로 접속합니다.</li>
-                  <li>화면 우측 상단 <strong>더보기 버튼(점 3개 ⋮)</strong>을 누릅니다.</li>
-                  <li><strong>[홈 화면에 추가]</strong> 또는 <strong>[앱 설치]</strong>를 누릅니다.</li>
-                  <li>바탕화면에 앱 아이콘이 설치되어 어플처럼 실행할 수 있습니다!</li>
-                </ol>
+                <div className="space-y-1.5 text-[11px] text-[#474645] pl-1">
+                  <div className="p-2 bg-white rounded border border-[#e5d5c3]/80">
+                    <p className="font-bold text-[#121212] mb-1">🔹 삼성 인터넷 (사진의 브라우저)</p>
+                    <p>메뉴에서 <strong>[현재 페이지 추가 (+ 모양)]</strong> 클릭 ➔ <strong>[홈 화면]</strong>을 선택하시면 바탕화면에 설치됩니다!</p>
+                  </div>
+                  <div className="p-2 bg-white rounded border border-[#e5d5c3]/80">
+                    <p className="font-bold text-[#121212] mb-1">🔹 크롬(Chrome) 브라우저</p>
+                    <p>우측 상단 <strong>점 3개(⋮)</strong> ➔ <strong>[홈 화면에 추가]</strong> 또는 <strong>[앱 설치]</strong>를 누르면 설치됩니다.</p>
+                  </div>
+                  <p className="text-[10px] text-[#7e7e7d] pt-0.5">
+                    💡 주소창 옆에 마스크/안경 모양(비밀 모드)이 켜져 있다면, 비밀 모드를 끄고 일반 탭에서 여셔야 로그인 정보가 유지됩니다.
+                  </p>
+                </div>
               </div>
 
               {/* Notification Permission Notice */}
