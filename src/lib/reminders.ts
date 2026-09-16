@@ -203,6 +203,9 @@ export function dispatchScheduledReminder(
     dispatchedNames.push(`${rec.studentNum}번 ${rec.studentName}`);
 
     // 단계별 맞춤 안내 문구 생성
+    const is3DaysIllness = rec.type === 'ILLNESS_OVER_3' || (rec.category === '질병' && (rec.daysCount || 1) >= 3);
+    const docNotice = is3DaysIllness ? ' (※ 3일 이상 질병결석: 의사 진단서 또는 의사 소견서 필수 지참)' : '';
+
     let messageBody = '';
     if (rec.type === 'FIELD_EXPERIENCE') {
       if (slotTime === '09:30') {
@@ -215,24 +218,24 @@ export function dispatchScheduledReminder(
     } else if (rec.status === 'ATTENDED_NOTIFIED') {
       // 1단계 미이행: 서류 미수령
       if (slotTime === '09:30') {
-        messageBody = `🔔 [1차 아침 09:30 알림] ${rec.studentName} 학생! 교실 앞 서류함에서 [${rec.typeName}] 결석신고서를 아직 챙기지 않았습니다. 지금 서류를 챙겨주세요!`;
+        messageBody = `🔔 [1차 아침 09:30 알림] ${rec.studentName} 학생! 교실 앞 서류함에서 [${rec.typeName}] 결석신고서를 아직 챙기지 않았습니다. 지금 서류를 챙겨주세요!${docNotice}`;
       } else if (slotTime === '12:30') {
-        messageBody = `🍱 [2차 정오 12:30 알림] ${rec.studentName} 학생! 점심시간에 교실 앞 서류함에서 [${rec.typeName}] 결석신고서를 반드시 챙겨 자필로 작성해주세요!`;
+        messageBody = `🍱 [2차 정오 12:30 알림] ${rec.studentName} 학생! 점심시간에 교실 앞 서류함에서 [${rec.typeName}] 결석신고서를 반드시 챙겨 자필로 작성해주세요!${docNotice}`;
       } else {
-        messageBody = `⚠️ [3차 오후 14:30 긴급] ${rec.studentName} 학생! 오늘 하교 전까지 교실 서류함에서 [${rec.typeName}] 결석신고서를 챙기지 않으면 결석 처리가 지연됩니다.`;
+        messageBody = `⚠️ [3차 오후 14:30 긴급] ${rec.studentName} 학생! 오늘 하교 전까지 교실 서류함에서 [${rec.typeName}] 결석신고서를 챙기지 않으면 결석 처리가 지연됩니다.${docNotice}`;
       }
     } else if (rec.status === 'FORM_PICKED_UP') {
       // 2단계 미이행: 서류 작성 및 제출함 투입 대기
       if (slotTime === '09:30') {
-        messageBody = `📝 [1차 아침 09:30 알림] ${rec.studentName} 학생! 챙겨간 [${rec.typeName}] 결석계 작성 및 증빙서류를 준비해주세요.`;
+        messageBody = `📝 [1차 아침 09:30 알림] ${rec.studentName} 학생! 챙겨간 [${rec.typeName}] 결석계 작성 및 증빙서류를 준비해주세요.${docNotice}`;
       } else if (slotTime === '12:30') {
-        messageBody = `🍱 [2차 정오 12:30 알림] ${rec.studentName} 학생! 점심시간에 [${rec.typeName}] 결석계를 작성하여 교실 제출함에 넣고 앱에서 [제출 완료]를 꼭 눌러주세요!`;
+        messageBody = `🍱 [2차 정오 12:30 알림] ${rec.studentName} 학생! 점심시간에 [${rec.typeName}] 결석계를 작성하여 교실 제출함에 넣고 앱에서 [제출 완료]를 꼭 눌러주세요!${docNotice}`;
       } else {
-        messageBody = `⚠️ [3차 오후 14:30 마감] ${rec.studentName} 학생! 오늘 하교 전까지 결석계를 교실 제출함에 넣고 앱에서 [제출 완료] 핑을 전송해주세요!`;
+        messageBody = `⚠️ [3차 오후 14:30 마감] ${rec.studentName} 학생! 오늘 하교 전까지 결석계를 교실 제출함에 넣고 앱에서 [제출 완료] 핑을 전송해주세요!${docNotice}`;
       }
     } else {
       // PENDING_ATTENDANCE
-      messageBody = `🏫 [${slot.title}] ${rec.studentName} 학생! 오늘 등교 후 담임선생님께 등교 확인을 받고 [${rec.typeName}] 결석계를 챙겨주세요.`;
+      messageBody = `🏫 [${slot.title}] ${rec.studentName} 학생! 오늘 등교 후 담임선생님께 등교 확인을 받고 [${rec.typeName}] 결석계를 챙겨주세요.${docNotice}`;
     }
 
     const notifTitle = rec.type === 'FIELD_EXPERIENCE'

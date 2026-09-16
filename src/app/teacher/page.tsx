@@ -1464,8 +1464,42 @@ export default function TeacherDashboard() {
                         setNewStartDate(start);
                         setNewEndDate(end);
                         setNewDaysCount(count);
+                        if (newKind === '결석' && newCategory === '질병') {
+                          if (count >= 3) {
+                            setNewSpecialType('ILLNESS_OVER_3');
+                            if (newReason === '감기몸살 및 발열') setNewReason('질병 치료 (3일 이상 진단서)');
+                          } else {
+                            setNewSpecialType('ILLNESS_UNDER_3');
+                            if (newReason === '질병 치료 (3일 이상 진단서)') setNewReason('감기몸살 및 발열');
+                          }
+                        }
                       }}
                     />
+
+                    {/* 질병결석 3일 이상 vs 2일 이내 학교 서식 기준 안내 배너 */}
+                    {newKind === '결석' && newCategory === '질병' && (
+                      newDaysCount >= 3 ? (
+                        <div className="p-3 bg-[#fef2f2] border border-[#fca5a5] rounded-[6px] text-xs space-y-1 mt-2 animate-in fade-in">
+                          <div className="font-bold text-[#b91c1c] flex items-center gap-1.5">
+                            <AlertTriangle className="w-4 h-4 text-[#dc2626] shrink-0" />
+                            <span>3일 이상 질병결석 서류 안내 (학교 결석신고서 기준)</span>
+                          </div>
+                          <p className="text-[11px] text-[#7f1d1d] leading-relaxed">
+                            • 결석 기간이 <strong>{newDaysCount}일(3일 이상)</strong>이므로 결석신고서 규정에 따라 반드시 <strong>의사 진단서</strong> 또는 <strong>의사 소견서</strong> 중 1부를 제출해야 합니다.<br />
+                            • 2일 이내에 사용되는 단순 진료확인서·처방전은 3일 이상 결석 시 증빙으로 인정되지 않으며, 학생 모바일 앱에도 <strong>진단서/소견서 지참 필수 안내</strong>가 자동으로 전달됩니다.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="p-2.5 bg-[#f0f9ff] border border-[#bae6fd] rounded-[6px] text-xs space-y-0.5 mt-2 animate-in fade-in">
+                          <div className="font-bold text-[#0369a1] flex items-center gap-1">
+                            <span>📋 2일 이내 질병결석 서류 안내</span>
+                          </div>
+                          <p className="text-[11px] text-[#0c4a6e]">
+                            2일 이내 질병결석은 진료확인서, 학부모 의견서, 처방전/약봉투 등으로 제출 가능합니다.
+                          </p>
+                        </div>
+                      )
+                    )}
                   </div>
 
                   {/* Requires Document Toggle */}
@@ -1637,6 +1671,17 @@ export default function TeacherDashboard() {
                         </span>
                         <p className="text-[#92400e] text-xs font-medium pl-4 break-all bg-white/80 p-1.5 rounded border border-[#fde68a]">
                           &ldquo;{selectedRecordToApprove.studentMemo || selectedRecordToApprove.memo}&rdquo;
+                        </p>
+                      </div>
+                    )}
+
+                    {(selectedRecordToApprove.category === '질병' && (selectedRecordToApprove.daysCount >= 3 || selectedRecordToApprove.type === 'ILLNESS_OVER_3')) && (
+                      <div className="pt-2 border-t border-[#f2f0ed] mt-2 bg-[#fef2f2] p-2.5 rounded-[6px] border border-[#fca5a5]">
+                        <span className="font-bold text-[#b91c1c] flex items-center gap-1 mb-0.5 text-xs">
+                          <AlertTriangle className="w-3.5 h-3.5 text-[#dc2626]" /> 3일 이상 질병결석 증빙 대조 필수 (학교 규정)
+                        </span>
+                        <p className="text-[#7f1d1d] text-[11px] leading-tight">
+                          결석신고서 서식 규정에 따라 실물 <strong>&lsquo;의사 진단서&rsquo;</strong> 또는 <strong>&lsquo;의사 소견서&rsquo;</strong> 원본이 동봉되어 있는지 반드시 확인하세요. (단순 진료확인서 불가)
                         </p>
                       </div>
                     )}

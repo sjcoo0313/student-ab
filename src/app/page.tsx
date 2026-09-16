@@ -192,6 +192,8 @@ export default function StudentMobilePage() {
   const activeRecord = pendingDocRecords[0];
   const myApprovedRecords = studentRecords.filter(r => r.status === 'APPROVED');
 
+  const isIllnessOver3 = activeRecord?.type === 'ILLNESS_OVER_3' || (activeRecord?.category === '질병' && (activeRecord?.daysCount || 1) >= 3);
+
   useEffect(() => {
     if (activeRecord) {
       if (activeRecord.attachments && activeRecord.attachments.length > 0) {
@@ -200,7 +202,11 @@ export default function StudentMobilePage() {
         setCheckedAttachments(['체험학습 보고서(NEIS)', '일자별 배경 사진(날짜당 1장)', '보호자 동반 사진']);
       } else if (activeRecord.type === 'MENSTRUAL') {
         setCheckedAttachments(['학부모 의견서(생리)']);
+      } else if (activeRecord.type === 'ILLNESS_OVER_3' || (activeRecord.category === '질병' && (activeRecord.daysCount || 1) >= 3)) {
+        // 3일 이상 질병결석: 학교 결석신고서 <서식 1호> 규정 (의사 진단서 또는 의사 소견서 필수 지참)
+        setCheckedAttachments(['의사 진단서']);
       } else if (activeRecord.category === '질병') {
+        // 2일 이내 질병결석
         setCheckedAttachments(['진료확인서', '학부모 의견서']);
       } else {
         setCheckedAttachments([]);
@@ -262,8 +268,10 @@ export default function StudentMobilePage() {
     ? ['체험학습 보고서(NEIS)', '일자별 배경 사진(날짜당 1장)', '보호자 동반 사진', '인솔자 위임장', '담임교사 확인서', '기타']
     : activeRecord?.type === 'MENSTRUAL'
     ? ['학부모 의견서(생리)', '담임교사 확인서', '기타']
+    : isIllnessOver3
+    ? ['의사 진단서', '의사 소견서', '학부모 의견서', '담임교사 확인서', '기타']
     : activeRecord?.category === '질병'
-    ? ['진료확인서', '학부모 의견서', '의사 소견서', '의사 진단서', '약봉투/처방전', '담임교사 확인서', '기타']
+    ? ['진료확인서', '학부모 의견서', '약봉투/처방전', '의사 소견서', '의사 진단서', '담임교사 확인서', '기타']
     : ['청첩장', '사망진단서', '학부모 의견서', '담임교사 확인서', '기타'];
 
   return (
@@ -639,11 +647,42 @@ export default function StudentMobilePage() {
                 <span className="text-[11px] text-[#7e7e7d]">다중 선택 가능</span>
               </div>
 
+              {/* 3일 이상 질병결석 시 서식 1호 경고 안내 */}
+              {isIllnessOver3 && (
+                <div className="mb-3 p-3 bg-[#fff0eb] rounded-[8px] border border-[#ff3e00]/30 text-xs text-[#121212] space-y-1.5">
+                  <div className="flex items-center gap-1.5 font-bold text-[#ff3e00]">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>3일 이상 질병결석 증빙 안내 (&lt;서식 1호&gt; 결석신고서)</span>
+                  </div>
+                  <p className="text-[11px] text-[#474645] leading-relaxed">
+                    • 3일 이상 연속 질병결석(또는 지필평가)은 학교 규정에 따라 반드시 <strong>[의사 진단서]</strong> 또는 <strong>[의사 소견서]</strong> 중 1부를 첨부해야 합니다.<br />
+                    • <span className="text-[#ff3e00] font-semibold">단순 진료확인서나 처방전(약봉투)은 3일 이상 결석 증빙서류로 인정되지 않습니다.</span>
+                  </p>
+                </div>
+              )}
+
+              {/* 2일 이내 질병결석 안내 */}
+              {!isIllnessOver3 && activeRecord.category === '질병' && (
+                <div className="mb-3 p-2.5 bg-[#f0f9ff] rounded-[8px] border border-[#0086fc]/20 text-xs text-[#121212] space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-[#0086fc]">
+                    <span>💡 2일 이내 질병결석 증빙 안내 (&lt;서식 1호&gt;)</span>
+                  </div>
+                  <p className="text-[11px] text-[#474645] leading-relaxed">
+                    • 진료확인서, 처방전(약봉투), 학부모 의견서, 의사 소견서/진단서 중 1부 이상 제출
+                  </p>
+                </div>
+              )}
+
               <div className="space-y-1.5 mt-2">
                 {availableAttachments.map((att) => {
                   const isChecked = checkedAttachments.includes(att);
                   const isCrucial = (activeRecord.type === 'MENSTRUAL' && att === '학부모 의견서(생리)') ||
-                                    (activeRecord.category === '질병' && (att === '진료확인서' || att === '학부모 의견서'));
+                                    (isIllnessOver3 && (att === '의사 진단서' || att === '의사 소견서')) ||
+                                    (!isIllnessOver3 && activeRecord.category === '질병' && (att === '진료확인서' || att === '학부모 의견서'));
+                  const badgeText = isIllnessOver3 && (att === '의사 진단서' || att === '의사 소견서')
+                    ? '3일이상 필수(택1)'
+                    : '필수/권장';
+
                   return (
                     <label
                       key={att}
@@ -664,8 +703,12 @@ export default function StudentMobilePage() {
                         <span>{att}</span>
                       </div>
                       {isCrucial && (
-                        <span className="text-[10px] bg-[#fff0eb] text-[#ff3e00] px-1.5 py-0.2 rounded-[4px] font-semibold">
-                          필수/권장
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-[4px] font-semibold ${
+                          isIllnessOver3 && (att === '의사 진단서' || att === '의사 소견서')
+                            ? 'bg-[#ff3e00] text-white'
+                            : 'bg-[#fff0eb] text-[#ff3e00]'
+                        }`}>
+                          {badgeText}
                         </span>
                       )}
                     </label>
