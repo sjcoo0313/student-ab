@@ -92,7 +92,7 @@ export interface AbsenceRecord {
 
 export interface SystemNotification {
   id: string;
-  type: 'SUBMIT_PING' | 'REMIND_ALERT' | 'ATTENDANCE_CHECKED' | 'SCHEDULED_REMIND';
+  type: 'SUBMIT_PING' | 'REMIND_ALERT' | 'ATTENDANCE_CHECKED' | 'SCHEDULED_REMIND' | 'STATUS_REVERTED';
   title: string;
   message: string;
   studentName: string;

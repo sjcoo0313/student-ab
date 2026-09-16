@@ -19,7 +19,9 @@ import {
   Sparkles,
   FileSpreadsheet,
   Trash2,
-  Edit2
+  Edit2,
+  RotateCcw,
+  Undo2
 } from 'lucide-react';
 import { 
   getStudents, 
@@ -27,13 +29,14 @@ import {
   saveAbsenceRecords,
   createAbsenceRecord, 
   updateAbsenceRecord,
+  updateAbsenceRecordStatus,
   markAttended, 
   markApproved, 
   triggerRemind, 
   subscribeToSyncEvents 
 } from '@/lib/storage';
 import { exportAbsenceStatisticsToExcel } from '@/lib/exportExcel';
-import { Student, AbsenceRecord, AttendanceKind, AttendanceCategory, AbsenceType, VerificationMethod } from '@/types';
+import { Student, AbsenceRecord, AbsenceStatus, AttendanceKind, AttendanceCategory, AbsenceType, VerificationMethod } from '@/types';
 import TeacherAuthGuard from '@/components/TeacherAuthGuard';
 import CalendarDatePicker, { getTodayString, formatKoreanDate } from '@/components/CalendarDatePicker';
 import { 
@@ -77,6 +80,7 @@ export default function TeacherDashboard() {
   const [newPeriodText, setNewPeriodText] = useState('전일');
   const [newSpecialType, setNewSpecialType] = useState<AbsenceType>('ILLNESS_UNDER_3');
   const [newMemo, setNewMemo] = useState('');
+  const [newStatus, setNewStatus] = useState<AbsenceStatus>('PENDING_ATTENDANCE');
 
   // Approval Form State
   const [approveMethod, setApproveMethod] = useState<VerificationMethod>('학생 사전 대면 보고');
@@ -224,6 +228,7 @@ export default function TeacherDashboard() {
         periodText: newPeriodText,
         reason: newReason,
         requiresDocument: newRequiresDocument,
+        status: newRequiresDocument ? newStatus : 'RECORDED',
         memo: newMemo,
       });
       setEditingRecordId(null);
@@ -245,6 +250,11 @@ export default function TeacherDashboard() {
     }
 
     setIsNewModalOpen(false);
+    loadData();
+  };
+
+  const handleRevertStatus = (recordId: string, targetStatus: AbsenceStatus, note?: string) => {
+    updateAbsenceRecordStatus(recordId, targetStatus, note);
     loadData();
   };
 
@@ -293,6 +303,7 @@ export default function TeacherDashboard() {
     setNewRequiresDocument(true);
     setNewPeriodText('전일');
     setNewMemo('');
+    setNewStatus('PENDING_ATTENDANCE');
     if (students.length > 0) setNewStudentId(students[0].id);
     setIsNewModalOpen(true);
   };
@@ -300,6 +311,7 @@ export default function TeacherDashboard() {
   const handleOpenEditModal = (rec: AbsenceRecord) => {
     setEditingRecordId(rec.id);
     setNewStudentId(rec.studentId);
+    setNewKind(rec.kind || '결석');
     const normalizedCategory = (rec.category === '출석 인정' ? '출석인정' : rec.category) as AttendanceCategory;
     setNewCategory(normalizedCategory);
     setNewSpecialType(rec.type);
@@ -309,6 +321,7 @@ export default function TeacherDashboard() {
     setNewPeriodText(rec.periodText || '전일');
     setNewReason(rec.reason);
     setNewRequiresDocument(rec.requiresDocument !== false);
+    setNewStatus(rec.status);
     setNewMemo(rec.memo || '');
     setIsNewModalOpen(true);
   };
@@ -679,10 +692,21 @@ export default function TeacherDashboard() {
                               </span>
                             )}
                           </div>
-                          <div className="flex items-center justify-between pt-1 border-t border-[#f2f0ed]">
-                            <span className="text-[10px] text-[#ff3e00] font-medium">
+                          <div className="flex items-center justify-between text-[10px]">
+                            <span className="text-[#ff3e00] font-medium">
                               {rec.type === 'FIELD_EXPERIENCE' ? '⚠️ 보고서 7일이내 NEIS 제출' : '⚠️ 미수령'}
                             </span>
+                          </div>
+                          <div className="flex items-center justify-between pt-1 border-t border-[#f2f0ed] gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleRevertStatus(rec.id, 'PENDING_ATTENDANCE', '등교 확인 취소')}
+                              className="text-[10px] text-[#475569] hover:text-[#0f172a] hover:bg-[#f1f5f9] px-2 py-1 rounded border border-[#cbd5e1] transition-colors cursor-pointer flex items-center gap-1 font-medium bg-white"
+                              title="등교 확인을 취소하고 1단계(등교 대기)로 되돌립니다."
+                            >
+                              <RotateCcw className="w-2.5 h-2.5 text-[#64748b]" />
+                              <span>↩ 1단계로</span>
+                            </button>
                             <button
                               onClick={() => handleRemind(rec)}
                               className="badge-pill badge-orange hover:bg-[#ff3e00] hover:text-white transition-colors cursor-pointer text-[10px]"
@@ -743,6 +767,25 @@ export default function TeacherDashboard() {
                           <div className="text-[10px] text-[#0086fc] font-medium">
                             {rec.type === 'FIELD_EXPERIENCE' ? '💻 보고서를 7일이내 NEIS로 제출 작성 중' : '✍️ 자필 작성 및 증빙 동봉 중'}
                           </div>
+                          <div className="flex items-center justify-between pt-1 border-t border-[#f2f0ed] gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleRevertStatus(rec.id, 'ATTENDED_NOTIFIED', '서류 미수령으로 되돌림')}
+                              className="text-[10px] text-[#475569] hover:text-[#0f172a] hover:bg-[#f1f5f9] px-2 py-1 rounded border border-[#cbd5e1] transition-colors cursor-pointer flex items-center gap-1 font-medium bg-white"
+                              title="서류 챙김을 취소하고 2단계(서류 미수령)로 되돌립니다."
+                            >
+                              <RotateCcw className="w-2.5 h-2.5 text-[#64748b]" />
+                              <span>↩ 2단계(미수령)로</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRevertStatus(rec.id, 'PENDING_ATTENDANCE', '등교 대기로 되돌림')}
+                              className="text-[10px] text-[#94a3b8] hover:text-[#0f172a] hover:bg-[#f1f5f9] px-1.5 py-1 rounded border border-dashed border-[#cbd5e1] transition-colors cursor-pointer"
+                              title="1단계(등교 확인 대기)로 바로 되돌립니다."
+                            >
+                              <span>1단계로</span>
+                            </button>
+                          </div>
                         </div>
                       ))
                     )}
@@ -795,12 +838,23 @@ export default function TeacherDashboard() {
                           <div className="text-[10px] text-[#0086fc] truncate">
                             📎 {rec.attachments && rec.attachments.length > 0 ? rec.attachments.join(', ') : '증빙 없음'}
                           </div>
-                          <button
-                            onClick={() => handleOpenApprove(rec)}
-                            className="w-full mt-1 bg-[#00ca48] hover:bg-[#00b03f] text-white text-[11px] py-1.5 rounded-[4px] font-semibold transition-colors cursor-pointer"
-                          >
-                            {rec.type === 'FIELD_EXPERIENCE' ? '✓ NEIS 보고서 및 사진 대조 승인' : '✓ 종이 서류 대조 및 승인'}
-                          </button>
+                          <div className="flex items-center gap-1.5 mt-1 pt-1 border-t border-[#d1fae5]">
+                            <button
+                              type="button"
+                              onClick={() => handleRevertStatus(rec.id, 'FORM_PICKED_UP', '제출함 투입 취소 -> 3단계(작성중)로 되돌림')}
+                              className="shrink-0 text-[10px] text-[#475569] hover:text-[#0f172a] hover:bg-white px-2 py-1.5 rounded border border-[#cbd5e1] transition-colors cursor-pointer flex items-center gap-1 font-medium bg-white"
+                              title="제출함 투입을 취소하고 3단계(서류 챙김/작성 중)로 되돌립니다."
+                            >
+                              <RotateCcw className="w-2.5 h-2.5 text-[#64748b]" />
+                              <span>↩ 3단계로</span>
+                            </button>
+                            <button
+                              onClick={() => handleOpenApprove(rec)}
+                              className="flex-1 bg-[#00ca48] hover:bg-[#00b03f] text-white text-[11px] py-1.5 px-2 rounded-[4px] font-semibold transition-colors cursor-pointer truncate text-center"
+                            >
+                              {rec.type === 'FIELD_EXPERIENCE' ? '✓ NEIS 승인' : '✓ 종이 서류 대조·승인'}
+                            </button>
+                          </div>
                         </div>
                       ))
                     )}
@@ -954,16 +1008,68 @@ export default function TeacherDashboard() {
                                     📋 출결 기록완료
                                   </span>
                                 ) : rec.status === 'APPROVED' ? (
-                                  <span className="text-[11px] text-[#15803d] bg-[#dcfce7] px-2 py-0.5 rounded font-medium">
-                                    ✓ 서류 승인완료
-                                  </span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[11px] text-[#15803d] bg-[#dcfce7] px-2 py-0.5 rounded font-medium">
+                                      ✓ 서류 승인완료
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRevertStatus(rec.id, 'SUBMITTED', '승인 취소 -> 제출함 대기로 되돌림')}
+                                      className="text-[10px] text-[#b45309] hover:bg-[#fef3c7] px-1.5 py-0.5 rounded border border-[#fde68a] transition-colors cursor-pointer inline-flex items-center gap-0.5 font-medium bg-white"
+                                      title="승인을 취소하고 4단계(제출함 투입/대기)로 되돌립니다."
+                                    >
+                                      <RotateCcw className="w-2.5 h-2.5 text-[#d97706]" />
+                                      <span>↩ 승인취소</span>
+                                    </button>
+                                  </div>
                                 ) : rec.status === 'SUBMITTED' ? (
-                                  <span className="text-[11px] text-[#0284c7] bg-[#e0f2fe] px-2 py-0.5 rounded font-medium animate-pulse">
-                                    📨 제출함 투입(대기)
-                                  </span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[11px] text-[#0284c7] bg-[#e0f2fe] px-2 py-0.5 rounded font-medium">
+                                      📨 제출함 투입(대기)
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRevertStatus(rec.id, 'FORM_PICKED_UP', '3단계 작성중으로 되돌림')}
+                                      className="text-[10px] text-[#475569] hover:bg-[#f1f5f9] px-1.5 py-0.5 rounded border border-[#cbd5e1] transition-colors cursor-pointer inline-flex items-center gap-0.5 font-medium bg-white"
+                                      title="제출함 투입을 취소하고 3단계(서류 작성 중)로 되돌립니다."
+                                    >
+                                      <RotateCcw className="w-2.5 h-2.5 text-[#64748b]" />
+                                      <span>↩ 작성중으로</span>
+                                    </button>
+                                  </div>
+                                ) : rec.status === 'FORM_PICKED_UP' ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[11px] text-[#0284c7] bg-[#f0f9ff] px-2 py-0.5 rounded font-medium">
+                                      ✍️ 서류 작성중
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRevertStatus(rec.id, 'ATTENDED_NOTIFIED', '2단계 미수령으로 되돌림')}
+                                      className="text-[10px] text-[#475569] hover:bg-[#f1f5f9] px-1.5 py-0.5 rounded border border-[#cbd5e1] transition-colors cursor-pointer inline-flex items-center gap-0.5 font-medium bg-white"
+                                      title="서류 챙김을 취소하고 2단계(서류 미수령)로 되돌립니다."
+                                    >
+                                      <RotateCcw className="w-2.5 h-2.5 text-[#64748b]" />
+                                      <span>↩ 미수령으로</span>
+                                    </button>
+                                  </div>
+                                ) : rec.status === 'ATTENDED_NOTIFIED' ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[11px] text-[#b45309] bg-[#fef3c7] px-2 py-0.5 rounded font-medium">
+                                      ⚠️ 서류 미수령
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRevertStatus(rec.id, 'PENDING_ATTENDANCE', '등교대기로 되돌림')}
+                                      className="text-[10px] text-[#475569] hover:bg-[#f1f5f9] px-1.5 py-0.5 rounded border border-[#cbd5e1] transition-colors cursor-pointer inline-flex items-center gap-0.5 font-medium bg-white"
+                                      title="등교 확인을 취소하고 1단계(등교 대기)로 되돌립니다."
+                                    >
+                                      <RotateCcw className="w-2.5 h-2.5 text-[#64748b]" />
+                                      <span>↩ 등교대기로</span>
+                                    </button>
+                                  </div>
                                 ) : (
-                                  <span className="text-[11px] text-[#b45309] bg-[#fef3c7] px-2 py-0.5 rounded font-medium">
-                                    ⚠️ 서류 미제출 회수중
+                                  <span className="text-[11px] text-[#64748b] bg-[#f8fafc] px-2 py-0.5 rounded font-medium border border-[#e2e8f0]">
+                                    ⏳ 1단계(등교 대기)
                                   </span>
                                 )}
                               </td>
@@ -1228,6 +1334,53 @@ export default function TeacherDashboard() {
                     </p>
                   </div>
 
+                  {/* Editing: Direct Stage Selector & Rollback */}
+                  {editingRecordId && newRequiresDocument && (
+                    <div className="bg-[#f8fafc] p-3 rounded-[4px] border border-[#cbd5e1] space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-[11px] text-[#1e293b] flex items-center gap-1.5">
+                          <RotateCcw className="w-3.5 h-3.5 text-[#0086fc]" />
+                          <span>진행 단계 직접 설정 (단계 되돌리기 / 즉시 이동)</span>
+                        </span>
+                        <span className="text-[10px] text-[#64748b]">원하는 단계를 클릭하면 즉시 적용됩니다</span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                        {[
+                          { val: 'PENDING_ATTENDANCE' as AbsenceStatus, label: '1. 등교대기' },
+                          { val: 'ATTENDED_NOTIFIED' as AbsenceStatus, label: '2. 서류미수령' },
+                          { val: 'FORM_PICKED_UP' as AbsenceStatus, label: '3. 서류챙김' },
+                          { val: 'SUBMITTED' as AbsenceStatus, label: '4. 제출함투입' },
+                        ].map((step) => (
+                          <button
+                            key={step.val}
+                            type="button"
+                            onClick={() => setNewStatus(step.val)}
+                            className={`py-1.5 px-2 text-[11px] rounded font-semibold border text-center transition-all cursor-pointer ${
+                              newStatus === step.val
+                                ? 'bg-[#1e293b] text-white border-[#1e293b] shadow-xs'
+                                : 'bg-white text-[#475569] border-[#cbd5e1] hover:border-[#94a3b8]'
+                            }`}
+                          >
+                            {newStatus === step.val ? `✓ ${step.label}` : step.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="pt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setNewStatus('APPROVED')}
+                          className={`w-full py-1.5 px-3 text-[11px] rounded font-semibold border text-center transition-all cursor-pointer ${
+                            newStatus === 'APPROVED'
+                              ? 'bg-[#15803d] text-white border-[#15803d]'
+                              : 'bg-white text-[#15803d] border-[#86efac] hover:bg-[#dcfce7]'
+                          }`}
+                        >
+                          {newStatus === 'APPROVED' ? '✓ 5. 최종 승인 완료 상태' : '✓ 5. 최종 승인 완료 상태로 지정'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Modal Action Buttons matching NEIS screenshot */}
                   <div className="pt-3 flex items-center justify-between border-t border-[#f1f5f9] mt-2">
                     {editingRecordId ? (
@@ -1344,21 +1497,38 @@ export default function TeacherDashboard() {
                     "위 신고 내용이 사실과 틀림없음을 확인하고 최종 승인 처리합니다."
                   </div>
 
-                  <div className="pt-2 flex items-center justify-end space-x-2">
+                  <div className="pt-2 flex items-center justify-between border-t border-[#f2f0ed]">
                     <button
                       type="button"
-                      onClick={() => setIsApproveModalOpen(false)}
-                      className="btn-sand-pill text-xs py-2 px-3.5 cursor-pointer"
+                      onClick={() => {
+                        if (selectedRecordToApprove) {
+                          handleRevertStatus(selectedRecordToApprove.id, 'FORM_PICKED_UP', '서류 미비/오류로 재작성 요청');
+                          setIsApproveModalOpen(false);
+                          setSelectedRecordToApprove(null);
+                        }
+                      }}
+                      className="text-[11px] text-[#b45309] hover:bg-[#fef3c7] border border-[#fde68a] px-3 py-1.5 rounded-[6px] font-semibold transition-colors cursor-pointer flex items-center gap-1 bg-white"
+                      title="제출된 서류를 반려하고 3단계(작성 중)로 되돌립니다."
                     >
-                      취소
+                      <RotateCcw className="w-3 h-3 text-[#d97706]" />
+                      <span>↩ 3단계(작성중)로 되돌리기</span>
                     </button>
-                    <button
-                      type="button"
-                      onClick={handleConfirmApprove}
-                      className="btn-dark-pill text-xs py-2 px-4 cursor-pointer"
-                    >
-                      최종 승인 완료
-                    </button>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsApproveModalOpen(false)}
+                        className="btn-sand-pill text-xs py-2 px-3.5 cursor-pointer"
+                      >
+                        취소
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleConfirmApprove}
+                        className="btn-dark-pill text-xs py-2 px-4 cursor-pointer"
+                      >
+                        최종 승인 완료
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -1,4 +1,4 @@
-import { Student, AbsenceRecord, SystemNotification, AttachmentProof, VerificationMethod, AttendanceKind } from '@/types';
+import { Student, AbsenceRecord, AbsenceStatus, SystemNotification, AttachmentProof, VerificationMethod, AttendanceKind } from '@/types';
 
 const STORAGE_KEYS = {
   STUDENTS: 'hoengseong_students_v1',
@@ -649,6 +649,7 @@ export function updateAbsenceRecord(recordId: string, updates: {
   periodText?: string;
   reason?: string;
   requiresDocument?: boolean;
+  status?: AbsenceStatus;
   memo?: string;
 }): AbsenceRecord | null {
   const records = getAbsenceRecords();
@@ -670,10 +671,10 @@ export function updateAbsenceRecord(recordId: string, updates: {
         ? updates.requiresDocument
         : r.requiresDocument;
 
-      let newStatus = r.status;
+      let newStatus = updates.status !== undefined ? updates.status : r.status;
       if (newRequiresDoc === false) {
         newStatus = 'RECORDED';
-      } else if (r.status === 'RECORDED' && newRequiresDoc === true) {
+      } else if (r.status === 'RECORDED' && newRequiresDoc === true && updates.status === undefined) {
         newStatus = 'PENDING_ATTENDANCE';
       }
 
@@ -697,6 +698,24 @@ export function updateAbsenceRecord(recordId: string, updates: {
         status: newStatus,
         memo: updates.memo !== undefined ? updates.memo : r.memo,
       };
+
+      // 만약 이전 단계로 되돌린 경우 타임스탬프 정리
+      if (newStatus === 'PENDING_ATTENDANCE') {
+        updatedRecord.attendedAt = undefined;
+        updatedRecord.pickedUpAt = undefined;
+        updatedRecord.submittedAt = undefined;
+        updatedRecord.approvedAt = undefined;
+      } else if (newStatus === 'ATTENDED_NOTIFIED') {
+        updatedRecord.pickedUpAt = undefined;
+        updatedRecord.submittedAt = undefined;
+        updatedRecord.approvedAt = undefined;
+      } else if (newStatus === 'FORM_PICKED_UP') {
+        updatedRecord.submittedAt = undefined;
+        updatedRecord.approvedAt = undefined;
+      } else if (newStatus === 'SUBMITTED') {
+        updatedRecord.approvedAt = undefined;
+      }
+
       return updatedRecord;
     }
     return r;
@@ -704,6 +723,73 @@ export function updateAbsenceRecord(recordId: string, updates: {
 
   if (updatedRecord) {
     saveAbsenceRecords(updated);
+  }
+  return updatedRecord;
+}
+
+// 1-2. 교사가 이전 단계로 되돌리기 (상태 롤백 / 워크플로우 단계 변경)
+export function updateAbsenceRecordStatus(
+  recordId: string,
+  targetStatus: AbsenceStatus,
+  note?: string
+): AbsenceRecord | null {
+  const records = getAbsenceRecords();
+  let updatedRecord: AbsenceRecord | null = null;
+
+  const updated = records.map(r => {
+    if (r.id === recordId) {
+      updatedRecord = {
+        ...r,
+        status: targetStatus,
+      };
+
+      // 되돌리는 단계에 맞추어 타임스탬프 정리 및 보정
+      if (targetStatus === 'PENDING_ATTENDANCE') {
+        updatedRecord.attendedAt = undefined;
+        updatedRecord.pickedUpAt = undefined;
+        updatedRecord.submittedAt = undefined;
+        updatedRecord.approvedAt = undefined;
+      } else if (targetStatus === 'ATTENDED_NOTIFIED') {
+        updatedRecord.pickedUpAt = undefined;
+        updatedRecord.submittedAt = undefined;
+        updatedRecord.approvedAt = undefined;
+      } else if (targetStatus === 'FORM_PICKED_UP') {
+        updatedRecord.submittedAt = undefined;
+        updatedRecord.approvedAt = undefined;
+      } else if (targetStatus === 'SUBMITTED') {
+        updatedRecord.approvedAt = undefined;
+        updatedRecord.verificationMethod = undefined;
+        updatedRecord.verificationNote = undefined;
+      }
+
+      return updatedRecord;
+    }
+    return r;
+  });
+
+  if (updatedRecord) {
+    saveAbsenceRecords(updated);
+
+    const rec = updatedRecord as AbsenceRecord;
+    const stageNames: Record<AbsenceStatus, string> = {
+      PENDING_ATTENDANCE: '1단계(등교 확인 대기)',
+      ATTENDED_NOTIFIED: '2단계(서류 미수령)',
+      FORM_PICKED_UP: '3단계(서류 챙김/작성 중)',
+      SUBMITTED: '4단계(제출함 투입/승인 대기)',
+      APPROVED: '최종 승인 완료',
+      RECORDED: '일반 출결 기록',
+    };
+
+    addNotification({
+      type: 'STATUS_REVERTED',
+      title: '↩ 출결 진행 단계 되돌림',
+      message: `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생의 출결 상태가 [${stageNames[targetStatus] || targetStatus}] 단계로 되돌려졌습니다.${note ? ` (${note})` : ''}`,
+      studentName: rec.studentName,
+      grade: rec.grade,
+      classNum: rec.classNum,
+      studentNum: rec.studentNum,
+      recordId: recordId,
+    });
   }
   return updatedRecord;
 }
