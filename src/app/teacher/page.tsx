@@ -327,13 +327,14 @@ export default function TeacherDashboard() {
   };
 
   // 1) 결석계 서류 회수 관리 탭 데이터 (requiresDocument !== false 대상)
+  // 등교확인 대기, 서류 미수령, 서류 챙김, 제출함 투입은 날짜가 지나도 최종 승인(APPROVED)될 때까지 무조건 누적 유지!
   const docRecords = records.filter(r => r.requiresDocument !== false);
   const filteredDocRecords = docRecords.filter(r => {
     const matchesSearch = r.studentName.includes(searchQuery) ||
       `${r.studentNum}`.includes(searchQuery) ||
       r.reason.includes(searchQuery);
-    const matchesDate = !filterOnlySelectedDate || isDateInRange(selectedDashboardDate, r.startDate, r.endDate);
-    return matchesSearch && matchesDate;
+    // 날짜가 지나도 승인 전까지는 계속 누적되어 보여야 함
+    return matchesSearch;
   });
 
   const pendingAttendanceRecords = filteredDocRecords.filter(r => r.status === 'PENDING_ATTENDANCE');
@@ -556,6 +557,20 @@ export default function TeacherDashboard() {
                 </div>
               </div>
 
+              {/* 💡 누적 관리 안내 배너 */}
+              <div className="bg-[#eff6ff] border border-[#bfdbfe] text-[#1e40af] px-3.5 py-2.5 rounded-[6px] text-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shadow-2xs">
+                <div className="flex items-center space-x-2">
+                  <span className="text-base">📌</span>
+                  <div>
+                    <span className="font-bold text-[#1e3a8a]">미완결 출결 서류 전원 누적 관리: </span>
+                    <span>등교 확인 대기 및 서류 미제출 건은 <strong>날짜가 지나도 승인 완료될 때까지 계속 누적</strong>되어 표시됩니다.</span>
+                  </div>
+                </div>
+                <span className="badge-pill bg-[#2563eb] text-white text-[11px] font-bold shrink-0 self-start sm:self-auto">
+                  총 미완결 {pendingAttendanceRecords.length + attendedNotifiedRecords.length + pickedUpRecords.length + submittedRecords.length}명 누적
+                </span>
+              </div>
+
               {/* 4-Stage Kanban Workflow Columns */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3.5">
                 {/* Col 1: Pending Attendance */}
@@ -565,8 +580,8 @@ export default function TeacherDashboard() {
                       <Clock className="w-3.5 h-3.5 text-[#7e7e7d]" />
                       <h4 className="font-semibold text-xs text-[#121212]">1. 등교 확인 대기</h4>
                     </div>
-                    <span className="badge-pill badge-stone text-[10px]">
-                      {pendingAttendanceRecords.length}
+                    <span className="badge-pill badge-stone text-[10px]" title="날짜 경과 포함 누적 건수">
+                      누적 {pendingAttendanceRecords.length}
                     </span>
                   </div>
 
@@ -593,7 +608,22 @@ export default function TeacherDashboard() {
                             </div>
                           </div>
                           <p className="text-[11px] text-[#474645] line-clamp-1">{rec.reason}</p>
-                          <div className="text-[10px] text-[#7e7e7d]">기간: {rec.startDate} ({rec.daysCount}일)</div>
+                          <div className="flex items-center justify-between text-[10px] text-[#7e7e7d]">
+                            <span>기간: {rec.startDate} ({rec.daysCount}일)</span>
+                            {rec.startDate < getTodayString() ? (
+                              <span className="text-[#e11d48] font-bold bg-[#ffe4e6] px-1.5 py-0.5 rounded text-[9px]">
+                                {rec.startDate} (경과)
+                              </span>
+                            ) : rec.startDate === getTodayString() ? (
+                              <span className="text-[#059669] font-bold bg-[#d1fae5] px-1.5 py-0.5 rounded text-[9px]">
+                                오늘
+                              </span>
+                            ) : (
+                              <span className="text-[#2563eb] font-bold bg-[#dbeafe] px-1.5 py-0.5 rounded text-[9px]">
+                                예정
+                              </span>
+                            )}
+                          </div>
                           <button
                             onClick={() => handleMarkAttended(rec)}
                             className="w-full mt-1 bg-[#121212] hover:bg-[#2c2c2b] text-white text-[11px] py-1.5 rounded-[4px] font-semibold transition-colors cursor-pointer"
@@ -613,8 +643,8 @@ export default function TeacherDashboard() {
                       <span className="w-2 h-2 rounded-full bg-[#ff3e00]"></span>
                       <h4 className="font-semibold text-xs text-[#121212]">2. 서류 미수령 (알림 중)</h4>
                     </div>
-                    <span className="badge-pill badge-orange text-[10px]">
-                      {attendedNotifiedRecords.length}
+                    <span className="badge-pill badge-orange text-[10px]" title="날짜 경과 포함 누적 건수">
+                      누적 {attendedNotifiedRecords.length}
                     </span>
                   </div>
 
@@ -641,6 +671,14 @@ export default function TeacherDashboard() {
                             </div>
                           </div>
                           <p className="text-[11px] text-[#474645] line-clamp-1">{rec.reason}</p>
+                          <div className="flex items-center justify-between text-[10px] text-[#7e7e7d]">
+                            <span>기간: {rec.startDate} ({rec.daysCount}일)</span>
+                            {rec.startDate < getTodayString() && (
+                              <span className="text-[#e11d48] font-bold bg-[#ffe4e6] px-1.5 py-0.5 rounded text-[9px]">
+                                {rec.startDate} (경과)
+                              </span>
+                            )}
+                          </div>
                           <div className="flex items-center justify-between pt-1 border-t border-[#f2f0ed]">
                             <span className="text-[10px] text-[#ff3e00] font-medium">
                               {rec.type === 'FIELD_EXPERIENCE' ? '⚠️ 보고서 7일이내 NEIS 제출' : '⚠️ 미수령'}
@@ -666,8 +704,8 @@ export default function TeacherDashboard() {
                       <FileText className="w-3.5 h-3.5 text-[#0086fc]" />
                       <h4 className="font-semibold text-xs text-[#121212]">3. 서류 챙김 (작성 중)</h4>
                     </div>
-                    <span className="badge-pill badge-sky text-[10px]">
-                      {pickedUpRecords.length}
+                    <span className="badge-pill badge-sky text-[10px]" title="날짜 경과 포함 누적 건수">
+                      누적 {pickedUpRecords.length}
                     </span>
                   </div>
 
@@ -694,6 +732,14 @@ export default function TeacherDashboard() {
                             </div>
                           </div>
                           <p className="text-[11px] text-[#474645] line-clamp-1">{rec.reason}</p>
+                          <div className="flex items-center justify-between text-[10px] text-[#7e7e7d]">
+                            <span>기간: {rec.startDate} ({rec.daysCount}일)</span>
+                            {rec.startDate < getTodayString() && (
+                              <span className="text-[#e11d48] font-bold bg-[#ffe4e6] px-1.5 py-0.5 rounded text-[9px]">
+                                {rec.startDate} (경과)
+                              </span>
+                            )}
+                          </div>
                           <div className="text-[10px] text-[#0086fc] font-medium">
                             {rec.type === 'FIELD_EXPERIENCE' ? '💻 보고서를 7일이내 NEIS로 제출 작성 중' : '✍️ 자필 작성 및 증빙 동봉 중'}
                           </div>
@@ -710,8 +756,8 @@ export default function TeacherDashboard() {
                       <Sparkles className="w-3.5 h-3.5 text-[#00ca48]" />
                       <h4 className="font-semibold text-xs text-[#121212]">4. 제출함 투입 (승인 대기)</h4>
                     </div>
-                    <span className="badge-pill badge-mint text-[10px]">
-                      {submittedRecords.length}
+                    <span className="badge-pill badge-mint text-[10px]" title="날짜 경과 포함 누적 건수">
+                      누적 {submittedRecords.length}
                     </span>
                   </div>
 
@@ -738,6 +784,14 @@ export default function TeacherDashboard() {
                             </div>
                           </div>
                           <p className="text-[11px] text-[#474645] line-clamp-1">{rec.reason}</p>
+                          <div className="flex items-center justify-between text-[10px] text-[#7e7e7d]">
+                            <span>기간: {rec.startDate} ({rec.daysCount}일)</span>
+                            {rec.startDate < getTodayString() && (
+                              <span className="text-[#e11d48] font-bold bg-[#ffe4e6] px-1.5 py-0.5 rounded text-[9px]">
+                                {rec.startDate} (경과)
+                              </span>
+                            )}
+                          </div>
                           <div className="text-[10px] text-[#0086fc] truncate">
                             📎 {rec.attachments && rec.attachments.length > 0 ? rec.attachments.join(', ') : '증빙 없음'}
                           </div>

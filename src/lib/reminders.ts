@@ -102,22 +102,21 @@ export function clearReminderLog() {
   localStorage.removeItem(REMINDER_LOG_KEY);
 }
 
-// 미이행 학생 레코드 목록 (서류를 아직 최종 제출함에 넣지 않은 학생)
+// 미이행 학생 레코드 목록 (등교확인, 서류 미수령, 서류 챙김 등 날짜가 지나도 계속 누적 관리)
 export function getUnfulfilledAbsenceRecords(): AbsenceRecord[] {
   const records = getAbsenceRecords();
   return records.filter(r => {
-    // 이미 학생이 제출함에 넣었거나(SUBMITTED) 최종 승인(APPROVED)된 건 제외
-    if (r.status === 'SUBMITTED' || r.status === 'APPROVED') {
+    // 서류 제출이 불필요한 건은 제외
+    if (r.requiresDocument === false) {
       return false;
     }
-    // 등교 확인 후 서류 미수령(ATTENDED_NOTIFIED) 또는 수령 후 미제출(FORM_PICKED_UP)
-    if (r.status === 'ATTENDED_NOTIFIED' || r.status === 'FORM_PICKED_UP') {
-      return true;
+    // 이미 최종 승인(APPROVED)된 건 제외
+    if (r.status === 'APPROVED') {
+      return false;
     }
-    // 등교 확인 대기 중이나 오늘 등교일인 경우 (PENDING_ATTENDANCE)
-    if (r.status === 'PENDING_ATTENDANCE') {
-      const today = getTodayDateString();
-      return r.startDate <= today;
+    // 등교 확인 대기, 서류 미수령, 서류 챙김은 날짜가 지났어도 완료될 때까지 누적
+    if (r.status === 'PENDING_ATTENDANCE' || r.status === 'ATTENDED_NOTIFIED' || r.status === 'FORM_PICKED_UP') {
+      return true;
     }
     return false;
   });
