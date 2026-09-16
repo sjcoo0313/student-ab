@@ -471,13 +471,32 @@ export default function StudentMobilePage() {
 
             <div className="mt-4">
               <h3 className="text-lg font-bold text-[#121212] leading-snug">
-                교실 서류함에서<br />
-                <span className="text-[#ff3e00] underline underline-offset-4 decoration-[#ff3e00]/30">
-                  [{activeRecord.typeName}]
-                </span> 서류를 챙기세요!
+                {activeRecord.type === 'FIELD_EXPERIENCE' ? (
+                  <>
+                    현장체험학습은 결석계가 아니며<br />
+                    <span className="text-[#d48f00] underline underline-offset-4 decoration-[#d48f00]/30">
+                      [보고서를 7일이내 NEIS로 제출]
+                    </span> 해야 합니다!
+                  </>
+                ) : (
+                  <>
+                    교실 서류함에서<br />
+                    <span className="text-[#ff3e00] underline underline-offset-4 decoration-[#ff3e00]/30">
+                      [{activeRecord.typeName}]
+                    </span> 서류를 챙기세요!
+                  </>
+                )}
               </h3>
               <p className="text-xs text-[#474645] mt-2 leading-relaxed">
-                {myStudent?.name} 학생! 교실 앞 서류함에서 <strong>결석신고서</strong>를 1장 챙겨서 자필로 작성해주세요.
+                {activeRecord.type === 'FIELD_EXPERIENCE' ? (
+                  <>
+                    {myStudent?.name} 학생! 현장체험학습은 결석계가 아니며, <strong>보고서를 7일이내 NEIS로 제출</strong>해야 합니다.
+                  </>
+                ) : (
+                  <>
+                    {myStudent?.name} 학생! 교실 앞 서류함에서 <strong>결석신고서</strong>를 1장 챙겨서 자필로 작성해주세요.
+                  </>
+                )}
               </p>
             </div>
 
@@ -499,10 +518,10 @@ export default function StudentMobilePage() {
                 <div className="mt-2 pt-2 border-t border-[#f2f0ed] space-y-1 text-[11px]">
                   <p className="font-bold text-[#d48f00] flex items-center gap-1">
                     <span>🎒</span>
-                    <span>[매우 중요] 현장체험학습 보고서 및 사진 규정</span>
+                    <span>[안내] 현장체험학습: 보고서를 7일이내 NEIS로 제출</span>
                   </p>
                   <ul className="list-disc list-inside text-[#474645] space-y-0.5 pl-0.5">
-                    <li><strong>보고서 마감:</strong> 복귀 후 <strong>1주일(7일) 이내</strong> NEIS 작성 {activeRecord.fieldTripDeadline ? `(${activeRecord.fieldTripDeadline}까지)` : ''} <span className="text-[#ff3e00] font-semibold">(미제출 시 수기 작성 필요)</span></li>
+                    <li><strong>보고서 마감:</strong> 결석계가 아니며 복귀 후 <strong>7일 이내 NEIS 보고서 제출</strong> {activeRecord.fieldTripDeadline ? `(${activeRecord.fieldTripDeadline}까지)` : ''}</li>
                     <li><strong>첨부 사진:</strong> 다녀온 날짜마다 1장 ({activeRecord.daysCount}일간 ➔ <strong>총 {activeRecord.daysCount}장</strong>)</li>
                     <li><strong>필수 사항:</strong> 체험학습 배경 + <strong>동행 보호자 사진 필수!</strong></li>
                     <li><strong>인솔자 위임장:</strong> 보호자 외 인솔 시 위임장 제출 필요</li>
@@ -523,7 +542,9 @@ export default function StudentMobilePage() {
                 </span>
               </div>
               <p className="text-[11px] text-[#474645] leading-snug">
-                서류를 챙겨 제출할 때까지 <strong>아침 09:30 · 정오 12:30 · 오후 14:30</strong>에 3차례 독려 핑이 울립니다.
+                {activeRecord.type === 'FIELD_EXPERIENCE'
+                  ? '보고서를 7일이내 NEIS로 제출할 때까지 아침 09:30 · 정오 12:30 · 오후 14:30에 독려 핑이 울립니다.'
+                  : '서류를 챙겨 제출할 때까지 아침 09:30 · 정오 12:30 · 오후 14:30에 3차례 독려 핑이 울립니다.'}
               </p>
               <div className="grid grid-cols-3 gap-1.5 text-center text-[10px] font-semibold pt-0.5">
                 <div className={`p-1.5 rounded-[6px] border ${currentTime >= '09:30' ? 'bg-[#ffcd6c]/30 text-[#d48f00] border-[#ffcd6c]' : 'bg-[#ffffff] text-[#7e7e7d] border-[#f2f0ed]'}`}>
@@ -546,7 +567,7 @@ export default function StudentMobilePage() {
               <FileText className="w-4 h-4" />
               <span>
                 {activeRecord.type === 'FIELD_EXPERIENCE' 
-                  ? '1단계: 현장체험학습 복귀 알림 확인 🎒' 
+                  ? '1단계: 보고서를 7일이내 NEIS로 제출 확인 🎒' 
                   : '1단계: 결석신고서 챙겼어요 📄'}
               </span>
             </button>
@@ -558,7 +579,7 @@ export default function StudentMobilePage() {
               <div className="flex items-center space-x-2">
                 <FileText className="w-4 h-4 text-[#0086fc]" />
                 <span className="badge-pill badge-sky">
-                  {activeRecord.type === 'FIELD_EXPERIENCE' ? '2단계: NEIS 보고서 & 사진 제출 확인' : '2단계: 서류 작성 및 제출'}
+                  {activeRecord.type === 'FIELD_EXPERIENCE' ? '2단계: 보고서를 7일이내 NEIS로 제출' : '2단계: 서류 작성 및 제출'}
                 </span>
               </div>
               <span className="text-[11px] text-[#7e7e7d]">작성 중</span>
@@ -567,12 +588,12 @@ export default function StudentMobilePage() {
             <div className="mt-4">
               <h3 className="text-base font-bold text-[#121212]">
                 {activeRecord.type === 'FIELD_EXPERIENCE' 
-                  ? 'NEIS 보고서 작성 및 첨부 사진 제출' 
+                  ? '보고서를 7일이내 NEIS로 제출 & 사진 첨부' 
                   : '종이 서류 작성 후 제출함에 넣기'}
               </h3>
               <p className="text-xs text-[#474645] mt-1 leading-relaxed">
                 {activeRecord.type === 'FIELD_EXPERIENCE' 
-                  ? 'NEIS 온라인 보고서를 제출하고, 동봉한 사진 및 서류를 체크한 뒤 제출 완료 핑을 보내세요.' 
+                  ? '보고서를 7일이내 NEIS로 제출하고, 동행 보호자 사진(일자당 1장)을 점검한 뒤 제출 완료 핑을 보내세요.' 
                   : '작성 후 동봉할 증빙서류를 아래에서 체크하고 교실 제출함에 넣은 뒤 버튼을 누르세요.'}
               </p>
             </div>
@@ -678,7 +699,13 @@ export default function StudentMobilePage() {
               className="btn-dark-pill w-full mt-4 py-3 text-sm"
             >
               <Send className="w-4 h-4" />
-              <span>{isSubmitting ? '전송 중...' : '제출함에 넣었어요! (선생님께 핑) 📨'}</span>
+              <span>
+                {isSubmitting
+                  ? '전송 중...'
+                  : activeRecord.type === 'FIELD_EXPERIENCE'
+                  ? '보고서를 7일이내 NEIS로 제출 완료했어요! 📨'
+                  : '제출함에 넣었어요! (선생님께 핑) 📨'}
+              </span>
             </button>
             <p className="text-center text-[11px] text-[#7e7e7d] mt-2">
               버튼을 누르면 선생님 대시보드에 즉시 실시간 알림음이 울립니다.
@@ -695,10 +722,14 @@ export default function StudentMobilePage() {
               선생님께 제출 알림 완료 (정기 리마인드 해제)
             </span>
             <h3 className="text-base font-bold text-[#121212] mt-1">
-              선생님이 실물 서류를 확인 중입니다
+              {activeRecord.type === 'FIELD_EXPERIENCE'
+                ? '선생님이 NEIS 보고서 및 사진을 확인 중입니다'
+                : '선생님이 실물 서류를 확인 중입니다'}
             </h3>
             <p className="text-xs text-[#474645] mt-1.5 leading-relaxed">
-              종이 결석신고서를 교실 제출함에 넣었습니다. 담임선생님이 서류를 확인하신 후 최종 승인 처리하실 예정입니다.
+              {activeRecord.type === 'FIELD_EXPERIENCE'
+                ? '현장체험학습 보고서를 7일이내 NEIS로 제출 완료했습니다. 담임선생님이 NEIS 대조 후 최종 승인 처리하실 예정입니다.'
+                : '종이 결석신고서를 교실 제출함에 넣었습니다. 담임선생님이 서류를 확인하신 후 최종 승인 처리하실 예정입니다.'}
             </p>
 
             <div className="mt-4 bg-[#fbfaf9] rounded-[10px] p-3 border border-[#f2f0ed] text-xs space-y-1 text-left">

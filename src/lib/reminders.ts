@@ -189,11 +189,11 @@ export function dispatchScheduledReminder(
     let messageBody = '';
     if (rec.type === 'FIELD_EXPERIENCE') {
       if (slotTime === '09:30') {
-        messageBody = `🎒 [1차 아침 09:30 알림] ${rec.studentName} 학생! 현장체험학습 복귀 후 NEIS 온라인 보고서 및 날짜마다 1장씩 사진 제출을 시작해주세요!`;
+        messageBody = `🎒 [1차 아침 09:30 알림] ${rec.studentName} 학생! 현장체험학습은 결석계가 아니며, '보고서를 7일이내 NEIS로 제출'해야 합니다!`;
       } else if (slotTime === '12:30') {
-        messageBody = `🍱 [2차 정오 12:30 알림] ${rec.studentName} 학생! 점심시간에 현장체험학습 보고서(NEIS)와 동행 보호자 사진을 점검하고 제출해주세요.`;
+        messageBody = `🍱 [2차 정오 12:30 알림] ${rec.studentName} 학생! 점심시간에 현장체험학습 '보고서를 7일이내 NEIS로 제출' 및 동행 보호자 사진(일자당 1장)을 확인해주세요.`;
       } else {
-        messageBody = `⚠️ [3차 오후 14:30 마감] ${rec.studentName} 학생! 현장체험학습 보고서 마감 기한을 준수하여 오늘 중 서류 제출을 완료해주세요!`;
+        messageBody = `⚠️ [3차 오후 14:30 마감] ${rec.studentName} 학생! 현장체험학습 '보고서를 7일이내 NEIS로 제출' 마감 기한을 준수해주세요!`;
       }
     } else if (rec.status === 'ATTENDED_NOTIFIED') {
       // 1단계 미이행: 서류 미수령
@@ -218,9 +218,13 @@ export function dispatchScheduledReminder(
       messageBody = `🏫 [${slot.title}] ${rec.studentName} 학생! 오늘 등교 후 담임선생님께 등교 확인을 받고 [${rec.typeName}] 결석계를 챙겨주세요.`;
     }
 
+    const notifTitle = rec.type === 'FIELD_EXPERIENCE'
+      ? `⏰ [${slot.title}] 현장체험학습: 보고서를 7일이내 NEIS로 제출 알림`
+      : `⏰ [${slot.title}] 결석계 단계 미이행 알림`;
+
     addNotification({
       type: 'SCHEDULED_REMIND',
-      title: `⏰ [${slot.title}] 결석계 단계 미이행 알림`,
+      title: notifTitle,
       message: messageBody,
       studentName: rec.studentName,
       grade: rec.grade,
@@ -231,8 +235,8 @@ export function dispatchScheduledReminder(
     });
 
     triggerBrowserPush(
-      `⏰ [${slot.title}] 결석신고서 제출 알림`,
-      `${rec.studentName} 학생! ${slot.targetAction}을(를) 진행해주세요.`
+      rec.type === 'FIELD_EXPERIENCE' ? `⏰ [${slot.title}] 현장체험학습 NEIS 보고서 제출 알림` : `⏰ [${slot.title}] 결석신고서 제출 알림`,
+      rec.type === 'FIELD_EXPERIENCE' ? `${rec.studentName} 학생! 보고서를 7일이내 NEIS로 제출해주세요.` : `${rec.studentName} 학생! ${slot.targetAction}을(를) 진행해주세요.`
     );
 
     return {

@@ -51,7 +51,7 @@ export const INITIAL_RECORDS: AbsenceRecord[] = [
     kind: '결석',
     category: '출석인정',
     type: 'FIELD_EXPERIENCE',
-    typeName: '현장체험학습 (NEIS)',
+    typeName: '현장체험학습 (보고서를 7일이내 NEIS로 제출)',
     startDate: getFormattedDate(-2),
     endDate: getFormattedDate(-1),
     daysCount: 2,
@@ -729,14 +729,18 @@ export function markAttended(recordId: string): AbsenceRecord | null {
 
   if (updatedRecord) {
     saveAbsenceRecords(updated);
+    const rec = updatedRecord as AbsenceRecord;
+    const isFieldTrip = rec.type === 'FIELD_EXPERIENCE';
     addNotification({
       type: 'ATTENDANCE_CHECKED',
-      title: '등교 확인 및 결석계 작성 알림 발송',
-      message: `${(updatedRecord as AbsenceRecord).grade}학년 ${(updatedRecord as AbsenceRecord).classNum}반 ${(updatedRecord as AbsenceRecord).studentNum}번 ${(updatedRecord as AbsenceRecord).studentName} 학생의 등교가 확인되어 결석계 챙기기 알림이 발송되었습니다.`,
-      studentName: (updatedRecord as AbsenceRecord).studentName,
-      grade: (updatedRecord as AbsenceRecord).grade,
-      classNum: (updatedRecord as AbsenceRecord).classNum,
-      studentNum: (updatedRecord as AbsenceRecord).studentNum,
+      title: isFieldTrip ? '등교 확인 및 NEIS 보고서 제출 알림' : '등교 확인 및 결석계 작성 알림 발송',
+      message: isFieldTrip
+        ? `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생의 등교가 확인되어 '보고서를 7일이내 NEIS로 제출' 알림이 발송되었습니다.`
+        : `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생의 등교가 확인되어 결석계 챙기기 알림이 발송되었습니다.`,
+      studentName: rec.studentName,
+      grade: rec.grade,
+      classNum: rec.classNum,
+      studentNum: rec.studentNum,
       recordId: recordId,
     });
   }
@@ -794,10 +798,13 @@ export function markSubmitted(
     const rec = updatedRecord as AbsenceRecord;
     const attachSummary = attachments.length > 0 ? ` (첨부: ${attachments.join(', ')})` : '';
 
+    const isFieldTrip = rec.type === 'FIELD_EXPERIENCE';
     addNotification({
       type: 'SUBMIT_PING',
-      title: '📢 결석신고서 제출 알림 (핑)',
-      message: `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생이 [${rec.typeName}] 결석신고서를 제출함에 넣었습니다!${attachSummary}`,
+      title: isFieldTrip ? '📢 현장체험학습 보고서(NEIS) 제출 확인' : '📢 결석신고서 제출 알림 (핑)',
+      message: isFieldTrip
+        ? `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생이 '보고서를 7일이내 NEIS로 제출' 및 증빙 사진 준비를 완료했습니다!${attachSummary}`
+        : `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생이 [${rec.typeName}] 결석신고서를 제출함에 넣었습니다!${attachSummary}`,
       studentName: rec.studentName,
       grade: rec.grade,
       classNum: rec.classNum,
@@ -858,10 +865,13 @@ export function triggerRemind(recordId: string): AbsenceRecord | null {
   if (updatedRecord) {
     saveAbsenceRecords(updated);
     const rec = updatedRecord as AbsenceRecord;
+    const isFieldTrip = rec.type === 'FIELD_EXPERIENCE';
     addNotification({
       type: 'REMIND_ALERT',
-      title: '🔔 결석신고서 수령/제출 리마인드 발송',
-      message: `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생에게 결석신고서 수령 및 제출 리마인드를 전송했습니다.`,
+      title: isFieldTrip ? '🔔 현장체험학습 NEIS 보고서 제출 리마인드' : '🔔 결석신고서 수령/제출 리마인드 발송',
+      message: isFieldTrip
+        ? `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생에게 '보고서를 7일이내 NEIS로 제출' 리마인드를 전송했습니다.`
+        : `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생에게 결석신고서 수령 및 제출 리마인드를 전송했습니다.`,
       studentName: rec.studentName,
       grade: rec.grade,
       classNum: rec.classNum,

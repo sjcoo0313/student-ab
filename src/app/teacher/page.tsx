@@ -185,7 +185,7 @@ export default function TeacherDashboard() {
       if (newCategory === '출석인정') {
         if (newSpecialType === 'FIELD_EXPERIENCE') {
           derivedType = 'FIELD_EXPERIENCE';
-          derivedTypeName = '현장체험학습 (NEIS)';
+          derivedTypeName = '현장체험학습 (보고서를 7일이내 NEIS로 제출)';
         } else if (newSpecialType === 'OFFICIAL_FAMILY') {
           derivedType = 'OFFICIAL_FAMILY';
           derivedTypeName = '경조사 인정결석';
@@ -598,7 +598,7 @@ export default function TeacherDashboard() {
                             onClick={() => handleMarkAttended(rec)}
                             className="w-full mt-1 bg-[#121212] hover:bg-[#2c2c2b] text-white text-[11px] py-1.5 rounded-[4px] font-semibold transition-colors cursor-pointer"
                           >
-                            🏫 등교 확인 (알림 전송)
+                            {rec.type === 'FIELD_EXPERIENCE' ? '🏫 등교 확인 (7일내 NEIS 보고서 알림)' : '🏫 등교 확인 (알림 전송)'}
                           </button>
                         </div>
                       ))
@@ -642,7 +642,9 @@ export default function TeacherDashboard() {
                           </div>
                           <p className="text-[11px] text-[#474645] line-clamp-1">{rec.reason}</p>
                           <div className="flex items-center justify-between pt-1 border-t border-[#f2f0ed]">
-                            <span className="text-[10px] text-[#ff3e00] font-medium">⚠️ 미수령</span>
+                            <span className="text-[10px] text-[#ff3e00] font-medium">
+                              {rec.type === 'FIELD_EXPERIENCE' ? '⚠️ 보고서 7일이내 NEIS 제출' : '⚠️ 미수령'}
+                            </span>
                             <button
                               onClick={() => handleRemind(rec)}
                               className="badge-pill badge-orange hover:bg-[#ff3e00] hover:text-white transition-colors cursor-pointer text-[10px]"
@@ -692,7 +694,9 @@ export default function TeacherDashboard() {
                             </div>
                           </div>
                           <p className="text-[11px] text-[#474645] line-clamp-1">{rec.reason}</p>
-                          <div className="text-[10px] text-[#0086fc] font-medium">✍️ 자필 작성 및 증빙 동봉 중</div>
+                          <div className="text-[10px] text-[#0086fc] font-medium">
+                            {rec.type === 'FIELD_EXPERIENCE' ? '💻 보고서를 7일이내 NEIS로 제출 작성 중' : '✍️ 자필 작성 및 증빙 동봉 중'}
+                          </div>
                         </div>
                       ))
                     )}
@@ -741,7 +745,7 @@ export default function TeacherDashboard() {
                             onClick={() => handleOpenApprove(rec)}
                             className="w-full mt-1 bg-[#00ca48] hover:bg-[#00b03f] text-white text-[11px] py-1.5 rounded-[4px] font-semibold transition-colors cursor-pointer"
                           >
-                            ✓ 종이 서류 대조 및 승인
+                            {rec.type === 'FIELD_EXPERIENCE' ? '✓ NEIS 보고서 및 사진 대조 승인' : '✓ 종이 서류 대조 및 승인'}
                           </button>
                         </div>
                       ))
@@ -1104,7 +1108,7 @@ export default function TeacherDashboard() {
                             newSpecialType === 'FIELD_EXPERIENCE' ? 'bg-[#1e293b] text-white' : 'bg-white text-[#334155]'
                           }`}
                         >
-                          🎒 현장체험학습 (NEIS 보고서)
+                          🎒 현장체험학습 (보고서를 7일이내 NEIS로 제출)
                         </button>
                         <button
                           type="button"
