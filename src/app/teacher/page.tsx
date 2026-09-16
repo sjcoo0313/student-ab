@@ -22,7 +22,8 @@ import {
   Edit2,
   RotateCcw,
   Undo2,
-  MessageSquare
+  MessageSquare,
+  Settings
 } from 'lucide-react';
 import { 
   getStudents, 
@@ -43,12 +44,17 @@ import { exportAbsenceStatisticsToExcel } from '@/lib/exportExcel';
 import { Student, AbsenceRecord, AbsenceStatus, AttendanceKind, AttendanceCategory, AbsenceType, VerificationMethod } from '@/types';
 import TeacherAuthGuard from '@/components/TeacherAuthGuard';
 import CalendarDatePicker, { getTodayString, formatKoreanDate } from '@/components/CalendarDatePicker';
+import ReminderSettingsModal from '@/components/ReminderSettingsModal';
 import { 
   getTodayReminderLog, 
   dispatchScheduledReminder, 
   getUnfulfilledAbsenceRecords,
+  getReminderSettings,
+  saveReminderSettings,
   DailyReminderLog,
-  ReminderSlotTime 
+  ReminderSlotTime,
+  ReminderSettings,
+  ReminderSlotInfo
 } from '@/lib/reminders';
 
 export default function TeacherDashboard() {
@@ -57,6 +63,8 @@ export default function TeacherDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'DOCS' | 'REGISTER'>('DOCS');
   const [reminderLog, setReminderLog] = useState<DailyReminderLog>({ date: getTodayString(), slots: {} });
+  const [reminderSettings, setReminderSettings] = useState<ReminderSettings>(getReminderSettings());
+  const [isReminderSettingsOpen, setIsReminderSettingsOpen] = useState(false);
 
   // Dashboard Date Navigation & Filtering
   const [selectedDashboardDate, setSelectedDashboardDate] = useState(getTodayString());
@@ -101,6 +109,7 @@ export default function TeacherDashboard() {
     }
     setRecords(getAbsenceRecords());
     setReminderLog(getTodayReminderLog());
+    setReminderSettings(getReminderSettings());
     setStorageInfo(getServerStorageInfo());
   };
 
@@ -109,16 +118,39 @@ export default function TeacherDashboard() {
     const unsubscribe = subscribeToSyncEvents(() => {
       loadData();
     });
-    return () => unsubscribe();
+
+    const handleReminderSettingsEvent = (e: Event) => {
+      const custom = e as CustomEvent<ReminderSettings>;
+      if (custom.detail) {
+        setReminderSettings(custom.detail);
+      } else {
+        setReminderSettings(getReminderSettings());
+      }
+    };
+    window.addEventListener('hoengseong_reminder_settings_updated', handleReminderSettingsEvent);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener('hoengseong_reminder_settings_updated', handleReminderSettingsEvent);
+    };
   }, []);
 
-  const handleTriggerSlotReminder = (slotTime: ReminderSlotTime) => {
-    const result = dispatchScheduledReminder(slotTime, true);
+  const handleToggleReminderMaster = () => {
+    const updated: ReminderSettings = {
+      ...reminderSettings,
+      enabled: !reminderSettings.enabled,
+    };
+    setReminderSettings(updated);
+    saveReminderSettings(updated);
+  };
+
+  const handleTriggerSlotReminder = (slotOrTime: ReminderSlotInfo | ReminderSlotTime) => {
+    const result = dispatchScheduledReminder(slotOrTime, true);
     loadData();
     if (result.dispatchedCount > 0) {
-      alert(`[${result.slot.title}] ${result.dispatchedCount}명의 미이행 학생에게 리마인드 핑을 전송했습니다.\n대상: ${result.studentNames.join(', ')}`);
+      alert(`[${result.slot.title} (${result.slot.time})] ${result.dispatchedCount}명의 미이행 학생에게 리마인드 핑을 전송했습니다.\n대상: ${result.studentNames.join(', ')}`);
     } else {
-      alert(`[${result.slot.title}] 현재 단계가 미이행된 결석 학생이 없습니다. (모두 제출 완료 또는 결석 없음)`);
+      alert(`[${result.slot.title} (${result.slot.time})] 현재 단계가 미이행된 결석 학생이 없습니다. (모두 제출 완료 또는 결석 없음)`);
     }
   };
 
@@ -569,46 +601,90 @@ export default function TeacherDashboard() {
           {/* ========================================================================= */}
           {activeTab === 'DOCS' && (
             <div className="space-y-5 animate-in fade-in">
-              {/* ⏰ 3차례 정기 자동 독려 알림 관리 바 */}
-              <div className="family-card bg-[#ffffff] border-[#ffcd6c]/60 p-4 shadow-xs space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-2.5 border-b border-[#f2f0ed]">
+              {/* ⏰ 결석계 정기 자동 독려 알림 관리 바 */}
+              <div className={`family-card p-4 shadow-xs space-y-3 transition-colors ${
+                reminderSettings.enabled 
+                  ? 'bg-white border-[#ffcd6c]/60' 
+                  : 'bg-[#fafafa] border-[#e5e7eb]'
+              }`}>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-2.5 border-b border-[#f2f0ed]">
                   <div className="flex items-center space-x-2.5">
-                    <div className="w-8 h-8 rounded-[8px] bg-[#fff8e8] text-[#d48f00] flex items-center justify-center shrink-0">
+                    <div className={`w-8 h-8 rounded-[8px] flex items-center justify-center shrink-0 ${
+                      reminderSettings.enabled ? 'bg-[#fff8e8] text-[#d48f00]' : 'bg-[#f3f4f6] text-[#9ca3af]'
+                    }`}>
                       <Clock className="w-4 h-4" />
                     </div>
                     <div>
                       <div className="flex items-center space-x-2">
                         <h3 className="font-bold text-xs sm:text-sm text-[#121212]">
-                          ⏰ 결석계 3차례 정기 자동 독려 현황
+                          ⏰ 결석계 정기 자동 독려 현황
                         </h3>
                         <span className={`badge-pill text-[10px] font-semibold ${unfulfilledRecords.length > 0 ? 'badge-orange' : 'badge-mint'}`}>
                           미이행 {unfulfilledRecords.length}명
                         </span>
+
+                        {/* ON / OFF Toggle Pill */}
+                        <button
+                          type="button"
+                          onClick={handleToggleReminderMaster}
+                          title={reminderSettings.enabled ? '클릭하여 자동 알림 끄기' : '클릭하여 자동 알림 켜기'}
+                          className={`badge-pill text-[10px] font-bold flex items-center gap-1.5 cursor-pointer transition-colors ${
+                            reminderSettings.enabled
+                              ? 'bg-[#e6fbf1] text-[#00ca48] border border-[#a3f3ca] hover:bg-[#d1fae5]'
+                              : 'bg-[#f3f4f6] text-[#6b7280] border border-[#d1d5db] hover:bg-[#e5e7eb]'
+                          }`}
+                        >
+                          <span className={`w-2 h-2 rounded-full ${
+                            reminderSettings.enabled ? 'bg-[#00ca48] animate-pulse' : 'bg-[#9ca3af]'
+                          }`}></span>
+                          <span>{reminderSettings.enabled ? '자동 발송 ON' : '자동 발송 OFF (꺼짐)'}</span>
+                        </button>
                       </div>
-                      <p className="text-[11px] text-[#7e7e7d]">
-                        아침(09:30), 점심(12:30), 종례(14:30)에 미제출 학생에게 자동 핑을 전송합니다.
+                      <p className="text-[11px] text-[#7e7e7d] mt-0.5">
+                        {reminderSettings.enabled ? (
+                          <>
+                            설정된 시간({reminderSettings.slots.filter(s => s.enabled !== false).map(s => s.time).join(', ') || '설정 필요'})에 미제출 학생에게 자동 핑을 전송합니다.
+                          </>
+                        ) : (
+                          <span className="text-[#dc2626] font-medium">
+                            현재 자동 발송이 꺼져 있습니다. (필요 시 우측 버튼으로 수동 즉시 전송 가능)
+                          </span>
+                        )}
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-1.5">
-                    {(['09:30', '12:30', '14:30'] as ReminderSlotTime[]).map((time) => {
-                      const isExecuted = Boolean(reminderLog.slots[time]?.dispatchedAt);
+                  {/* Slot buttons & Settings button */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {reminderSettings.slots.filter(s => s.enabled !== false).map((slot) => {
+                      const isExecuted = Boolean(reminderLog.slots[slot.id]?.dispatchedAt || reminderLog.slots[slot.time]?.dispatchedAt);
                       return (
                         <button
-                          key={time}
+                          key={slot.id}
                           type="button"
-                          onClick={() => handleTriggerSlotReminder(time)}
+                          onClick={() => handleTriggerSlotReminder(slot)}
                           className={`text-[11px] px-2.5 py-1 rounded-[6px] font-semibold border transition-all flex items-center space-x-1 cursor-pointer ${
                             isExecuted
                               ? 'bg-[#e6fbf1] text-[#00ca48] border-[#a3f3ca]'
                               : 'bg-[#fcfbf9] text-[#474645] border-[#e5d5c3] hover:border-[#ffcd6c]'
                           }`}
+                          title={`[${slot.title}] 미제출 학생에게 즉시 발송`}
                         >
-                          <span>{time} {isExecuted ? '✓ 완료' : '전송'}</span>
+                          <span>{slot.time} {isExecuted ? '✓ 완료' : '전송'}</span>
                         </button>
                       );
                     })}
+
+                    {/* Settings Modal Open Button */}
+                    <button
+                      type="button"
+                      onClick={() => setIsReminderSettingsOpen(true)}
+                      className="text-[11px] px-2.5 py-1 rounded-[6px] font-bold border border-[#ffcd6c] bg-[#fff8e8] text-[#d48f00] hover:bg-[#ffeec2] transition-colors flex items-center gap-1 cursor-pointer ml-1"
+                      title="알림 시간 직접 설정 및 온/오프 관리"
+                    >
+                      <Settings className="w-3.5 h-3.5" />
+                      <span>시간 설정</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1868,6 +1944,16 @@ export default function TeacherDashboard() {
               </div>
             </div>
           )}
+
+          {/* Reminder Settings Modal */}
+          <ReminderSettingsModal
+            isOpen={isReminderSettingsOpen}
+            onClose={() => setIsReminderSettingsOpen(false)}
+            onSaved={(updated) => {
+              setReminderSettings(updated);
+              loadData();
+            }}
+          />
 
         </div>
       </main>

@@ -50,12 +50,20 @@ export async function POST(req: NextRequest) {
         break;
       }
 
+      case 'SAVE_REMINDER_SETTINGS': {
+        if (body.reminderSettings && typeof body.reminderSettings === 'object') {
+          updated = await writeServerDb({ reminderSettings: body.reminderSettings });
+        }
+        break;
+      }
+
       case 'BATCH_SYNC': {
         const patch: Record<string, unknown> = {};
         if (Array.isArray(body.records)) patch.records = body.records;
         if (Array.isArray(body.students)) patch.students = body.students;
         if (Array.isArray(body.notifications)) patch.notifications = body.notifications;
         if (typeof body.teacherPin === 'string') patch.teacherPin = body.teacherPin;
+        if (body.reminderSettings && typeof body.reminderSettings === 'object') patch.reminderSettings = body.reminderSettings;
         updated = await writeServerDb(patch);
         break;
       }

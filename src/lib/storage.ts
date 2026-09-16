@@ -6,6 +6,7 @@ const STORAGE_KEYS = {
   NOTIFICATIONS: 'hoengseong_notifications_v1',
   CURRENT_STUDENT: 'hoengseong_current_student_id',
   TEACHER_PIN: 'hoengseong_teacher_pin_v1',
+  REMINDER_SETTINGS: 'hoengseong_reminder_settings_v1',
 };
 
 export const INITIAL_STUDENTS: Student[] = [
@@ -342,6 +343,9 @@ export async function fetchServerSync(): Promise<boolean> {
     }
     if (data.teacherPin) {
       localStorage.setItem(STORAGE_KEYS.TEACHER_PIN, data.teacherPin);
+    }
+    if (data.reminderSettings) {
+      localStorage.setItem(STORAGE_KEYS.REMINDER_SETTINGS, JSON.stringify(data.reminderSettings));
     }
     localStorage.setItem('hoengseong_app_has_run_v1', 'true');
 

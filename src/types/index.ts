@@ -105,3 +105,20 @@ export interface SystemNotification {
   read: boolean;
   attachments?: AttachmentProof[];
 }
+
+export type ReminderSlotTime = string;
+
+export interface ReminderSlotInfo {
+  id: string;
+  time: string; // 'HH:mm' e.g. '09:30'
+  title: string; // e.g. '1차 아침 알림'
+  periodName?: string;
+  timeDescription?: string;
+  targetAction?: string;
+  enabled?: boolean;
+}
+
+export interface ReminderSettings {
+  enabled: boolean; // 자동 알림 전체 ON / OFF 토글
+  slots: ReminderSlotInfo[]; // 교사가 직접 설정한 알림 시간 목록
+}
