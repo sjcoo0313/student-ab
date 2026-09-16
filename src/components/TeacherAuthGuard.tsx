@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Lock, KeyRound, CheckCircle2, AlertCircle, Eye, EyeOff, ShieldCheck, LogOut } from 'lucide-react';
-import { getTeacherPin, setTeacherPin, isTeacherLoggedIn, setTeacherLoggedIn } from '@/lib/storage';
+import { verifyTeacherPinServer, setTeacherPin, isTeacherLoggedIn, setTeacherLoggedIn } from '@/lib/storage';
 
 interface TeacherAuthGuardProps {
   children: React.ReactNode;
@@ -12,6 +12,7 @@ export default function TeacherAuthGuard({ children }: TeacherAuthGuardProps) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [pinInput, setPinInput] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isChangePinOpen, setIsChangePinOpen] = useState(false);
   const [showPin, setShowPin] = useState(false);
 
@@ -26,16 +27,20 @@ export default function TeacherAuthGuard({ children }: TeacherAuthGuardProps) {
     setIsAuthenticated(isTeacherLoggedIn());
   }, []);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const correctPin = getTeacherPin();
-    if (pinInput.trim() === correctPin) {
+    if (!pinInput.trim() || isSubmitting) return;
+    setIsSubmitting(true);
+    setErrorMsg('');
+    const result = await verifyTeacherPinServer(pinInput.trim());
+    setIsSubmitting(false);
+    if (result.success) {
       setTeacherLoggedIn(true);
       setIsAuthenticated(true);
       setErrorMsg('');
       setPinInput('');
     } else {
-      setErrorMsg('비밀번호가 올바르지 않습니다. 다시 확인해주세요.');
+      setErrorMsg(result.error || '비밀번호가 올바르지 않습니다. 다시 확인해주세요.');
       setPinInput('');
     }
   };
@@ -46,13 +51,8 @@ export default function TeacherAuthGuard({ children }: TeacherAuthGuardProps) {
     window.location.href = '/';
   };
 
-  const handleChangePin = (e: React.FormEvent) => {
+  const handleChangePin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const currentCorrect = getTeacherPin();
-    if (currentPinInput !== currentCorrect) {
-      setChangeError('현재 비밀번호가 일치하지 않습니다.');
-      return;
-    }
     if (newPinInput.length < 4) {
       setChangeError('새 비밀번호는 4자리 이상이어야 합니다.');
       return;
@@ -62,7 +62,13 @@ export default function TeacherAuthGuard({ children }: TeacherAuthGuardProps) {
       return;
     }
 
-    setTeacherPin(newPinInput);
+    const checkCurrent = await verifyTeacherPinServer(currentPinInput.trim());
+    if (!checkCurrent.success) {
+      setChangeError('현재 비밀번호가 일치하지 않습니다.');
+      return;
+    }
+
+    await setTeacherPin(newPinInput.trim(), currentPinInput.trim());
     setChangeSuccess(true);
     setChangeError('');
     setTimeout(() => {
@@ -124,9 +130,10 @@ export default function TeacherAuthGuard({ children }: TeacherAuthGuardProps) {
 
             <button
               type="submit"
-              className="btn-dark-pill w-full py-3 text-sm cursor-pointer"
+              disabled={isSubmitting}
+              className="btn-dark-pill w-full py-3 text-sm cursor-pointer disabled:opacity-50"
             >
-              <span>교사 모드 입장하기</span>
+              <span>{isSubmitting ? '확인 중...' : '교사 모드 입장하기'}</span>
             </button>
 
             <div className="pt-2">

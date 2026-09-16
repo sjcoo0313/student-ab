@@ -8,8 +8,11 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const db = await readServerDb();
   const storageInfo = getStorageInfo();
+  // 🔒 보안: 학생 및 일반 클라이언트 응답에서 교사 비밀번호(teacherPin)를 완벽히 제외
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { teacherPin, ...safeDb } = db;
   return NextResponse.json(
-    { success: true, storageInfo, ...db },
+    { success: true, storageInfo, ...safeDb },
     {
       headers: {
         'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
@@ -194,10 +197,34 @@ export async function POST(req: NextRequest) {
         break;
       }
 
-      case 'SET_TEACHER_PIN': {
+      case 'VERIFY_TEACHER_PIN': {
         const { pin } = body;
-        if (pin && typeof pin === 'string') {
-          updated = await writeServerDb({ teacherPin: pin });
+        const serverPin = current.teacherPin || '1234';
+        const isMatch = typeof pin === 'string' && pin.trim() === serverPin.trim();
+        return NextResponse.json({
+          success: true,
+          authenticated: isMatch,
+          error: isMatch ? null : '비밀번호가 일치하지 않습니다.',
+        });
+      }
+
+      case 'SET_TEACHER_PIN': {
+        const { currentPin, newPin, pin } = body;
+        const targetPin = newPin || pin;
+        const serverPin = current.teacherPin || '1234';
+
+        if (currentPin && typeof currentPin === 'string') {
+          if (currentPin.trim() !== serverPin.trim()) {
+            return NextResponse.json(
+              { success: false, error: '현재 비밀번호가 일치하지 않습니다.' },
+              { status: 400 }
+            );
+          }
+        }
+
+        if (targetPin && typeof targetPin === 'string') {
+          updated = await writeServerDb({ teacherPin: targetPin.trim() });
+          return NextResponse.json({ success: true, message: '교사 비밀번호가 성공적으로 변경되었습니다.' });
         }
         break;
       }

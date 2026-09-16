@@ -551,21 +551,6 @@ export default function StudentMobilePage() {
         </>
       )}
 
-      {/* Discreet Teacher Login Footer */}
-      <footer className="pt-8 pb-4 text-center border-t border-[#f2f0ed] mt-4">
-        <Link
-          href="/teacher"
-          className="inline-flex items-center gap-1.5 text-xs text-[#7e7e7d] hover:text-[#121212] transition-colors py-1.5 px-3.5 rounded-full hover:bg-[#f2f0ed] font-medium border border-transparent hover:border-[#e5d5c3]"
-          title="교직원 전용 모드"
-        >
-          <Lock className="w-3.5 h-3.5 text-[#7e7e7d]" />
-          <span>선생님(교직원) 로그인</span>
-        </Link>
-        <p className="text-[10px] text-[#a8a29e] mt-1.5">
-          스마트 출결 관리 알리미 시스템
-        </p>
-      </footer>
-
       {/* Student Password Change Modal */}
       {isChangePinOpen && (
         <div className="fixed inset-0 z-50 bg-[#121212]/40 backdrop-blur-2xs flex items-center justify-center p-4">

@@ -1541,31 +1541,66 @@ export function getTeacherPin(): string {
   return localStorage.getItem(STORAGE_KEYS.TEACHER_PIN) || '1234';
 }
 
-export function setTeacherPin(newPin: string) {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(STORAGE_KEYS.TEACHER_PIN, newPin);
+export async function verifyTeacherPinServer(pin: string): Promise<{ success: boolean; error?: string }> {
+  if (typeof window === 'undefined') return { success: false, error: '오프라인' };
+  try {
+    const res = await fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'VERIFY_TEACHER_PIN', pin: pin.trim() }),
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      return { success: false, error: '서버 인증 응답 오류가 발생했습니다.' };
+    }
+    const data = await res.json();
+    if (data.authenticated) {
+      return { success: true };
+    }
+    return { success: false, error: data.error || '비밀번호가 일치하지 않습니다.' };
+  } catch {
+    // 네트워크 실패 시 로컬 폴백
+    const localPin = localStorage.getItem(STORAGE_KEYS.TEACHER_PIN) || '1234';
+    if (pin.trim() === localPin.trim()) {
+      return { success: true };
+    }
+    return { success: false, error: '비밀번호가 일치하지 않습니다.' };
+  }
+}
+
+export async function setTeacherPin(newPin: string, currentPin?: string): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  localStorage.setItem(STORAGE_KEYS.TEACHER_PIN, newPin.trim());
   broadcastUpdate('TEACHER_PIN_CHANGED');
-  postServerSync('SET_TEACHER_PIN', { pin: newPin });
+  try {
+    const res = await fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'SET_TEACHER_PIN', newPin: newPin.trim(), currentPin: currentPin?.trim() }),
+      cache: 'no-store',
+      keepalive: true,
+    });
+    return res.ok;
+  } catch {
+    return true;
+  }
 }
 
 export function isTeacherLoggedIn(): boolean {
   if (typeof window === 'undefined') return false;
-  return localStorage.getItem('hoengseong_teacher_auth') === 'true' || 
-         sessionStorage.getItem('hoengseong_teacher_auth') === 'true';
+  // 🔒 보안: 탭/세션 단위 인증 - 브라우저 종료 시 자동 해제되며 타 기기/타 탭과 혼선 방지
+  return sessionStorage.getItem('hoengseong_teacher_auth') === 'true';
 }
 
 export function setTeacherLoggedIn(loggedIn: boolean) {
   if (typeof window === 'undefined') return;
   if (loggedIn) {
-    localStorage.setItem('hoengseong_teacher_auth', 'true');
-    try {
-      sessionStorage.setItem('hoengseong_teacher_auth', 'true');
-    } catch {}
-  } else {
+    sessionStorage.setItem('hoengseong_teacher_auth', 'true');
+    // 이전 영구 세션이 남아있었다면 정리하여 학생 화면 혼선 차단
     localStorage.removeItem('hoengseong_teacher_auth');
-    try {
-      sessionStorage.removeItem('hoengseong_teacher_auth');
-    } catch {}
+  } else {
+    sessionStorage.removeItem('hoengseong_teacher_auth');
+    localStorage.removeItem('hoengseong_teacher_auth');
   }
   broadcastUpdate('TEACHER_AUTH_CHANGED', loggedIn);
 }
