@@ -35,7 +35,7 @@ export default function TeacherAuthGuard({ children }: TeacherAuthGuardProps) {
       setErrorMsg('');
       setPinInput('');
     } else {
-      setErrorMsg('비밀번호가 올바르지 않습니다. 다시 확인해주세요. (기본: 1234)');
+      setErrorMsg('비밀번호가 올바르지 않습니다. 다시 확인해주세요.');
       setPinInput('');
     }
   };
@@ -88,11 +88,8 @@ export default function TeacherAuthGuard({ children }: TeacherAuthGuardProps) {
               교사 전용 모드
             </h2>
             <p className="text-xs text-[#7e7e7d] mt-1.5 leading-relaxed">
-              교사 출결 관리 및 대시보드 접근을 위해 비밀번호(PIN)를 입력해주세요.
+              교사 출결 관리 및 대시보드 접근을 위해 비밀번호를 입력해주세요.
             </p>
-            <span className="badge-pill badge-stone text-[10px] mt-2 font-mono">
-              기본 비밀번호: 1234
-            </span>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4 pt-2">
@@ -104,7 +101,7 @@ export default function TeacherAuthGuard({ children }: TeacherAuthGuardProps) {
                   setPinInput(e.target.value);
                   if (errorMsg) setErrorMsg('');
                 }}
-                placeholder="비밀번호 입력 (4자리)"
+                placeholder="교사 비밀번호 입력"
                 maxLength={20}
                 autoFocus
                 className="w-full text-center text-lg tracking-widest font-bold p-3 bg-[#ffffff] border border-[#e5d5c3] rounded-[10px] focus:outline-hidden focus:border-[#121212]"
@@ -127,10 +124,19 @@ export default function TeacherAuthGuard({ children }: TeacherAuthGuardProps) {
 
             <button
               type="submit"
-              className="btn-dark-pill w-full py-3 text-sm"
+              className="btn-dark-pill w-full py-3 text-sm cursor-pointer"
             >
               <span>교사 모드 입장하기</span>
             </button>
+
+            <div className="pt-2">
+              <a
+                href="/"
+                className="text-xs text-[#7e7e7d] hover:text-[#121212] underline font-medium"
+              >
+                ← 학생 화면으로 돌아가기
+              </a>
+            </div>
           </form>
         </div>
       </div>

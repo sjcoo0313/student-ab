@@ -551,22 +551,6 @@ export default function StudentMobilePage() {
         </>
       )}
 
-      {/* Teacher Mode Jump Card */}
-        <div className="family-card-stone flex items-center justify-between p-4">
-          <div>
-            <p className="text-[10px] font-semibold text-[#7e7e7d] uppercase">교사용 모드</p>
-            <p className="text-xs font-medium text-[#121212]">선생님 화면에서 출결 및 알림 확인하기</p>
-          </div>
-          <Link
-            href="/teacher"
-            className="btn-dark-pill text-xs py-2 px-3.5"
-          >
-            <GraduationCap className="w-3.5 h-3.5" />
-            <span>교사 모드</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
-
       {/* Student Password Change Modal */}
       {isChangePinOpen && (
         <div className="fixed inset-0 z-50 bg-[#121212]/40 backdrop-blur-2xs flex items-center justify-center p-4">

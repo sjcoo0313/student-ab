@@ -44,11 +44,12 @@ export default function Navbar() {
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [toastMessage, setToastMessage] = useState<SystemNotification | null>(null);
+  const isTeacherRoute = pathname === '/teacher' || pathname === '/manage' || pathname === '/stats';
   const [isTeacher, setIsTeacher] = useState<boolean>(false);
 
   useEffect(() => {
     setNotifications(getNotifications());
-    setIsTeacher(isTeacherLoggedIn());
+    setIsTeacher(isTeacherRoute && isTeacherLoggedIn());
 
     // ⏰ 3차례 정기 자동 리마인드 (09:30, 12:30, 14:30) 20초 주기 자동 검사
     checkAndRunAutomatedReminders();
@@ -59,7 +60,7 @@ export default function Navbar() {
     const unsubscribe = subscribeToSyncEvents((type, payload) => {
       setNotifications(getNotifications());
       if (type === 'TEACHER_AUTH_CHANGED' || type === 'RESET_ALL') {
-        setIsTeacher(isTeacherLoggedIn());
+        setIsTeacher(isTeacherRoute && isTeacherLoggedIn());
       }
 
       if (type === 'NOTIFICATIONS_UPDATED' && Array.isArray(payload) && payload.length > 0) {
@@ -353,8 +354,8 @@ export default function Navbar() {
                 </button>
               )}
 
-              {/* Teacher Mode Switch / Logout Button */}
-              {isTeacher ? (
+              {/* Teacher Mode Switch / Logout Button - Only visible in teacher mode */}
+              {isTeacher && (
                 <button
                   onClick={handleTeacherLogout}
                   title="교사 모드 종료 (학생 화면으로 전환)"
@@ -363,15 +364,6 @@ export default function Navbar() {
                   <LogOut className="w-3.5 h-3.5" />
                   <span className="text-xs font-medium">교사 종료</span>
                 </button>
-              ) : (
-                <Link
-                  href="/teacher"
-                  title="교사 모드 전환 (비밀번호: 1234)"
-                  className="btn-sand-pill text-xs py-1.5 px-2.5 text-[#7e7e7d] hover:text-[#121212] flex items-center gap-1"
-                >
-                  <Lock className="w-3.5 h-3.5" />
-                  <span className="text-xs font-medium">교사 모드</span>
-                </Link>
               )}
             </div>
           </div>
