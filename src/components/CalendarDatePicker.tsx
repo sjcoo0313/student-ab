@@ -1,7 +1,17 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, RotateCcw, Plus, Minus, AlertCircle } from 'lucide-react';
+import { 
+  ChevronLeft, 
+  ChevronRight, 
+  Calendar as CalendarIcon, 
+  RotateCcw, 
+  Plus, 
+  Minus, 
+  AlertCircle,
+  CalendarCheck,
+  ArrowRight
+} from 'lucide-react';
 
 interface CalendarDatePickerProps {
   startDate: string; // YYYY-MM-DD
@@ -49,7 +59,6 @@ export const calculateDaysCount = (start: string, end: string): number => {
     }
     cur.setDate(cur.getDate() + 1);
   }
-  // 평일이 포함되지 않은 주말만 선택된 예외 경우 최소 1일 반환
   return count > 0 ? count : 1;
 };
 
@@ -85,6 +94,9 @@ export default function CalendarDatePicker({
   const [currentMonth, setCurrentMonth] = useState(initialDate.getMonth()); // 0-indexed
   const [hoverDate, setHoverDate] = useState<string | null>(null);
 
+  // 'START': 다음 클릭이 시작일 지정, 'END': 다음 클릭이 종료일 지정
+  const [selectPhase, setSelectPhase] = useState<'START' | 'END'>('START');
+
   // Keep month view in sync if external startDate changes
   useEffect(() => {
     if (startDate) {
@@ -95,6 +107,9 @@ export default function CalendarDatePicker({
       }
     }
   }, [startDate]);
+
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const toISO = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
   const goToPrevMonth = () => {
     if (currentMonth === 0) {
@@ -115,29 +130,73 @@ export default function CalendarDatePicker({
   };
 
   const goToToday = () => {
-    const today = new Date();
     const tStr = getTodayString();
-    setCurrentYear(today.getFullYear());
-    setCurrentMonth(today.getMonth());
+    const parts = tStr.split('-').map(Number);
+    setCurrentYear(parts[0]);
+    setCurrentMonth(parts[1] - 1);
+    setSelectPhase('START');
     onChange(tStr, tStr, 1);
   };
 
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const toISO = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  // 1. 직접 날짜 선택 입력 핸들러 (어느 날짜든 자유롭게 지정 가능)
+  const handleDirectStartChange = (newStartStr: string) => {
+    if (!newStartStr) return;
+    const parts = newStartStr.split('-').map(Number);
+    if (!isNaN(parts[0])) {
+      setCurrentYear(parts[0]);
+      setCurrentMonth(parts[1] - 1);
+    }
+    const currentEnd = endDate || newStartStr;
+    const finalEnd = newStartStr > currentEnd ? newStartStr : currentEnd;
+    const newCount = calculateDaysCount(newStartStr, finalEnd);
+    setSelectPhase('START');
+    onChange(newStartStr, finalEnd, newCount);
+  };
 
-  // 빠른 날짜 이동 버튼 (오늘, 어제, 내일, 1일로 리셋)
-  const handleQuickJump = (type: 'today' | 'yesterday' | 'tomorrow' | 'resetToOneDay') => {
+  const handleDirectEndChange = (newEndStr: string) => {
+    if (!newEndStr) return;
+    const parts = newEndStr.split('-').map(Number);
+    if (!isNaN(parts[0])) {
+      setCurrentYear(parts[0]);
+      setCurrentMonth(parts[1] - 1);
+    }
+    const currentStart = startDate || newEndStr;
+    const finalStart = newEndStr < currentStart ? newEndStr : currentStart;
+    const newCount = calculateDaysCount(finalStart, newEndStr);
+    setSelectPhase('START');
+    onChange(finalStart, newEndStr, newCount);
+  };
+
+  // 2. 빠른 날짜 점프 (오늘, 어제, 내일, 다음 주 월요일, 1일 리셋)
+  const handleQuickJump = (type: 'today' | 'yesterday' | 'tomorrow' | 'nextWeek' | 'resetToOneDay') => {
     const base = new Date();
+    setSelectPhase('START');
+
     if (type === 'today') {
       const dStr = toISO(base);
+      setCurrentYear(base.getFullYear());
+      setCurrentMonth(base.getMonth());
       onChange(dStr, dStr, 1);
     } else if (type === 'yesterday') {
       base.setDate(base.getDate() - 1);
       const dStr = toISO(base);
+      setCurrentYear(base.getFullYear());
+      setCurrentMonth(base.getMonth());
       onChange(dStr, dStr, 1);
     } else if (type === 'tomorrow') {
       base.setDate(base.getDate() + 1);
       const dStr = toISO(base);
+      setCurrentYear(base.getFullYear());
+      setCurrentMonth(base.getMonth());
+      onChange(dStr, dStr, 1);
+    } else if (type === 'nextWeek') {
+      // 다음 주 월요일로 점프
+      const day = base.getDay();
+      const daysUntilNextMon = ((1 - day + 7) % 7) || 7;
+      base.setDate(base.getDate() + daysUntilNextMon);
+      const dStr = toISO(base);
+      setCurrentYear(base.getFullYear());
+      setCurrentMonth(base.getMonth());
       onChange(dStr, dStr, 1);
     } else if (type === 'resetToOneDay') {
       const curStart = startDate || todayStr;
@@ -145,13 +204,12 @@ export default function CalendarDatePicker({
     }
   };
 
-  // 일수 증감 스태퍼 (+1일 / -1일, 토·일 주말 건너뜀)
+  // 3. 일수 증감 스태퍼 (+1일 / -1일, 토·일 주말 건너뜀)
   const handleAdjustDays = (delta: number) => {
     const s = startDate ? new Date(startDate) : new Date();
     const e = endDate ? new Date(endDate) : new Date(s);
 
     if (delta > 0) {
-      // 다음 평일(월~금)이 될 때까지 1일씩 전진
       const nextDate = new Date(e);
       do {
         nextDate.setDate(nextDate.getDate() + 1);
@@ -161,7 +219,6 @@ export default function CalendarDatePicker({
       const newCount = calculateDaysCount(startDate || todayStr, newEndStr);
       onChange(startDate || todayStr, newEndStr, newCount);
     } else if (delta < 0) {
-      // 이전 평일(월~금)로 후진 (시작일 이상)
       const prevDate = new Date(e);
       let foundDate: Date | null = null;
       while (prevDate > s) {
@@ -216,65 +273,43 @@ export default function CalendarDatePicker({
     daysGrid.push({ day: d, dateStr, isCurrentMonth: false, isWeekend: dObj.getDay() });
   }
 
-  // 💡 핵심: 날짜를 연속적으로 클릭하여 결석 일수를 자연스럽게 늘리거나 줄이는 핸들러
+  // 💡 스마트 클릭 핸들러: 미래/과거 어느 날이든 자유롭게 시작일과 종료일로 지정 가능!
   const handleDateClick = (dateStr: string) => {
     if (singleDateOnly) {
       onChange(dateStr, dateStr, 1);
       return;
     }
 
-    if (!startDate) {
+    // 1) 시작일 선택 단계이거나, 이미 2일 이상 범위가 완성된 상태에서 새로운 날짜를 클릭한 경우
+    //    -> 클릭한 날짜를 새로운 시작일로 즉시 설정하고 1일로 초기화!
+    if (selectPhase === 'START' || (startDate !== endDate && startDate && endDate)) {
       onChange(dateStr, dateStr, 1);
+      setSelectPhase('END');
       return;
     }
 
-    const s = startDate;
-    const e = endDate || startDate;
+    // 2) 종료일 선택 단계 (현재 1일만 선택되어 있는 상태)
+    const s = startDate || todayStr;
 
-    // 1) 시작일을 다시 클릭한 경우: 여러 날 선택 중이었다면 시작일 1일만 선택으로 초기화
+    // 시작일과 동일한 날을 다시 클릭한 경우 -> 1일 선택 완료로 종결
     if (dateStr === s) {
       onChange(s, s, 1);
+      setSelectPhase('START');
       return;
     }
 
-    // 2) 현재 종료일을 다시 클릭한 경우: 결석 일수를 1일 줄임 (예: 16~18 선택 중 18 클릭 -> 16~17로 축소)
-    if (dateStr === e && e > s) {
-      const eDate = new Date(e);
-      eDate.setDate(eDate.getDate() - 1);
-      const newEndStr = toISO(eDate);
-      const newCount = calculateDaysCount(s, newEndStr);
-      onChange(s, newEndStr, newCount);
-      return;
-    }
-
-    // 3) 선택 범위 내부의 날짜를 클릭한 경우 (s < dateStr < e): 클릭한 날짜까지로 종료일 축소 (예: 16~20 중 18 클릭 -> 16~18)
-    if (dateStr > s && dateStr < e) {
+    // 시작일 이후의 날짜를 클릭한 경우 -> 종료일로 지정하여 범위 완성!
+    if (dateStr > s) {
       const newCount = calculateDaysCount(s, dateStr);
       onChange(s, dateStr, newCount);
+      setSelectPhase('START');
       return;
     }
 
-    // 4) 현재 종료일 이후의 날짜를 클릭한 경우 (dateStr > e): 연속적으로 범위를 확장!
-    //    예: 16일(1일) -> 17일 클릭(2일) -> 18일 클릭(3일: 진단서 안내 자동 발동) -> 19일 클릭(4일)
-    if (dateStr > e) {
-      const newCount = calculateDaysCount(s, dateStr);
-      onChange(s, dateStr, newCount);
-      return;
-    }
-
-    // 5) 시작일보다 이전의 날짜를 클릭한 경우 (dateStr < s)
+    // 시작일 이전의 날짜를 클릭한 경우 -> 클릭한 날짜가 새로운 시작일이 됨
     if (dateStr < s) {
-      // 바로 하루 전날이면 시작일을 앞쪽으로 하루 확장
-      const prevDay = new Date(s);
-      prevDay.setDate(prevDay.getDate() - 1);
-      if (dateStr === toISO(prevDay)) {
-        const newCount = calculateDaysCount(dateStr, e);
-        onChange(dateStr, e, newCount);
-        return;
-      }
-
-      // 하루 이상 떨어진 이전 날짜면 해당 날짜 1일 선택으로 새롭게 시작
       onChange(dateStr, dateStr, 1);
+      setSelectPhase('END');
       return;
     }
   };
@@ -292,10 +327,104 @@ export default function CalendarDatePicker({
   const is3DaysOrMore = currentDaysCount >= 3;
 
   return (
-    <div className="bg-[#ffffff] border border-[#cbd5e1] rounded-[8px] p-2 sm:p-2.5 shadow-2xs space-y-1.5 font-sans">
-      {/* 1. 빠른 날짜 선택 & 초기화 바 */}
-      <div className="flex flex-wrap items-center justify-between gap-1 pb-1.5 border-b border-[#f1f5f9]">
-        <div className="flex items-center gap-1">
+    <div className="bg-[#ffffff] border border-[#cbd5e1] rounded-[10px] p-2.5 sm:p-3 shadow-2xs space-y-2 font-sans">
+      
+      {/* 1. 시작일 ~ 종료일 직접 선택 인풋 바 (어느 날짜든 자유롭게 지정) */}
+      <div className="bg-[#f8fafc] p-2 rounded-[8px] border border-[#e2e8f0] flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 flex-1 min-w-[240px]">
+          {/* 시작일 인풋 */}
+          <div className="flex-1">
+            <div className="flex items-center justify-between mb-0.5">
+              <label className="text-[10px] font-bold text-[#475569] flex items-center gap-1">
+                <span>📍 시작일</span>
+                {selectPhase === 'START' && (
+                  <span className="text-[9px] text-[#2563eb] font-extrabold animate-pulse">
+                    ● 클릭 대기
+                  </span>
+                )}
+              </label>
+              <button
+                type="button"
+                onClick={() => setSelectPhase('START')}
+                className={`text-[9px] px-1 rounded font-semibold transition-colors cursor-pointer ${
+                  selectPhase === 'START'
+                    ? 'bg-[#2563eb] text-white'
+                    : 'bg-[#e2e8f0] text-[#64748b] hover:bg-[#cbd5e1]'
+                }`}
+                title="달력 클릭 시 시작일로 지정"
+              >
+                선택
+              </button>
+            </div>
+            <input
+              type="date"
+              value={startDate || todayStr}
+              onChange={(e) => handleDirectStartChange(e.target.value)}
+              className="w-full text-xs font-bold bg-white border border-[#cbd5e1] rounded px-2 py-1 focus:border-[#1e293b] focus:outline-hidden cursor-pointer"
+            />
+          </div>
+
+          <span className="text-[#94a3b8] font-bold self-end mb-1.5">~</span>
+
+          {/* 종료일 인풋 */}
+          <div className="flex-1">
+            <div className="flex items-center justify-between mb-0.5">
+              <label className="text-[10px] font-bold text-[#475569] flex items-center gap-1">
+                <span>🏁 종료일</span>
+                {selectPhase === 'END' && (
+                  <span className="text-[9px] text-[#d97706] font-extrabold animate-pulse">
+                    ● 클릭 대기
+                  </span>
+                )}
+              </label>
+              <button
+                type="button"
+                onClick={() => setSelectPhase('END')}
+                className={`text-[9px] px-1 rounded font-semibold transition-colors cursor-pointer ${
+                  selectPhase === 'END'
+                    ? 'bg-[#d97706] text-white'
+                    : 'bg-[#e2e8f0] text-[#64748b] hover:bg-[#cbd5e1]'
+                }`}
+                title="달력 클릭 시 종료일로 지정"
+              >
+                선택
+              </button>
+            </div>
+            <input
+              type="date"
+              value={endDate || startDate || todayStr}
+              onChange={(e) => handleDirectEndChange(e.target.value)}
+              className="w-full text-xs font-bold bg-white border border-[#cbd5e1] rounded px-2 py-1 focus:border-[#1e293b] focus:outline-hidden cursor-pointer"
+            />
+          </div>
+        </div>
+
+        {/* 일수 배지 & 빠른 초기화 */}
+        <div className="flex items-center gap-1 self-end mb-0.5">
+          <span className={`px-2 py-1 rounded text-xs font-extrabold border shrink-0 ${
+            is3DaysOrMore 
+              ? 'bg-[#fee2e2] text-[#dc2626] border-[#fca5a5]' 
+              : 'bg-[#fef3c7] text-[#b45309] border-[#fde68a]'
+          }`}>
+            총 {currentDaysCount}일간
+          </span>
+
+          {!singleDateOnly && (
+            <button
+              type="button"
+              onClick={() => handleQuickJump('resetToOneDay')}
+              className="p-1 rounded bg-white text-[#64748b] border border-[#cbd5e1] hover:text-[#dc2626] hover:bg-[#fee2e2] transition-colors cursor-pointer"
+              title="시작일 하루(1일)로 초기화"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 2. 빠른 날짜 선택 바로가기 바 */}
+      <div className="flex flex-wrap items-center justify-between gap-1 pb-1 border-b border-[#f1f5f9]">
+        <div className="flex flex-wrap items-center gap-1">
           <button
             type="button"
             onClick={() => handleQuickJump('today')}
@@ -321,28 +450,55 @@ export default function CalendarDatePicker({
           >
             내일
           </button>
-        </div>
-
-        {!singleDateOnly && (currentDaysCount > 1 || weekendDaysCount > 0) && (
           <button
             type="button"
-            onClick={() => handleQuickJump('resetToOneDay')}
-            className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#f8fafc] text-[#64748b] border border-[#cbd5e1] hover:bg-[#fee2e2] hover:text-[#dc2626] hover:border-[#fca5a5] transition-colors cursor-pointer flex items-center gap-0.5"
-            title="현재 시작일 기준 1일로 재설정"
+            onClick={() => handleQuickJump('nextWeek')}
+            className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-white text-[#2563eb] border border-[#bfdbfe] hover:bg-[#eff6ff] cursor-pointer"
           >
-            <RotateCcw className="w-2.5 h-2.5" />
-            <span>1일 초기화</span>
+            다음 주(월)
           </button>
-        )}
+        </div>
+
+        <div className="text-[10px] text-[#64748b]">
+          {selectPhase === 'END' ? (
+            <span className="text-[#d97706] font-bold">
+              👉 달력에서 종료일을 클릭하세요
+            </span>
+          ) : (
+            <span className="text-[#64748b]">
+              💡 날짜를 자유롭게 클릭하여 시작·종료일 지정
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* 2. Calendar Month Navigation Header */}
+      {/* 3. Calendar Month Navigation Header */}
       <div className="flex items-center justify-between px-0.5 pt-0.5">
         <div className="flex items-center space-x-1.5">
           <CalendarIcon className="w-3.5 h-3.5 text-[#1e293b]" />
-          <span className="text-xs font-bold text-[#0f172a]">
-            {currentYear}년 {currentMonth + 1}월
-          </span>
+          
+          {/* Year & Month Picker */}
+          <div className="flex items-center space-x-1">
+            <select
+              value={currentYear}
+              onChange={(e) => setCurrentYear(Number(e.target.value))}
+              className="text-xs font-bold text-[#0f172a] bg-transparent border-0 cursor-pointer focus:outline-hidden"
+            >
+              {[2025, 2026, 2027].map(y => (
+                <option key={y} value={y}>{y}년</option>
+              ))}
+            </select>
+            <select
+              value={currentMonth}
+              onChange={(e) => setCurrentMonth(Number(e.target.value))}
+              className="text-xs font-bold text-[#0f172a] bg-transparent border-0 cursor-pointer focus:outline-hidden"
+            >
+              {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(m => (
+                <option key={m} value={m}>{m + 1}월</option>
+              ))}
+            </select>
+          </div>
+
           {is3DaysOrMore && (
             <span className="text-[9px] bg-[#fee2e2] text-[#dc2626] font-extrabold px-1.5 py-0.2 rounded border border-[#fca5a5] flex items-center gap-0.5">
               <AlertCircle className="w-2.5 h-2.5" />
@@ -352,9 +508,6 @@ export default function CalendarDatePicker({
         </div>
 
         <div className="flex items-center space-x-1">
-          <span className="text-[9px] text-[#64748b] hidden sm:inline mr-1">
-            연속 클릭 시 기간 확장 (주말 제외)
-          </span>
           <button
             type="button"
             onClick={goToToday}
@@ -382,7 +535,7 @@ export default function CalendarDatePicker({
         </div>
       </div>
 
-      {/* 3. Day of week headers */}
+      {/* 4. Day of week headers */}
       <div className="grid grid-cols-7 gap-0 text-center text-[10px] font-bold text-[#64748b] pt-0.5">
         <div className="text-[#ef4444]">일</div>
         <div>월</div>
@@ -393,7 +546,7 @@ export default function CalendarDatePicker({
         <div className="text-[#2563eb]">토</div>
       </div>
 
-      {/* 4. Continuous Days Grid (Compact) */}
+      {/* 5. Continuous Days Grid */}
       <div className="grid grid-cols-7 gap-y-0.5 gap-x-0">
         {daysGrid.map((item, idx) => {
           const inRange = isInRange(item.dateStr);
@@ -466,22 +619,22 @@ export default function CalendarDatePicker({
         })}
       </div>
 
-      {/* 5. Selected Date Summary Footer & Stepper (Compact) */}
-      <div className="p-1.5 bg-[#f8fafc] rounded-[4px] border border-[#e2e8f0] flex items-center justify-between text-[11px]">
+      {/* 6. Selected Date Summary Footer & Stepper */}
+      <div className="p-2 bg-[#f8fafc] rounded-[6px] border border-[#e2e8f0] flex items-center justify-between text-[11px]">
         <div className="space-y-0.5">
-          <div className="font-bold text-[#0f172a] flex items-center gap-1 text-[11px]">
+          <div className="font-bold text-[#0f172a] flex items-center gap-1.5 text-[11px]">
             <span>{formatKoreanDate(startDate)}</span>
             {startDate !== endDate && (
               <>
-                <span className="text-[#94a3b8]">~</span>
+                <ArrowRight className="w-3 h-3 text-[#94a3b8]" />
                 <span>{formatKoreanDate(endDate)}</span>
               </>
             )}
           </div>
-          <div className="text-[9px] text-[#64748b]">
+          <div className="text-[10px] text-[#64748b]">
             {is3DaysOrMore
-              ? '🏥 3일 이상: 의사 진단서/소견서 필수'
-              : '달력 날짜를 클릭하여 결석 기간 지정'}
+              ? '🏥 연속 3일 이상: 학교 규정상 의사 진단서/소견서 필수 지참'
+              : '달력 클릭 또는 상단 날짜 입력창으로 기간을 설정하세요.'}
           </div>
         </div>
 
