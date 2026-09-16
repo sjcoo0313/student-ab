@@ -21,8 +21,8 @@ import TeacherAuthGuard from '@/components/TeacherAuthGuard';
 import { KeyRound, Sparkles, ExternalLink } from 'lucide-react';
 import QRCode from 'qrcode';
 
-const NETLIFY_URL = 'https://student-ab2.netlify.app';
-const PUBLIC_TUNNEL_URL = 'https://classical-meal-adequate-mia.trycloudflare.com';
+const VERCEL_URL = 'https://student-ab2.vercel.app';
+const PUBLIC_TUNNEL_URL = 'https://arch-reception-comparable-eligibility.trycloudflare.com';
 const LOCAL_WIFI_URL = 'http://10.95.25.25:3000';
 
 export default function ManageStudentsPage() {
@@ -40,7 +40,7 @@ export default function ManageStudentsPage() {
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
 
   // QR Code Real Generation States
-  const [qrUrl, setQrUrl] = useState(NETLIFY_URL);
+  const [qrUrl, setQrUrl] = useState(VERCEL_URL);
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [isEditingQrUrl, setIsEditingQrUrl] = useState(false);
   const [isPrintPosterOpen, setIsPrintPosterOpen] = useState(false);
@@ -52,11 +52,11 @@ export default function ManageStudentsPage() {
   useEffect(() => {
     loadData();
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    // If accessed through a public domain or tunnel, use origin; if accessed on localhost, default to Netlify production URL
+    // If accessed through a public domain or tunnel, use origin; if accessed on localhost, default to Vercel production URL
     if (origin && !origin.includes('localhost') && !origin.includes('127.0.0.1')) {
       setQrUrl(origin);
     } else {
-      setQrUrl(NETLIFY_URL);
+      setQrUrl(VERCEL_URL);
     }
 
     const unsubscribe = subscribeToSyncEvents(() => {
@@ -397,15 +397,15 @@ export default function ManageStudentsPage() {
                   <div className="flex flex-wrap gap-1 mb-2">
                     <button
                       type="button"
-                      onClick={() => setQrUrl(NETLIFY_URL)}
+                      onClick={() => setQrUrl(VERCEL_URL)}
                       className={`text-[10px] px-2 py-1 rounded font-medium transition-all ${
-                        qrUrl === NETLIFY_URL 
-                          ? 'bg-[#00c7b7] text-white font-bold shadow-xs' 
-                          : 'bg-[#e6faf8] text-[#008f84] hover:bg-[#cbf5f1]'
+                        qrUrl === VERCEL_URL 
+                          ? 'bg-black text-white font-bold shadow-xs' 
+                          : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
                       }`}
-                      title="Netlify 공식 배포 웹 주소"
+                      title="Vercel 공식 배포 웹 주소"
                     >
-                      🚀 student-ab2.netlify.app (공식 배포)
+                      ▲ student-ab2.vercel.app (공식 배포)
                     </button>
                     <button
                       type="button"
