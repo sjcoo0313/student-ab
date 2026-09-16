@@ -334,19 +334,27 @@ export async function fetchServerSync(): Promise<boolean> {
       localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(data.records));
     }
 
-    // Local students protection: if local has students but server is empty or cold, re-hydrate server!
+    // Local students sync:
     const localStudentsStr = localStorage.getItem(STORAGE_KEYS.STUDENTS);
     let localStudents: Student[] = [];
-    try { localStudents = JSON.parse(localStudentsStr || '[]'); } catch {}
+    const hasLocalStudents = localStudentsStr !== null;
+    if (hasLocalStudents) {
+      try { localStudents = JSON.parse(localStudentsStr || '[]'); } catch {}
+    }
     const serverStudents: Student[] = Array.isArray(data.students) ? data.students : [];
 
-    if (localStudents.length > 0 && serverStudents.length === 0) {
-      // Re-hydrate server students from client
-      postServerSync('SYNC_PUSH', { students: localStudents });
-    } else if (serverStudents.length > 0) {
-      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(serverStudents));
-    } else if (localStudents.length === 0) {
-      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(INITIAL_STUDENTS));
+    if (hasLocalStudents) {
+      if (localStudents.length > 0 && serverStudents.length === 0) {
+        postServerSync('SYNC_PUSH', { students: localStudents });
+      } else if (Array.isArray(data.students)) {
+        localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(data.students));
+      }
+    } else {
+      if (serverStudents.length > 0) {
+        localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(serverStudents));
+      } else {
+        localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(INITIAL_STUDENTS));
+      }
     }
 
     if (Array.isArray(data.notifications)) {
@@ -465,14 +473,21 @@ export function getStudents(): Student[] {
   if (typeof window === 'undefined') return INITIAL_STUDENTS;
   const stored = localStorage.getItem(STORAGE_KEYS.STUDENTS);
   if (stored === null) {
-    localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(INITIAL_STUDENTS));
-    return INITIAL_STUDENTS;
+    const hasRun = localStorage.getItem('hoengseong_app_has_run_v1');
+    if (!hasRun) {
+      localStorage.setItem('hoengseong_app_has_run_v1', 'true');
+      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(INITIAL_STUDENTS));
+      return INITIAL_STUDENTS;
+    }
+    return [];
   }
   try {
     const list: Student[] = JSON.parse(stored);
-    if (!Array.isArray(list) || list.length === 0) {
-      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(INITIAL_STUDENTS));
-      return INITIAL_STUDENTS;
+    if (!Array.isArray(list)) {
+      return [];
+    }
+    if (list.length === 0) {
+      return [];
     }
     // 자동 마이그레이션: 기존 2학년 3반 샘플 데이터가 있다면 3학년 2반으로 자동 전환
     let hasGrade2Class3 = false;

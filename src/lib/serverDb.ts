@@ -203,7 +203,7 @@ export async function writeServerDb(updates: Partial<ServerDatabase>): Promise<S
         // 💡 안전 가드: 부분 업데이트 시 기존 학생 명단 및 결석 기록이 비어있는 값으로 덮어써지지 않도록 엄격 보존
         const mergedStudents = Array.isArray(updates.students)
           ? updates.students
-          : (current.students && current.students.length > 0 ? current.students : INITIAL_STUDENTS);
+          : (current.students !== undefined ? current.students : INITIAL_STUDENTS);
 
         const mergedRecords = Array.isArray(updates.records)
           ? updates.records
