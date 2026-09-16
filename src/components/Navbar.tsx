@@ -24,6 +24,7 @@ import {
   getNotifications, 
   markNotificationsAsRead, 
   clearAllAbsenceData, 
+  clearAllNotifications,
   wipeEntireDatabase, 
   loadSampleMockData, 
   resetMockData, 
@@ -300,7 +301,23 @@ export default function Navbar() {
                         <Bell className="w-3.5 h-3.5 text-[#ff3e00]" />
                         <span className="font-semibold text-xs text-[#121212]">실시간 알림</span>
                       </div>
-                      <span className="text-[11px] text-[#7e7e7d]">{visibleNotifications.length}건</span>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-[11px] text-[#7e7e7d]">{visibleNotifications.length}건</span>
+                        {visibleNotifications.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              clearAllNotifications();
+                              setNotifications([]);
+                            }}
+                            className="text-[11px] text-[#e11d48] hover:text-[#be123c] hover:underline cursor-pointer flex items-center gap-0.5 ml-1 font-medium"
+                            title="모든 알림 비우기"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>비우기</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     <div className="max-h-72 overflow-y-auto divide-y divide-[#f2f0ed] mt-1">

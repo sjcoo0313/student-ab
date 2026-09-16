@@ -2,6 +2,7 @@ import { AbsenceRecord, SystemNotification } from '@/types';
 import { 
   getAbsenceRecords, 
   saveAbsenceRecords, 
+  getStudents,
   addNotification 
 } from '@/lib/storage';
 import { playRemindSound } from '@/lib/sound';
@@ -102,10 +103,18 @@ export function clearReminderLog() {
   localStorage.removeItem(REMINDER_LOG_KEY);
 }
 
-// 미이행 학생 레코드 목록 (등교확인, 서류 미수령, 서류 챙김 등 날짜가 지나도 계속 누적 관리)
+// 미이행 학생 레코드 목록 (우리 반 실제 학생 검증 및 누적 관리)
 export function getUnfulfilledAbsenceRecords(): AbsenceRecord[] {
   const records = getAbsenceRecords();
+  const currentStudents = getStudents();
+  const studentIds = new Set(currentStudents.map(s => s.id));
+  const studentNames = new Set(currentStudents.map(s => s.name));
+
   return records.filter(r => {
+    // 💡 우리 반 실제 학생 목록에 존재하는 학생인지 엄격 검증
+    if (currentStudents.length > 0 && !studentIds.has(r.studentId) && !studentNames.has(r.studentName)) {
+      return false;
+    }
     // 서류 제출이 불필요한 건은 제외
     if (r.requiresDocument === false) {
       return false;
@@ -178,9 +187,18 @@ export function dispatchScheduledReminder(
   const nowIso = new Date().toISOString();
 
   // 모든 미이행 학생에게 맞춤형 리마인드 발송
+  const currentStudents = getStudents();
+  const studentIds = new Set(currentStudents.map(s => s.id));
+  const studentNames = new Set(currentStudents.map(s => s.name));
+
   const updatedRecords = allRecords.map(rec => {
     const isTarget = unfulfilled.some(u => u.id === rec.id);
     if (!isTarget) return rec;
+
+    // 우리 반에 없는 학생이면 알림 발송 건너뜀
+    if (currentStudents.length > 0 && !studentIds.has(rec.studentId) && !studentNames.has(rec.studentName)) {
+      return rec;
+    }
 
     dispatchedNames.push(`${rec.studentNum}번 ${rec.studentName}`);
 

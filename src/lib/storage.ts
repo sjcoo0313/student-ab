@@ -40,7 +40,9 @@ function getFormattedDate(offsetDays = 0): string {
   return `${year}-${month}-${day}`;
 }
 
-export const INITIAL_RECORDS: AbsenceRecord[] = [
+export const INITIAL_RECORDS: AbsenceRecord[] = [];
+
+export const SAMPLE_RECORDS: AbsenceRecord[] = [
   {
     id: 'rec-0',
     studentId: 'std-30202',
@@ -83,7 +85,7 @@ export const INITIAL_RECORDS: AbsenceRecord[] = [
     daysCount: 1,
     periodText: '전일',
     reason: '생리통으로 인한 출석인정 결석',
-    status: 'ATTENDED_NOTIFIED', // 오늘 등교 확인됨, 결석계 챙겨야 함!
+    status: 'ATTENDED_NOTIFIED',
     requiresDocument: true,
     attachments: ['학부모 의견서(생리)'],
     createdAt: new Date(Date.now() - 86400000).toISOString(),
@@ -108,7 +110,7 @@ export const INITIAL_RECORDS: AbsenceRecord[] = [
     daysCount: 1,
     periodText: '전일',
     reason: '급성 위장염 및 발열',
-    status: 'FORM_PICKED_UP', // 양식 챙김, 작성 중
+    status: 'FORM_PICKED_UP',
     requiresDocument: true,
     attachments: ['진료확인서', '학부모 의견서'],
     createdAt: new Date(Date.now() - 86400000).toISOString(),
@@ -133,7 +135,7 @@ export const INITIAL_RECORDS: AbsenceRecord[] = [
     daysCount: 1,
     periodText: '전일',
     reason: '감기몸살',
-    status: 'SUBMITTED', // 학생이 제출함에 넣음! (교사 확인 대기)
+    status: 'SUBMITTED',
     requiresDocument: true,
     attachments: ['진료확인서', '학부모 의견서'],
     createdAt: new Date(Date.now() - 172800000).toISOString(),
@@ -164,9 +166,9 @@ export const INITIAL_RECORDS: AbsenceRecord[] = [
     attachments: ['학부모 의견서(생리)'],
     createdAt: new Date(Date.now() - 604800000).toISOString(),
     attendedAt: new Date(Date.now() - 518400000).toISOString(),
-    pickedUpAt: new Date(Date.now() - 514800000).toISOString(),
-    submittedAt: new Date(Date.now() - 504000000).toISOString(),
-    approvedAt: new Date(Date.now() - 500000000).toISOString(),
+    pickedUpAt: new Date(Date.now() - 432000000).toISOString(),
+    submittedAt: new Date(Date.now() - 345600000).toISOString(),
+    approvedAt: new Date(Date.now() - 259200000).toISOString(),
     verificationMethod: '학생 사전 대면 보고',
     remindCount: 0,
   },
@@ -190,10 +192,10 @@ export const INITIAL_RECORDS: AbsenceRecord[] = [
     requiresDocument: true,
     attachments: ['사망진단서'],
     createdAt: new Date(Date.now() - 864000000).toISOString(),
-    attendedAt: new Date(Date.now() - 691200000).toISOString(),
-    pickedUpAt: new Date(Date.now() - 687600000).toISOString(),
-    submittedAt: new Date(Date.now() - 684000000).toISOString(),
-    approvedAt: new Date(Date.now() - 680000000).toISOString(),
+    attendedAt: new Date(Date.now() - 777600000).toISOString(),
+    pickedUpAt: new Date(Date.now() - 691200000).toISOString(),
+    submittedAt: new Date(Date.now() - 604800000).toISOString(),
+    approvedAt: new Date(Date.now() - 518400000).toISOString(),
     verificationMethod: '학부모 연락',
     remindCount: 0,
   },
@@ -502,11 +504,30 @@ export function getAbsenceRecords(): AbsenceRecord[] {
       }
       return updated;
     });
-    if (changed) {
-      localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(migrated));
-      return migrated;
+
+    // 💡 우리 반 실제 학생 목록과 대조: 우리 반에 존재하지 않는 학생의 결석 기록은 자동 삭제
+    let validRecords = migrated;
+    const currentStudents = getStudents();
+    if (currentStudents.length > 0) {
+      const studentIds = new Set(currentStudents.map(s => s.id));
+      const studentNames = new Set(currentStudents.map(s => s.name));
+      const filtered = migrated.filter(r => {
+        const belongs = studentIds.has(r.studentId) || studentNames.has(r.studentName);
+        if (!belongs) {
+          changed = true;
+          return false;
+        }
+        return true;
+      });
+      validRecords = filtered;
     }
-    return list;
+
+    if (changed) {
+      localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(validRecords));
+      postServerSync('SAVE_RECORDS', { records: validRecords });
+      return validRecords;
+    }
+    return validRecords;
   } catch {
     return [];
   }
@@ -543,11 +564,28 @@ export function getNotifications(): SystemNotification[] {
       }
       return n;
     });
-    if (changed) {
-      localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(migrated));
-      return migrated;
+
+    // 💡 우리 반에 실제로 등록된 학생의 알림만 유지하고, 우리 반에 없는 학생 알림은 즉시 자동 삭제
+    let validNotifs = migrated;
+    const currentStudents = getStudents();
+    if (currentStudents.length > 0) {
+      const studentNames = new Set(currentStudents.map(s => s.name));
+      const filtered = migrated.filter(n => {
+        if (n.studentName && !studentNames.has(n.studentName)) {
+          changed = true;
+          return false;
+        }
+        return true;
+      });
+      validNotifs = filtered;
     }
-    return list;
+
+    if (changed) {
+      localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(validNotifs));
+      postServerSync('SAVE_NOTIFICATIONS', { notifications: validNotifs });
+      return validNotifs;
+    }
+    return validNotifs;
   } catch {
     return [];
   }
@@ -561,6 +599,15 @@ export function saveNotifications(notifications: SystemNotification[]) {
 }
 
 export function addNotification(notification: Omit<SystemNotification, 'id' | 'timestamp' | 'read'>) {
+  // 💡 등록하려는 알림의 학생이 우리 반 학생 목록에 있는지 엄격 검증
+  const currentStudents = getStudents();
+  if (currentStudents.length > 0 && notification.studentName) {
+    const exists = currentStudents.some(s => s.name === notification.studentName || s.studentNum === notification.studentNum);
+    if (!exists) {
+      return null;
+    }
+  }
+
   const current = getNotifications();
   const newNotif: SystemNotification = {
     ...notification,
@@ -570,6 +617,13 @@ export function addNotification(notification: Omit<SystemNotification, 'id' | 't
   };
   saveNotifications([newNotif, ...current]);
   return newNotif;
+}
+
+export function clearAllNotifications() {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify([]));
+  broadcastUpdate('NOTIFICATIONS_UPDATED', []);
+  postServerSync('SAVE_NOTIFICATIONS', { notifications: [] });
 }
 
 export function markNotificationsAsRead() {
@@ -1183,7 +1237,7 @@ export function loadSampleMockData() {
   if (typeof window === 'undefined') return;
   localStorage.setItem('hoengseong_app_has_run_v1', 'true');
   localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(INITIAL_STUDENTS));
-  localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(INITIAL_RECORDS));
+  localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(SAMPLE_RECORDS));
   localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify([]));
   localStorage.setItem(STORAGE_KEYS.CURRENT_STUDENT, 'std-30203');
   localStorage.removeItem('hoengseong_daily_reminders_log_v1');
