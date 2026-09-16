@@ -21,7 +21,8 @@ import {
   Trash2,
   Edit2,
   RotateCcw,
-  Undo2
+  Undo2,
+  MessageSquare
 } from 'lucide-react';
 import { 
   getStudents, 
@@ -33,7 +34,8 @@ import {
   markAttended, 
   markApproved, 
   triggerRemind, 
-  subscribeToSyncEvents 
+  subscribeToSyncEvents,
+  checkStudentMenstrualMonthlyLimit
 } from '@/lib/storage';
 import { exportAbsenceStatisticsToExcel } from '@/lib/exportExcel';
 import { Student, AbsenceRecord, AbsenceStatus, AttendanceKind, AttendanceCategory, AbsenceType, VerificationMethod } from '@/types';
@@ -215,8 +217,21 @@ export default function TeacherDashboard() {
       derivedTypeName = `${newCategory} ${newKind}`;
     }
 
+    // 💡 생리 인정결석 월 1회 초과 가드 (교사 대시보드 작성 차단)
+    if (newKind === '결석' && derivedType === 'MENSTRUAL') {
+      const menstrualCheck = checkStudentMenstrualMonthlyLimit(targetStudent.id, newStartDate, editingRecordId);
+      if (menstrualCheck.exceeded) {
+        alert(
+          `[생리결석 등록 불가 (월 1회 한도 초과)]\n` +
+          `${targetStudent.name} 학생은 이미 이번 달(${newStartDate.substring(0, 7)})에 생리 인정결석(${menstrualCheck.existingRecord?.startDate})이 등록되어 있습니다.\n` +
+          `생리 인정결석은 교육과정 출결 규정상 월 1회를 초과하여 등록할 수 없습니다.`
+        );
+        return;
+      }
+    }
+
     if (editingRecordId) {
-      updateAbsenceRecord(editingRecordId, {
+      const res = updateAbsenceRecord(editingRecordId, {
         student: targetStudent,
         kind: newKind,
         category: newCategory,
@@ -231,9 +246,10 @@ export default function TeacherDashboard() {
         status: newRequiresDocument ? newStatus : 'RECORDED',
         memo: newMemo,
       });
+      if (!res) return;
       setEditingRecordId(null);
     } else {
-      createAbsenceRecord({
+      const res = createAbsenceRecord({
         student: targetStudent,
         kind: newKind,
         category: newCategory,
@@ -247,6 +263,7 @@ export default function TeacherDashboard() {
         requiresDocument: newRequiresDocument,
         memo: newMemo,
       });
+      if (!res) return;
     }
 
     setIsNewModalOpen(false);
@@ -375,6 +392,13 @@ export default function TeacherDashboard() {
   const totalSkipCount = records.filter(r => r.kind === '결과').length;
 
   const todayCount = records.filter(r => isDateInRange(selectedDashboardDate, r.startDate, r.endDate)).length;
+
+  // 3) 모달 내 생리 인정결석 월 1회 초과 실시간 검증
+  const isMenstrualAttempt = newKind === '결석' && newCategory === '출석인정' && newSpecialType === 'MENSTRUAL';
+  const menstrualCheckResult = (isMenstrualAttempt && newStudentId)
+    ? checkStudentMenstrualMonthlyLimit(newStudentId, newStartDate, editingRecordId)
+    : { exceeded: false };
+  const isMenstrualExceeded = Boolean(menstrualCheckResult.exceeded);
 
   return (
     <TeacherAuthGuard>
@@ -575,17 +599,22 @@ export default function TeacherDashboard() {
                 <div className="flex items-center space-x-2">
                   <span className="text-base">📌</span>
                   <div>
-                    <span className="font-bold text-[#1e3a8a]">미완결 출결 서류 전원 누적 관리: </span>
-                    <span>등교 확인 대기 및 서류 미제출 건은 <strong>날짜가 지나도 승인 완료될 때까지 계속 누적</strong>되어 표시됩니다.</span>
+                    <span className="font-bold text-[#1e3a8a]">5단계 결석계 완결 누적 관리: </span>
+                    <span>등교 확인부터 서류 제출 및 <strong>5단계 최종 승인까지 전 과정이 누적</strong>되어 한눈에 확인 가능합니다.</span>
                   </div>
                 </div>
-                <span className="badge-pill bg-[#2563eb] text-white text-[11px] font-bold shrink-0 self-start sm:self-auto">
-                  총 미완결 {pendingAttendanceRecords.length + attendedNotifiedRecords.length + pickedUpRecords.length + submittedRecords.length}명 누적
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="badge-pill bg-[#2563eb] text-white text-[11px] font-bold shrink-0 self-start sm:self-auto">
+                    미완결 {pendingAttendanceRecords.length + attendedNotifiedRecords.length + pickedUpRecords.length + submittedRecords.length}명 누적
+                  </span>
+                  <span className="badge-pill bg-[#16a34a] text-white text-[11px] font-bold shrink-0 self-start sm:self-auto">
+                    최종 승인 {approvedRecords.length}건
+                  </span>
+                </div>
               </div>
 
-              {/* 4-Stage Kanban Workflow Columns */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3.5">
+              {/* 5-Stage Kanban Workflow Columns */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
                 {/* Col 1: Pending Attendance */}
                 <div className="family-card flex flex-col h-full">
                   <div className="flex items-center justify-between pb-2.5 border-b border-[#f2f0ed]">
@@ -637,6 +666,14 @@ export default function TeacherDashboard() {
                               </span>
                             )}
                           </div>
+                          {(rec.studentMemo || rec.memo) && (
+                            <div className="bg-[#fffbeb] border border-[#fef3c7] text-[#92400e] px-2 py-1 rounded text-[10px] leading-tight flex items-start gap-1">
+                              <MessageSquare className="w-3 h-3 text-[#d97706] shrink-0 mt-0.5" />
+                              <div className="break-all">
+                                <span className="font-bold text-[#b45309]">메모:</span> {rec.studentMemo || rec.memo}
+                              </div>
+                            </div>
+                          )}
                           <button
                             onClick={() => handleMarkAttended(rec)}
                             className="w-full mt-1 bg-[#121212] hover:bg-[#2c2c2b] text-white text-[11px] py-1.5 rounded-[4px] font-semibold transition-colors cursor-pointer"
@@ -697,6 +734,14 @@ export default function TeacherDashboard() {
                               {rec.type === 'FIELD_EXPERIENCE' ? '⚠️ 보고서 7일이내 NEIS 제출' : '⚠️ 미수령'}
                             </span>
                           </div>
+                          {(rec.studentMemo || rec.memo) && (
+                            <div className="bg-[#fffbeb] border border-[#fef3c7] text-[#92400e] px-2 py-1 rounded text-[10px] leading-tight flex items-start gap-1">
+                              <MessageSquare className="w-3 h-3 text-[#d97706] shrink-0 mt-0.5" />
+                              <div className="break-all">
+                                <span className="font-bold text-[#b45309]">메모:</span> {rec.studentMemo || rec.memo}
+                              </div>
+                            </div>
+                          )}
                           <div className="flex items-center justify-between pt-1 border-t border-[#f2f0ed] gap-1.5">
                             <button
                               type="button"
@@ -767,6 +812,14 @@ export default function TeacherDashboard() {
                           <div className="text-[10px] text-[#0086fc] font-medium">
                             {rec.type === 'FIELD_EXPERIENCE' ? '💻 보고서를 7일이내 NEIS로 제출 작성 중' : '✍️ 자필 작성 및 증빙 동봉 중'}
                           </div>
+                          {(rec.studentMemo || rec.memo) && (
+                            <div className="bg-[#fffbeb] border border-[#fef3c7] text-[#92400e] px-2 py-1 rounded text-[10px] leading-tight flex items-start gap-1">
+                              <MessageSquare className="w-3 h-3 text-[#d97706] shrink-0 mt-0.5" />
+                              <div className="break-all">
+                                <span className="font-bold text-[#b45309]">메모:</span> {rec.studentMemo || rec.memo}
+                              </div>
+                            </div>
+                          )}
                           <div className="flex items-center justify-between pt-1 border-t border-[#f2f0ed] gap-1.5">
                             <button
                               type="button"
@@ -838,6 +891,14 @@ export default function TeacherDashboard() {
                           <div className="text-[10px] text-[#0086fc] truncate">
                             📎 {rec.attachments && rec.attachments.length > 0 ? rec.attachments.join(', ') : '증빙 없음'}
                           </div>
+                          {(rec.studentMemo || rec.memo) && (
+                            <div className="bg-[#fffbeb] border border-[#fef3c7] text-[#92400e] px-2 py-1 rounded text-[10px] leading-tight flex items-start gap-1">
+                              <MessageSquare className="w-3 h-3 text-[#d97706] shrink-0 mt-0.5" />
+                              <div className="break-all">
+                                <span className="font-bold text-[#b45309]">학생 메모:</span> {rec.studentMemo || rec.memo}
+                              </div>
+                            </div>
+                          )}
                           <div className="flex items-center gap-1.5 mt-1 pt-1 border-t border-[#d1fae5]">
                             <button
                               type="button"
@@ -853,6 +914,80 @@ export default function TeacherDashboard() {
                               className="flex-1 bg-[#00ca48] hover:bg-[#00b03f] text-white text-[11px] py-1.5 px-2 rounded-[4px] font-semibold transition-colors cursor-pointer truncate text-center"
                             >
                               {rec.type === 'FIELD_EXPERIENCE' ? '✓ NEIS 승인' : '✓ 종이 서류 대조·승인'}
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Col 5: Approved (최종 승인 완료) */}
+                <div className="family-card flex flex-col h-full border-t-2 border-t-[#16a34a]">
+                  <div className="flex items-center justify-between pb-2.5 border-b border-[#f2f0ed]">
+                    <div className="flex items-center space-x-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-[#16a34a]" />
+                      <h4 className="font-semibold text-xs text-[#121212]">5. 최종 승인 완료</h4>
+                    </div>
+                    <span className="badge-pill badge-mint text-[10px]" title="날짜 경과 포함 누적 승인 건수">
+                      누적 {approvedRecords.length}
+                    </span>
+                  </div>
+
+                  <div className="mt-2.5 space-y-2 flex-1 overflow-y-auto max-h-[480px]">
+                    {approvedRecords.length === 0 ? (
+                      <div className="py-8 text-center text-xs text-[#7e7e7d]">
+                        승인 완료 건이 없습니다.
+                      </div>
+                    ) : (
+                      approvedRecords.map((rec) => (
+                        <div key={rec.id} className="bg-[#f0fdf4] p-3 rounded-[6px] border border-[#86efac] space-y-1.5 hover:border-[#4ade80] transition-colors">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-xs text-[#121212]">{rec.studentNum}번 {rec.studentName}</span>
+                            <div className="flex items-center space-x-1">
+                              <span className="badge-pill badge-mint text-[9px]">✓ 승인 완료</span>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditModal(rec)}
+                                className="text-[#94a3b8] hover:text-[#0086fc] p-1 rounded hover:bg-white transition-colors cursor-pointer"
+                                title="출결 수정"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                          <p className="text-[11px] text-[#474645] line-clamp-1">{rec.reason}</p>
+                          <div className="flex items-center justify-between text-[10px] text-[#7e7e7d]">
+                            <span>기간: {rec.startDate} ({rec.daysCount}일)</span>
+                            <span className="text-[#16a34a] font-medium text-[9px]">
+                              {rec.verificationMethod || '대면 확인'}
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-[#0086fc] truncate">
+                            📎 {rec.attachments && rec.attachments.length > 0 ? rec.attachments.join(', ') : '증빙 없음'}
+                          </div>
+                          {(rec.studentMemo || rec.memo) && (
+                            <div className="bg-[#fffbeb] border border-[#fef3c7] text-[#92400e] px-2 py-1 rounded text-[10px] leading-tight flex items-start gap-1">
+                              <MessageSquare className="w-3 h-3 text-[#d97706] shrink-0 mt-0.5" />
+                              <div className="break-all">
+                                <span className="font-bold text-[#b45309]">학생 메모:</span> {rec.studentMemo || rec.memo}
+                              </div>
+                            </div>
+                          )}
+                          {rec.approvedAt && (
+                            <div className="text-[9px] text-[#64748b]">
+                              승인일: {new Date(rec.approvedAt).toLocaleDateString('ko-KR')}
+                            </div>
+                          )}
+                          <div className="pt-1 border-t border-[#d1fae5] flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => handleRevertStatus(rec.id, 'SUBMITTED', '최종 승인 취소 -> 4단계(승인 대기)로 되돌림')}
+                              className="text-[10px] text-[#475569] hover:text-[#0f172a] hover:bg-white px-2 py-1 rounded border border-[#cbd5e1] transition-colors cursor-pointer flex items-center gap-1 font-medium bg-white"
+                              title="최종 승인을 취소하고 4단계(제출함 투입/승인 대기)로 되돌립니다."
+                            >
+                              <RotateCcw className="w-2.5 h-2.5 text-[#64748b]" />
+                              <span>↩ 4단계(승인 대기)로</span>
                             </button>
                           </div>
                         </div>
@@ -999,8 +1134,14 @@ export default function TeacherDashboard() {
                               <td className="py-2.5 px-3 text-[#64748b] whitespace-nowrap">
                                 {rec.periodText || `${rec.daysCount}일간`}
                               </td>
-                              <td className="py-2.5 px-3 text-[#1e293b] max-w-xs truncate" title={rec.reason}>
-                                {rec.reason}
+                              <td className="py-2.5 px-3 text-[#1e293b] max-w-xs" title={rec.reason}>
+                                <div className="truncate">{rec.reason}</div>
+                                {(rec.studentMemo || rec.memo) && (
+                                  <div className="text-[10px] text-[#b45309] bg-[#fffbeb] px-1.5 py-0.5 rounded border border-[#fef3c7] mt-0.5 inline-flex items-center gap-1 max-w-full truncate">
+                                    <MessageSquare className="w-2.5 h-2.5 text-[#d97706] shrink-0" />
+                                    <span className="truncate">메모: {rec.studentMemo || rec.memo}</span>
+                                  </div>
+                                )}
                               </td>
                               <td className="py-2.5 px-3 whitespace-nowrap">
                                 {!rec.requiresDocument ? (
@@ -1295,6 +1436,19 @@ export default function TeacherDashboard() {
                           🏥 법정 전염병
                         </button>
                       </div>
+
+                      {/* 생리결석 월 1회 초과 경고 배너 */}
+                      {isMenstrualAttempt && isMenstrualExceeded && (
+                        <div className="p-2.5 bg-[#fef2f2] border border-[#fca5a5] rounded text-xs text-[#991b1b] flex items-start gap-2 animate-in fade-in">
+                          <AlertTriangle className="w-4 h-4 text-[#dc2626] shrink-0 mt-0.5" />
+                          <div className="leading-snug">
+                            <span className="font-bold">⛔ 생리 인정결석 월 1회 초과 (작성 불가)</span>
+                            <p className="mt-0.5 text-[11px] text-[#b91c1c]">
+                              {students.find(s => s.id === newStudentId)?.name} 학생은 이미 이번 달({newStartDate.substring(0, 7)})에 생리 인정결석({menstrualCheckResult.existingRecord?.startDate})이 등록되어 있습니다. 교육청 출결 관리 규정상 월 1회를 초과하여 추가 등록할 수 없습니다.
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1381,6 +1535,20 @@ export default function TeacherDashboard() {
                     </div>
                   )}
 
+                  {/* Memo / Notes input */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#334155] mb-1">
+                      비고 / 특이사항 (선택)
+                    </label>
+                    <input
+                      type="text"
+                      value={newMemo}
+                      onChange={(e) => setNewMemo(e.target.value)}
+                      placeholder="특이사항이나 전달 메모를 입력하세요 (예: 학부모 통화 완료, 보건실 기록 대조 등)"
+                      className="w-full bg-white border border-[#cbd5e1] rounded-[2px] px-2.5 py-1.5 text-xs text-[#0f172a] focus:outline-hidden focus:border-[#2563eb]"
+                    />
+                  </div>
+
                   {/* Modal Action Buttons matching NEIS screenshot */}
                   <div className="pt-3 flex items-center justify-between border-t border-[#f1f5f9] mt-2">
                     {editingRecordId ? (
@@ -1406,9 +1574,15 @@ export default function TeacherDashboard() {
                     <div className="flex items-center space-x-2">
                       <button
                         type="submit"
-                        className="bg-[#243757] hover:bg-[#1d2d47] text-white px-5 py-1.5 rounded-[3px] text-xs font-bold shadow-xs cursor-pointer min-w-[70px]"
+                        disabled={isMenstrualExceeded}
+                        className={`px-5 py-1.5 rounded-[3px] text-xs font-bold shadow-xs cursor-pointer min-w-[70px] ${
+                          isMenstrualExceeded
+                            ? 'bg-[#94a3b8] text-white cursor-not-allowed opacity-70'
+                            : 'bg-[#243757] hover:bg-[#1d2d47] text-white'
+                        }`}
+                        title={isMenstrualExceeded ? '생리 인정결석은 월 1회를 초과하여 등록할 수 없습니다.' : ''}
                       >
-                        {editingRecordId ? '수정 완료' : '적용'}
+                        {isMenstrualExceeded ? '🚫 월 1회 한도 초과' : (editingRecordId ? '수정 완료' : '적용')}
                       </button>
                       <button
                         type="button"
@@ -1456,6 +1630,16 @@ export default function TeacherDashboard() {
                       <span className="font-medium text-[#7e7e7d]">동봉된 증빙서류: </span>
                       <span className="text-[#0086fc] font-semibold">{selectedRecordToApprove.attachments && selectedRecordToApprove.attachments.length > 0 ? selectedRecordToApprove.attachments.join(', ') : '없음'}</span>
                     </div>
+                    {(selectedRecordToApprove.studentMemo || selectedRecordToApprove.memo) && (
+                      <div className="pt-2 border-t border-[#f2f0ed] mt-2 bg-[#fffbeb] p-2.5 rounded-[6px] border border-[#fef3c7]">
+                        <span className="font-bold text-[#b45309] flex items-center gap-1 mb-1 text-xs">
+                          <MessageSquare className="w-3.5 h-3.5" /> 💬 학생 전달 메모:
+                        </span>
+                        <p className="text-[#92400e] text-xs font-medium pl-4 break-all bg-white/80 p-1.5 rounded border border-[#fde68a]">
+                          &ldquo;{selectedRecordToApprove.studentMemo || selectedRecordToApprove.memo}&rdquo;
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <div>

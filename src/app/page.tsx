@@ -206,7 +206,7 @@ export default function StudentMobilePage() {
         setCheckedAttachments([]);
       }
       setOtherAttachmentText(activeRecord.otherAttachmentText || '');
-      setStudentMemo(activeRecord.memo || '');
+      setStudentMemo(activeRecord.studentMemo || activeRecord.memo || '');
     }
   }, [activeRecord?.id]);
 
@@ -789,10 +789,10 @@ export default function StudentMobilePage() {
                 <span>동봉한 증빙:</span>
                 <span className="font-semibold text-[#0086fc]">{activeRecord.attachments.join(', ') || '없음'}</span>
               </div>
-              {activeRecord.memo && (
+              {(activeRecord.studentMemo || activeRecord.memo) && (
                 <div className="flex justify-between text-[#7e7e7d] pt-1.5 border-t border-[#f2f0ed]">
                   <span>전달한 메모:</span>
-                  <span className="text-[#121212] font-medium">{activeRecord.memo}</span>
+                  <span className="text-[#121212] font-medium">{activeRecord.studentMemo || activeRecord.memo}</span>
                 </div>
               )}
             </div>

@@ -632,6 +632,28 @@ export function markNotificationsAsRead() {
   saveNotifications(updated);
 }
 
+// 생리 인정결석 월 1회 초과 여부 확인
+export function checkStudentMenstrualMonthlyLimit(
+  studentId: string,
+  targetDate: string,
+  excludeRecordId?: string | null
+): { exceeded: boolean; existingRecord?: AbsenceRecord } {
+  if (!studentId || !targetDate) return { exceeded: false };
+  const targetYM = targetDate.substring(0, 7); // 'YYYY-MM'
+  const records = getAbsenceRecords();
+  const existing = records.find(r => 
+    r.studentId === studentId &&
+    r.id !== excludeRecordId &&
+    (r.kind || '결석') === '결석' &&
+    r.type === 'MENSTRUAL' &&
+    (r.startDate.substring(0, 7) === targetYM || r.endDate.substring(0, 7) === targetYM)
+  );
+  return {
+    exceeded: Boolean(existing),
+    existingRecord: existing,
+  };
+}
+
 // 1. 교사가 출결/결석 등록
 export function createAbsenceRecord(data: {
   student: Student;
@@ -646,7 +668,18 @@ export function createAbsenceRecord(data: {
   reason: string;
   requiresDocument?: boolean;
   memo?: string;
-}): AbsenceRecord {
+}): AbsenceRecord | null {
+  // 💡 생리인정 결석 월 1회 초과 방지 가드
+  if ((data.kind || '결석') === '결석' && data.type === 'MENSTRUAL') {
+    const check = checkStudentMenstrualMonthlyLimit(data.student.id, data.startDate);
+    if (check.exceeded) {
+      if (typeof window !== 'undefined') {
+        alert(`[생리결석 월 1회 제한] ${data.student.name} 학생은 이미 이번 달(${data.startDate.substring(0, 7)})에 생리 인정결석(${check.existingRecord?.startDate})이 등록되어 있어 월 1회를 초과하여 작성할 수 없습니다.`);
+      }
+      return null;
+    }
+  }
+
   const records = getAbsenceRecords();
   const requiresDoc = data.requiresDocument !== undefined 
     ? data.requiresDocument 
@@ -720,10 +753,23 @@ export function updateAbsenceRecord(recordId: string, updates: {
       };
 
       const newKind = updates.kind !== undefined ? updates.kind : r.kind;
+      const newType = updates.type !== undefined ? updates.type : r.type;
       const newCategory = updates.category !== undefined ? updates.category : r.category;
+      const newStartDate = updates.startDate !== undefined ? updates.startDate : r.startDate;
       const newRequiresDoc = updates.requiresDocument !== undefined
         ? updates.requiresDocument
         : r.requiresDocument;
+
+      // 💡 생리인정 결석 월 1회 초과 방지 가드 (수정 시)
+      if ((newKind || '결석') === '결석' && newType === 'MENSTRUAL') {
+        const check = checkStudentMenstrualMonthlyLimit(targetStudent.id, newStartDate, recordId);
+        if (check.exceeded) {
+          if (typeof window !== 'undefined') {
+            alert(`[생리결석 월 1회 제한] ${targetStudent.name} 학생은 이미 이번 달(${newStartDate.substring(0, 7)})에 생리 인정결석(${check.existingRecord?.startDate})이 등록되어 있어 월 1회를 초과하여 수정할 수 없습니다.`);
+          }
+          return r;
+        }
+      }
 
       let newStatus = updates.status !== undefined ? updates.status : r.status;
       if (newRequiresDoc === false) {
@@ -915,7 +961,7 @@ export function markSubmitted(
   recordId: string,
   attachments: AttachmentProof[],
   otherText?: string,
-  memo?: string
+  studentMemo?: string
 ): AbsenceRecord | null {
   const records = getAbsenceRecords();
   let updatedRecord: AbsenceRecord | null = null;
@@ -928,7 +974,7 @@ export function markSubmitted(
         attachments,
         otherAttachmentText: otherText,
         submittedAt: new Date().toISOString(),
-        memo: memo !== undefined ? memo : r.memo,
+        studentMemo: studentMemo?.trim() ? studentMemo.trim() : r.studentMemo,
       };
       return updatedRecord;
     }
@@ -939,14 +985,15 @@ export function markSubmitted(
     saveAbsenceRecords(updated);
     const rec = updatedRecord as AbsenceRecord;
     const attachSummary = attachments.length > 0 ? ` (첨부: ${attachments.join(', ')})` : '';
+    const memoSnippet = rec.studentMemo ? ` [학생 메모: "${rec.studentMemo}"]` : '';
 
     const isFieldTrip = rec.type === 'FIELD_EXPERIENCE';
     addNotification({
       type: 'SUBMIT_PING',
       title: isFieldTrip ? '📢 현장체험학습 보고서(NEIS) 제출 확인' : '📢 결석신고서 제출 알림 (핑)',
       message: isFieldTrip
-        ? `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생이 '보고서를 7일이내 NEIS로 제출' 및 증빙 사진 준비를 완료했습니다!${attachSummary}`
-        : `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생이 [${rec.typeName}] 결석신고서를 제출함에 넣었습니다!${attachSummary}`,
+        ? `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생이 '보고서를 7일이내 NEIS로 제출' 및 증빙 사진 준비를 완료했습니다!${attachSummary}${memoSnippet}`
+        : `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생이 [${rec.typeName}] 결석신고서를 제출함에 넣었습니다!${attachSummary}${memoSnippet}`,
       studentName: rec.studentName,
       grade: rec.grade,
       classNum: rec.classNum,
