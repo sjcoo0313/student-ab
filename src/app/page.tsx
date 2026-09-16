@@ -658,10 +658,10 @@ export default function StudentMobilePage() {
                 <div className="mb-3 p-3 bg-[#fff0eb] rounded-[8px] border border-[#ff3e00]/30 text-xs text-[#121212] space-y-1.5">
                   <div className="flex items-center gap-1.5 font-bold text-[#ff3e00]">
                     <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>연속 {Math.max(activeRecord.daysCount || 1, consecutiveIllnessDays)}일 질병결석 서류 규정 안내 (&lt;서식 1호&gt; 결석신고서)</span>
+                    <span>연속 {Math.max(activeRecord.daysCount || 1, consecutiveIllnessDays)}일 질병결석 서류 규정 안내 (&lt;서식 1호&gt; 결석신고서, 주말 제외)</span>
                   </div>
                   <p className="text-[11px] text-[#474645] leading-relaxed">
-                    • 3일 이상 연속 질병결석(또는 지필평가)은 학교 규정에 따라 반드시 <strong>[의사 진단서]</strong> 또는 <strong>[의사 소견서]</strong> 중 1부를 첨부해야 합니다.<br />
+                    • 토·일 주말을 제외한 <strong>연속 3일 이상 질병결석</strong>(또는 지필평가 기간)은 학교 규정에 따라 반드시 <strong>[의사 진단서]</strong> 또는 <strong>[의사 소견서]</strong> 중 1부를 첨부해야 합니다.<br />
                     • <span className="text-[#ff3e00] font-semibold">단순 진료확인서나 처방전(약봉투)은 3일 이상 결석 증빙서류로 인정되지 않습니다.</span>
                   </p>
                 </div>

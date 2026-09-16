@@ -654,7 +654,25 @@ export function checkStudentMenstrualMonthlyLimit(
   };
 }
 
-// 💡 학생의 질병 결석 연속 일수 계산 (단일 레코드 일수 + 연속된 날짜에 등록된 분할 레코드 누적)
+// 💡 학교 수업일(평일, 월~금) 일수 계산 (토·일 주말 제외)
+export function calculateSchoolDays(start?: string, end?: string): number {
+  if (!start) return 1;
+  const s = new Date(start);
+  const e = new Date(end || start);
+  if (isNaN(s.getTime()) || isNaN(e.getTime())) return 1;
+  let count = 0;
+  const cur = new Date(s);
+  while (cur <= e) {
+    const dayOfWeek = cur.getDay();
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      count++;
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count > 0 ? count : 1;
+}
+
+// 💡 학생의 질병 결석 연속 일수 계산 (단일 레코드 일수 + 연속된 날짜에 등록된 분할 레코드 누적, 토·일 주말 제외)
 export function getStudentConsecutiveIllnessDays(
   studentId: string,
   targetRecord?: Partial<AbsenceRecord> | null
@@ -673,7 +691,11 @@ export function getStudentConsecutiveIllnessDays(
     while (cur <= last) {
       const pad = (n: number) => String(n).padStart(2, '0');
       const dStr = `${cur.getFullYear()}-${pad(cur.getMonth() + 1)}-${pad(cur.getDate())}`;
-      dateSet.add(dStr);
+      const dayOfWeek = cur.getDay();
+      // 💡 토요일(6)과 일요일(0)은 수업일이 아니므로 결석 일수 계산에서 제외!
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        dateSet.add(dStr);
+      }
       cur.setDate(cur.getDate() + 1);
     }
   };
@@ -694,7 +716,7 @@ export function getStudentConsecutiveIllnessDays(
     const curr = new Date(sortedDates[i]);
     const diffDays = Math.round((curr.getTime() - prev.getTime()) / (1000 * 3600 * 24));
 
-    // 연속 판정: 달력상 1일 차이이거나, 금요일(5)에서 월요일(1)로 주말(3일 차이)을 건너뛴 경우
+    // 연속 판정: 달력상 1일 차이(연속 요일)이거나, 금요일(5)에서 월요일(1)로 주말(3일 차이)을 건너뛴 경우
     const isConsecutive = diffDays === 1 || (diffDays === 3 && prev.getDay() === 5 && curr.getDay() === 1);
 
     if (isConsecutive) {
@@ -705,7 +727,10 @@ export function getStudentConsecutiveIllnessDays(
     }
   }
 
-  const baseCount = targetRecord?.daysCount || 1;
+  const baseCount = targetRecord?.startDate
+    ? calculateSchoolDays(targetRecord.startDate, targetRecord.endDate || targetRecord.startDate)
+    : (targetRecord?.daysCount || 1);
+
   return Math.max(baseCount, maxChain);
 }
 

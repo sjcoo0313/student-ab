@@ -32,13 +32,44 @@ export const formatKoreanDate = (dateStr: string, includeDayOfWeek: boolean = tr
   return `${y}년 ${m}월 ${d}일`;
 };
 
+// 💡 학교 출결 규정: 토요일(6)과 일요일(0)은 수업일이 아니므로 결석 일수에서 제외
 export const calculateDaysCount = (start: string, end: string): number => {
   if (!start || !end) return 1;
   const s = new Date(start);
   const e = new Date(end);
-  const diffTime = e.getTime() - s.getTime();
-  const diffDays = Math.round(diffTime / (1000 * 3600 * 24)) + 1;
-  return diffDays > 0 ? diffDays : 1;
+  if (isNaN(s.getTime()) || isNaN(e.getTime())) return 1;
+
+  let count = 0;
+  const cur = new Date(s);
+  while (cur <= e) {
+    const dayOfWeek = cur.getDay();
+    // 토요일(6) 및 일요일(0) 제외
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      count++;
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  // 평일이 포함되지 않은 주말만 선택된 예외 경우 최소 1일 반환
+  return count > 0 ? count : 1;
+};
+
+// 선택된 범위 내 주말(토/일) 일수 계산
+export const calculateWeekendDaysCount = (start: string, end: string): number => {
+  if (!start || !end) return 0;
+  const s = new Date(start);
+  const e = new Date(end);
+  if (isNaN(s.getTime()) || isNaN(e.getTime())) return 0;
+
+  let weekendCount = 0;
+  const cur = new Date(s);
+  while (cur <= e) {
+    const dayOfWeek = cur.getDay();
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      weekendCount++;
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return weekendCount;
 };
 
 export default function CalendarDatePicker({
@@ -114,15 +145,40 @@ export default function CalendarDatePicker({
     }
   };
 
-  // 일수 증감 스태퍼 (+1일 / -1일)
+  // 일수 증감 스태퍼 (+1일 / -1일, 토·일 주말 건너뜀)
   const handleAdjustDays = (delta: number) => {
-    const currentCount = calculateDaysCount(startDate, endDate);
-    const newCount = Math.max(1, currentCount + delta);
-    const baseDate = startDate ? new Date(startDate) : new Date();
-    const newEnd = new Date(baseDate);
-    newEnd.setDate(newEnd.getDate() + (newCount - 1));
-    const newEndStr = toISO(newEnd);
-    onChange(startDate || todayStr, newEndStr, newCount);
+    const s = startDate ? new Date(startDate) : new Date();
+    const e = endDate ? new Date(endDate) : new Date(s);
+
+    if (delta > 0) {
+      // 다음 평일(월~금)이 될 때까지 1일씩 전진
+      const nextDate = new Date(e);
+      do {
+        nextDate.setDate(nextDate.getDate() + 1);
+      } while (nextDate.getDay() === 0 || nextDate.getDay() === 6);
+
+      const newEndStr = toISO(nextDate);
+      const newCount = calculateDaysCount(startDate || todayStr, newEndStr);
+      onChange(startDate || todayStr, newEndStr, newCount);
+    } else if (delta < 0) {
+      // 이전 평일(월~금)로 후진 (시작일 이상)
+      const prevDate = new Date(e);
+      let foundDate: Date | null = null;
+      while (prevDate > s) {
+        prevDate.setDate(prevDate.getDate() - 1);
+        if (prevDate.getDay() !== 0 && prevDate.getDay() !== 6) {
+          foundDate = new Date(prevDate);
+          break;
+        }
+      }
+      if (foundDate && foundDate >= s) {
+        const newEndStr = toISO(foundDate);
+        const newCount = calculateDaysCount(startDate || todayStr, newEndStr);
+        onChange(startDate || todayStr, newEndStr, newCount);
+      } else {
+        onChange(startDate || todayStr, startDate || todayStr, 1);
+      }
+    }
   };
 
   // Generate calendar days
@@ -232,6 +288,7 @@ export default function CalendarDatePicker({
   const isToday = (dStr: string) => dStr === todayStr;
 
   const currentDaysCount = calculateDaysCount(startDate, endDate);
+  const weekendDaysCount = calculateWeekendDaysCount(startDate, endDate);
   const is3DaysOrMore = currentDaysCount >= 3;
 
   return (
@@ -266,7 +323,7 @@ export default function CalendarDatePicker({
           </button>
         </div>
 
-        {!singleDateOnly && currentDaysCount > 1 && (
+        {!singleDateOnly && (currentDaysCount > 1 || weekendDaysCount > 0) && (
           <button
             type="button"
             onClick={() => handleQuickJump('resetToOneDay')}
@@ -284,7 +341,7 @@ export default function CalendarDatePicker({
         <span className="text-sm">👆</span>
         <span>
           달력에서 날짜를 <strong>연속 클릭</strong>하면 결석 기간이 늘어납니다.{' '}
-          <span className="text-[#dc2626] font-semibold">(연속 3일 이상 시 의사 진단서 필수 자동 전환)</span>
+          <span className="text-[#dc2626] font-semibold">(토·일 주말 제외 계산 / 3일 이상 진단서 필수)</span>
         </span>
       </div>
 
@@ -333,13 +390,13 @@ export default function CalendarDatePicker({
 
       {/* 4. Day of week headers */}
       <div className="grid grid-cols-7 gap-0 text-center text-[11px] font-bold text-[#64748b] pt-0.5">
-        <div className="text-[#ef4444]">일</div>
+        <div className="text-[#ef4444]">일 (제외)</div>
         <div>월</div>
         <div>화</div>
         <div>수</div>
         <div>목</div>
         <div>금</div>
-        <div className="text-[#2563eb]">토</div>
+        <div className="text-[#2563eb]">토 (제외)</div>
       </div>
 
       {/* 5. Continuous Days Grid */}
@@ -350,6 +407,7 @@ export default function CalendarDatePicker({
           const isEnd = isSelectedEnd(item.dateStr);
           const today = isToday(item.dateStr);
           const isMultiple = startDate !== endDate && !singleDateOnly;
+          const isWeekend = item.isWeekend === 0 || item.isWeekend === 6;
 
           return (
             <div
@@ -361,7 +419,9 @@ export default function CalendarDatePicker({
               {isMultiple && inRange && (
                 <div
                   className={`absolute inset-y-1 ${
-                    is3DaysOrMore 
+                    isWeekend
+                      ? 'bg-[#f1f5f9] border-y border-dashed border-[#cbd5e1]'
+                      : is3DaysOrMore 
                       ? 'bg-[#fee2e2] border-y border-[#fca5a5]' 
                       : 'bg-[#fff8e8] border-y border-[#ffcd6c]'
                   } z-0 ${
@@ -380,11 +440,15 @@ export default function CalendarDatePicker({
                 onClick={() => handleDateClick(item.dateStr)}
                 className={`relative z-10 w-8 h-8 rounded-[6px] flex flex-col items-center justify-center text-xs font-semibold transition-all cursor-pointer ${
                   isStart || isEnd
-                    ? is3DaysOrMore
+                    ? isWeekend
+                      ? 'bg-[#64748b] text-white shadow-xs font-bold'
+                      : is3DaysOrMore
                       ? 'bg-[#dc2626] text-white shadow-xs font-bold'
                       : 'bg-[#1e293b] text-white shadow-xs font-bold'
                     : inRange
-                    ? is3DaysOrMore
+                    ? isWeekend
+                      ? 'text-[#94a3b8] font-medium'
+                      : is3DaysOrMore
                       ? 'text-[#991b1b] font-bold hover:bg-[#fecaca]'
                       : 'text-[#b45309] font-bold hover:bg-[#ffeec2]'
                     : !item.isCurrentMonth
@@ -436,7 +500,7 @@ export default function CalendarDatePicker({
                 onClick={() => handleAdjustDays(-1)}
                 disabled={currentDaysCount <= 1}
                 className="p-1 text-[#475569] hover:text-[#0f172a] disabled:text-[#cbd5e1] cursor-pointer disabled:cursor-not-allowed"
-                title="1일 줄이기"
+                title="1일 줄이기 (평일 기준)"
               >
                 <Minus className="w-3 h-3" />
               </button>
@@ -444,20 +508,27 @@ export default function CalendarDatePicker({
                 type="button"
                 onClick={() => handleAdjustDays(1)}
                 className="p-1 text-[#475569] hover:text-[#0f172a] cursor-pointer"
-                title="1일 늘리기"
+                title="1일 늘리기 (평일 기준)"
               >
                 <Plus className="w-3 h-3" />
               </button>
             </div>
           )}
 
-          <span className={`px-2 py-0.5 rounded text-xs font-extrabold border ${
-            is3DaysOrMore
-              ? 'bg-[#fee2e2] text-[#dc2626] border-[#fca5a5]'
-              : 'bg-[#fef3c7] text-[#b45309] border-[#fde68a]'
-          }`}>
-            총 {currentDaysCount}일간
-          </span>
+          <div className="flex flex-col items-end">
+            <span className={`px-2 py-0.5 rounded text-xs font-extrabold border ${
+              is3DaysOrMore
+                ? 'bg-[#fee2e2] text-[#dc2626] border-[#fca5a5]'
+                : 'bg-[#fef3c7] text-[#b45309] border-[#fde68a]'
+            }`}>
+              총 {currentDaysCount}일간
+            </span>
+            {weekendDaysCount > 0 && (
+              <span className="text-[9px] text-[#64748b] font-medium mt-0.5">
+                (토·일 주말 {weekendDaysCount}일 제외)
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </div>
