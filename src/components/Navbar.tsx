@@ -117,24 +117,24 @@ export default function Navbar() {
     setIsResetModalOpen(true);
   };
 
-  const handleClearAbsenceOnly = () => {
-    clearAllAbsenceData();
+  const handleClearAbsenceOnly = async () => {
+    await clearAllAbsenceData();
     setIsResetModalOpen(false);
     alert('모든 결석 데이터와 알림이 깨끗하게 삭제되었습니다. (0건)');
     window.location.reload();
   };
 
-  const handleWipeAll = () => {
+  const handleWipeAll = async () => {
     if (confirm('학생 명단과 모든 결석 기록을 완전히 삭제하시겠습니까?')) {
-      wipeEntireDatabase();
+      await wipeEntireDatabase();
       setIsResetModalOpen(false);
       alert('모든 데이터가 완전히 삭제되었습니다.');
       window.location.reload();
     }
   };
 
-  const handleLoadSample = () => {
-    loadSampleMockData();
+  const handleLoadSample = async () => {
+    await loadSampleMockData();
     setIsResetModalOpen(false);
     alert('샘플 목업 데이터가 복원되었습니다.');
     window.location.reload();

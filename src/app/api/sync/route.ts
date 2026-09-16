@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readServerDb, writeServerDb, getStorageInfo } from '@/lib/serverDb';
-import { INITIAL_STUDENTS, INITIAL_RECORDS } from '@/lib/storage';
+import { SAMPLE_STUDENTS, SAMPLE_RECORDS } from '@/lib/storage';
 import { AbsenceRecord } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -221,8 +221,8 @@ export async function POST(req: NextRequest) {
 
       case 'LOAD_SAMPLE_DATA': {
         updated = await writeServerDb({
-          students: INITIAL_STUDENTS,
-          records: INITIAL_RECORDS,
+          students: SAMPLE_STUDENTS,
+          records: SAMPLE_RECORDS,
           notifications: [],
         });
         break;
@@ -230,8 +230,8 @@ export async function POST(req: NextRequest) {
 
       case 'SYNC_PUSH': {
         const patch: Record<string, unknown> = {};
-        if (Array.isArray(body.records) && body.records.length > 0) patch.records = body.records;
-        if (Array.isArray(body.students) && body.students.length > 0) patch.students = body.students;
+        if (Array.isArray(body.records)) patch.records = body.records;
+        if (Array.isArray(body.students)) patch.students = body.students;
         if (Array.isArray(body.notifications)) patch.notifications = body.notifications;
         if (typeof body.teacherPin === 'string') patch.teacherPin = body.teacherPin;
         updated = await writeServerDb(patch);

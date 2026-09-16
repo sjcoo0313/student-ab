@@ -167,10 +167,11 @@ export async function readServerDb(): Promise<ServerDatabase> {
       const parsed = JSON.parse(raw);
       const db: ServerDatabase = {
         students: Array.isArray(parsed.students) ? parsed.students : INITIAL_STUDENTS,
-        records: Array.isArray(parsed.records) ? parsed.records : INITIAL_RECORDS,
+        records: Array.isArray(parsed.records) ? parsed.records : [],
         notifications: Array.isArray(parsed.notifications) ? parsed.notifications : [],
         teacherPin: parsed.teacherPin || '1234',
-        lastUpdated: parsed.lastUpdated || Date.now(),
+        lastUpdated: parsed.lastUpdated || 0,
+        reminderSettings: parsed.reminderSettings,
       };
       globalThis._studentServerDbCache = db;
       return db;
@@ -183,10 +184,10 @@ export async function readServerDb(): Promise<ServerDatabase> {
   if (!globalThis._studentServerDbCache) {
     globalThis._studentServerDbCache = {
       students: INITIAL_STUDENTS,
-      records: INITIAL_RECORDS,
+      records: [],
       notifications: [],
       teacherPin: '1234',
-      lastUpdated: Date.now(),
+      lastUpdated: 0,
     };
   }
   return globalThis._studentServerDbCache;

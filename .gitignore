@@ -37,8 +37,7 @@ yarn-error.log*
 .vercel
 .netlify
 
-# local database & batch helpers
-data/db.json
+# batch helpers
 *.bat
 
 # typescript

@@ -9,7 +9,7 @@ const STORAGE_KEYS = {
   REMINDER_SETTINGS: 'hoengseong_reminder_settings_v1',
 };
 
-export const INITIAL_STUDENTS: Student[] = [
+export const SAMPLE_STUDENTS: Student[] = [
   { id: 'std-30201', grade: 3, classNum: 2, studentNum: 1, name: '강서윤', phone: '010-1111-0001', parentPhone: '010-2222-0001', pin: '1234' },
   { id: 'std-30202', grade: 3, classNum: 2, studentNum: 2, name: '김다은', phone: '010-1111-0002', parentPhone: '010-2222-0002', pin: '1234' },
   { id: 'std-30203', grade: 3, classNum: 2, studentNum: 3, name: '김민지', phone: '010-1111-0003', parentPhone: '010-2222-0003', pin: '1234' },
@@ -31,6 +31,40 @@ export const INITIAL_STUDENTS: Student[] = [
   { id: 'std-30219', grade: 3, classNum: 2, studentNum: 19, name: '한소희', phone: '010-1111-0019', parentPhone: '010-2222-0019', pin: '1234' },
   { id: 'std-30220', grade: 3, classNum: 2, studentNum: 20, name: '황민아', phone: '010-1111-0020', parentPhone: '010-2222-0020', pin: '1234' },
 ];
+
+export const INITIAL_STUDENTS: Student[] = [
+  { id: 'std-30201-0', grade: 3, classNum: 2, studentNum: 1, name: '김동희', phone: '01033948815', parentPhone: '01067988815', pin: '1234' },
+  { id: 'std-30202-1', grade: 3, classNum: 2, studentNum: 2, name: '김지후', phone: '01037450978', parentPhone: '01035170988', pin: '1234' },
+  { id: 'std-30203-2', grade: 3, classNum: 2, studentNum: 3, name: '김혜련', phone: '01055853911', parentPhone: '01044333911', pin: '1234' },
+  { id: 'std-30204-3', grade: 3, classNum: 2, studentNum: 4, name: '박서은', phone: '01065613341', parentPhone: '01031053341', pin: '1234' },
+  { id: 'std-30205-4', grade: 3, classNum: 2, studentNum: 5, name: '박소연', phone: '01081611815', parentPhone: '01020561815', pin: '1234' },
+  { id: 'std-30206-5', grade: 3, classNum: 2, studentNum: 6, name: '변가담', phone: '01091164763', parentPhone: '01088791999', pin: '1234' },
+  { id: 'std-30207-6', grade: 3, classNum: 2, studentNum: 7, name: '이가연', phone: '01033157380', parentPhone: '01047067380', pin: '1234' },
+  { id: 'std-30208-7', grade: 3, classNum: 2, studentNum: 8, name: '이소민', phone: '01039525549', parentPhone: '01046965547', pin: '1234' },
+  { id: 'std-30209-8', grade: 3, classNum: 2, studentNum: 9, name: '이윤서', phone: '01086674126', parentPhone: '01050884126', pin: '1234' },
+  { id: 'std-30210-9', grade: 3, classNum: 2, studentNum: 10, name: '이지민', phone: '01099677807', parentPhone: '01033657807', pin: '1234' },
+  { id: 'std-30211-10', grade: 3, classNum: 2, studentNum: 11, name: '이현빈', phone: '01091033021', parentPhone: '01090330913', pin: '1234' },
+  { id: 'std-30212-11', grade: 3, classNum: 2, studentNum: 12, name: '임하연', phone: '01027646350', parentPhone: '01043306350', pin: '1234' },
+  { id: 'std-30213-12', grade: 3, classNum: 2, studentNum: 13, name: '임혜주', phone: '01041467875', parentPhone: '01049288002', pin: '1234' },
+  { id: 'std-30214-13', grade: 3, classNum: 2, studentNum: 14, name: '정다혜', phone: '01036994412', parentPhone: '01026062485', pin: '1234' },
+  { id: 'std-30215-14', grade: 3, classNum: 2, studentNum: 15, name: '조민채', phone: '01071210784', parentPhone: '01077410784', pin: '1234' },
+  { id: 'std-30217-15', grade: 3, classNum: 2, studentNum: 17, name: '최가인', phone: '01091524470', parentPhone: '01031183690', pin: '1234' },
+  { id: 'std-30218-16', grade: 3, classNum: 2, studentNum: 18, name: '허지안', phone: '01082093372', parentPhone: '01031363372', pin: '1234' },
+  { id: 'std-30219-17', grade: 3, classNum: 2, studentNum: 19, name: '홍예진', phone: '01023623036', parentPhone: '01053793036', pin: '1234' },
+  { id: 'std-30220-18', grade: 3, classNum: 2, studentNum: 20, name: '김남경', phone: '01087293117', parentPhone: '01063796667', pin: '1234' },
+];
+
+export function isSampleStudentRoster(students: Student[]): boolean {
+  if (!students || students.length === 0) return false;
+  const sampleNames = new Set([
+    '강서윤', '김다은', '김민지', '김서현', '김하은',
+    '박수빈', '박지우', '배서영', '신예은', '안유진',
+    '오세린', '이소율', '이지원', '이채원', '장원영',
+    '정예린', '조유리', '최예나', '한소희', '황민아'
+  ]);
+  const matchCount = students.filter(s => sampleNames.has(s.name)).length;
+  return matchCount >= 5;
+}
 
 function getFormattedDate(offsetDays = 0): string {
   const d = new Date();
@@ -320,41 +354,30 @@ export async function fetchServerSync(): Promise<boolean> {
     try { oldNotifs = JSON.parse(oldNotifsStr); } catch {}
     const newNotifs: SystemNotification[] = Array.isArray(data.notifications) ? data.notifications : [];
 
-    // Local records protection: if local has data but server is cold/empty, re-hydrate server!
-    const localRecordsStr = localStorage.getItem(STORAGE_KEYS.RECORDS);
-    let localRecords: AbsenceRecord[] = [];
-    try { localRecords = JSON.parse(localRecordsStr || '[]'); } catch {}
-
-    const serverRecords: AbsenceRecord[] = Array.isArray(data.records) ? data.records : [];
-
-    if (localRecords.length > 0 && serverRecords.length === 0) {
-      // Re-hydrate server records from client
-      postServerSync('SYNC_PUSH', { records: localRecords });
-    } else if (Array.isArray(data.records)) {
+    // Records sync: Server is the source of truth across all devices (no false re-hydration)
+    if (Array.isArray(data.records)) {
       localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(data.records));
     }
 
-    // Local students sync:
+    // Students sync:
     const localStudentsStr = localStorage.getItem(STORAGE_KEYS.STUDENTS);
     let localStudents: Student[] = [];
-    const hasLocalStudents = localStudentsStr !== null;
-    if (hasLocalStudents) {
+    if (localStudentsStr !== null) {
       try { localStudents = JSON.parse(localStudentsStr || '[]'); } catch {}
     }
     const serverStudents: Student[] = Array.isArray(data.students) ? data.students : [];
 
-    if (hasLocalStudents) {
-      if (localStudents.length > 0 && serverStudents.length === 0) {
-        postServerSync('SYNC_PUSH', { students: localStudents });
-      } else if (Array.isArray(data.students)) {
-        localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(data.students));
-      }
-    } else {
-      if (serverStudents.length > 0) {
-        localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(serverStudents));
-      } else {
-        localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(INITIAL_STUDENTS));
-      }
+    const isLocalCustom = !isSampleStudentRoster(localStudents) && localStudents.length > 0;
+    const isServerSample = isSampleStudentRoster(serverStudents);
+
+    if (isLocalCustom && isServerSample) {
+      // Local client has a real custom roster, but server returned default sample data (e.g. from cold start).
+      // DO NOT overwrite custom roster! Protect it and heal the server with the real roster!
+      postServerSync('SAVE_STUDENTS', { students: localStudents });
+    } else if (Array.isArray(data.students) && data.students.length > 0) {
+      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(data.students));
+    } else if (localStudents.length === 0 && Array.isArray(data.students)) {
+      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(data.students));
     }
 
     if (Array.isArray(data.notifications)) {
@@ -389,6 +412,7 @@ export async function postServerSync(action: string, payload: Record<string, unk
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action, ...payload }),
       cache: 'no-store',
+      keepalive: true,
     });
     if (res.ok) {
       const data = await res.json();
@@ -1465,7 +1489,7 @@ export function resetStudentPinToDefault(studentId: string): boolean {
 }
 
 // 8. 데이터 초기화 및 완전 삭제
-export function clearAllAbsenceData() {
+export async function clearAllAbsenceData(): Promise<void> {
   if (typeof window === 'undefined') return;
   localStorage.setItem('hoengseong_app_has_run_v1', 'true');
   localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify([]));
@@ -1474,10 +1498,10 @@ export function clearAllAbsenceData() {
   broadcastUpdate('RESET_ALL');
   broadcastUpdate('RECORDS_UPDATED', []);
   broadcastUpdate('NOTIFICATIONS_UPDATED', []);
-  postServerSync('CLEAR_ABSENCE_DATA');
+  await postServerSync('CLEAR_ABSENCE_DATA');
 }
 
-export function wipeEntireDatabase() {
+export async function wipeEntireDatabase(): Promise<void> {
   if (typeof window === 'undefined') return;
   localStorage.setItem('hoengseong_app_has_run_v1', 'true');
   localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify([]));
@@ -1491,24 +1515,24 @@ export function wipeEntireDatabase() {
   broadcastUpdate('RECORDS_UPDATED', []);
   broadcastUpdate('NOTIFICATIONS_UPDATED', []);
   broadcastUpdate('STUDENT_SELECTED', null);
-  postServerSync('WIPE_DATABASE');
+  await postServerSync('WIPE_DATABASE');
 }
 
-export function loadSampleMockData() {
+export async function loadSampleMockData(): Promise<void> {
   if (typeof window === 'undefined') return;
   localStorage.setItem('hoengseong_app_has_run_v1', 'true');
-  localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(INITIAL_STUDENTS));
+  localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(SAMPLE_STUDENTS));
   localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(SAMPLE_RECORDS));
   localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify([]));
   localStorage.setItem(STORAGE_KEYS.CURRENT_STUDENT, 'std-30203');
   localStorage.removeItem('hoengseong_daily_reminders_log_v1');
   broadcastUpdate('RESET_ALL');
-  postServerSync('LOAD_SAMPLE_DATA');
+  await postServerSync('LOAD_SAMPLE_DATA');
 }
 
 // 기존 호환용: 초기화 시 결석 데이터 0건으로 완전 삭제
-export function resetMockData() {
-  clearAllAbsenceData();
+export async function resetMockData(): Promise<void> {
+  await clearAllAbsenceData();
 }
 
 // 9. 교사 비밀번호(PIN) 및 인증 관리

@@ -126,9 +126,9 @@ export default function ManageStudentsPage() {
     }
   };
 
-  const handleClearAllStudents = () => {
+  const handleClearAllStudents = async () => {
     if (confirm(`현재 등록된 모든 학생 명단(${students.length}명)을 완전히 비우시겠습니까?\n새로운 학생 엑셀 명단을 업로드하기 전에 유용합니다.`)) {
-      saveStudents([]);
+      await saveStudents([]);
       loadData();
       alert('모든 학생 명단이 비워졌습니다. (0명)');
     }
@@ -172,7 +172,7 @@ export default function ManageStudentsPage() {
         ...p,
       }));
 
-      saveStudents(newStudents);
+      await saveStudents(newStudents);
       setUploadStatus(`총 ${newStudents.length}명의 학생 명단이 성공적으로 업로드되었습니다!`);
       loadData();
       setTimeout(() => setUploadStatus(null), 4000);
