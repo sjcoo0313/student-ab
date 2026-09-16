@@ -61,6 +61,50 @@ export default function StudentMobilePage() {
 
   const [isAppInstallGuideOpen, setIsAppInstallGuideOpen] = useState(false);
 
+  // 시크릿 제스처: 꽃 아이콘(🌸) 연속 3회 탭 또는 3초간 길게 누르면 교사 모드 진입
+  const tapCountRef = React.useRef(0);
+  const lastTapTimeRef = React.useRef(0);
+  const longPressTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  const triggerSecretTeacherEntry = React.useCallback(() => {
+    if (typeof window !== 'undefined') {
+      if (navigator.vibrate) {
+        try {
+          navigator.vibrate([50, 50, 50]);
+        } catch {}
+      }
+      window.location.href = '/teacher';
+    }
+  }, []);
+
+  const handleSecretTap = React.useCallback(() => {
+    const now = Date.now();
+    if (now - lastTapTimeRef.current > 1200) {
+      tapCountRef.current = 1;
+    } else {
+      tapCountRef.current += 1;
+      if (tapCountRef.current >= 3) {
+        tapCountRef.current = 0;
+        triggerSecretTeacherEntry();
+        return;
+      }
+    }
+    lastTapTimeRef.current = now;
+  }, [triggerSecretTeacherEntry]);
+
+  const handleSecretPointerDown = React.useCallback(() => {
+    longPressTimerRef.current = setTimeout(() => {
+      triggerSecretTeacherEntry();
+    }, 3000);
+  }, [triggerSecretTeacherEntry]);
+
+  const handleSecretPointerUp = React.useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
   const loadData = () => {
     try {
       const stds = getStudents();
@@ -219,7 +263,15 @@ export default function StudentMobilePage() {
 
         {/* Storybook Hero Intro */}
         <div className="text-center pt-2 pb-1">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-[16px] bg-[#ffcd6c] text-[#121212] text-xl mb-3 shadow-xs">
+          <div
+            onPointerDown={handleSecretPointerDown}
+            onPointerUp={handleSecretPointerUp}
+            onPointerLeave={handleSecretPointerUp}
+            onContextMenu={(e) => e.preventDefault()}
+            onClick={handleSecretTap}
+            className="inline-flex items-center justify-center w-12 h-12 rounded-[16px] bg-[#ffcd6c] text-[#121212] text-xl mb-3 shadow-xs cursor-pointer select-none active:scale-95 transition-transform"
+            title="스마트 출결 관리"
+          >
             🌸
           </div>
           <h2 className="text-2xl font-bold text-[#121212] tracking-tight">
@@ -729,17 +781,6 @@ export default function StudentMobilePage() {
           </div>
         </div>
       )}
-
-        {/* Discreet Teacher Entry Link */}
-        <div className="pt-8 pb-4 text-center">
-          <Link
-            href="/teacher"
-            className="text-[11px] text-[#a8a29e] hover:text-[#78716c] inline-flex items-center gap-1.5 transition-colors py-1 px-3 rounded-full hover:bg-[#f2f0ed]"
-          >
-            <Lock className="w-3 h-3 text-[#a8a29e]" />
-            <span>교직원 전용 로그인</span>
-          </Link>
-        </div>
 
       </div>
     </main>

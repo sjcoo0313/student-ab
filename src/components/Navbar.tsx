@@ -47,6 +47,54 @@ export default function Navbar() {
   const isTeacherRoute = pathname === '/teacher' || pathname === '/manage' || pathname === '/stats';
   const [isTeacher, setIsTeacher] = useState<boolean>(false);
 
+  // 시크릿 제스처: 상단 로고 꽃(🌸) 3회 탭 또는 3초간 길게 누르면 교사 모드 진입
+  const tapCountRef = React.useRef(0);
+  const lastTapTimeRef = React.useRef(0);
+  const longPressTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  const triggerSecretTeacherEntry = React.useCallback(() => {
+    if (typeof window !== 'undefined') {
+      if (navigator.vibrate) {
+        try {
+          navigator.vibrate([50, 50, 50]);
+        } catch {}
+      }
+      window.location.href = '/teacher';
+    }
+  }, []);
+
+  const handleSecretTap = React.useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const now = Date.now();
+    if (now - lastTapTimeRef.current > 1200) {
+      tapCountRef.current = 1;
+    } else {
+      tapCountRef.current += 1;
+      if (tapCountRef.current >= 3) {
+        tapCountRef.current = 0;
+        triggerSecretTeacherEntry();
+        return;
+      }
+    }
+    lastTapTimeRef.current = now;
+  }, [triggerSecretTeacherEntry]);
+
+  const handleSecretPointerDown = React.useCallback((e: React.PointerEvent) => {
+    e.stopPropagation();
+    longPressTimerRef.current = setTimeout(() => {
+      triggerSecretTeacherEntry();
+    }, 3000);
+  }, [triggerSecretTeacherEntry]);
+
+  const handleSecretPointerUp = React.useCallback((e: React.PointerEvent) => {
+    e.stopPropagation();
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     setNotifications(getNotifications());
     setIsTeacher(isTeacherLoggedIn());
@@ -218,20 +266,26 @@ export default function Navbar() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-18">
             
-            {/* Storybook Logo Mascot */}
+            {/* Storybook Logo Mascot with Secret Teacher Gesture */}
             <div className="flex items-center space-x-3">
-              <Link href="/" className="flex items-center space-x-3 group">
-                <div className="w-10 h-10 rounded-[12px] bg-[#ffcd6c] text-[#121212] flex items-center justify-center text-lg font-bold shadow-xs group-hover:scale-105 transition-transform">
-                  🌸
+              <div
+                onPointerDown={handleSecretPointerDown}
+                onPointerUp={handleSecretPointerUp}
+                onPointerLeave={handleSecretPointerUp}
+                onContextMenu={(e) => e.preventDefault()}
+                onClick={handleSecretTap}
+                className="w-10 h-10 rounded-[12px] bg-[#ffcd6c] text-[#121212] flex items-center justify-center text-lg font-bold shadow-xs hover:scale-105 active:scale-95 transition-transform cursor-pointer select-none shrink-0"
+                title="스마트 출결 관리"
+              >
+                🌸
+              </div>
+              <Link href="/" className="group">
+                <div className="flex items-center space-x-2">
+                  <span className="text-[11px] font-medium text-[#7e7e7d]">학급 출결 알리미</span>
                 </div>
-                <div>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-[11px] font-medium text-[#7e7e7d]">학급 출결 알리미</span>
-                  </div>
-                  <h1 className="text-base font-semibold text-[#121212] tracking-tight leading-tight">
-                    스마트 출결 관리
-                  </h1>
-                </div>
+                <h1 className="text-base font-semibold text-[#121212] tracking-tight leading-tight">
+                  스마트 출결 관리
+                </h1>
               </Link>
             </div>
 
