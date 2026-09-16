@@ -636,6 +636,78 @@ export function createAbsenceRecord(data: {
   return newRecord;
 }
 
+// 1-1. 교사가 출결/결석 기록 직접 수정
+export function updateAbsenceRecord(recordId: string, updates: {
+  student?: Student;
+  kind?: AttendanceKind;
+  category?: AbsenceRecord['category'];
+  type?: AbsenceRecord['type'];
+  typeName?: string;
+  startDate?: string;
+  endDate?: string;
+  daysCount?: number;
+  periodText?: string;
+  reason?: string;
+  requiresDocument?: boolean;
+  memo?: string;
+}): AbsenceRecord | null {
+  const records = getAbsenceRecords();
+  let updatedRecord: AbsenceRecord | null = null;
+
+  const updated = records.map(r => {
+    if (r.id === recordId) {
+      const targetStudent = updates.student || {
+        id: r.studentId,
+        name: r.studentName,
+        grade: r.grade,
+        classNum: r.classNum,
+        studentNum: r.studentNum,
+      };
+
+      const newKind = updates.kind !== undefined ? updates.kind : r.kind;
+      const newCategory = updates.category !== undefined ? updates.category : r.category;
+      const newRequiresDoc = updates.requiresDocument !== undefined
+        ? updates.requiresDocument
+        : r.requiresDocument;
+
+      let newStatus = r.status;
+      if (newRequiresDoc === false) {
+        newStatus = 'RECORDED';
+      } else if (r.status === 'RECORDED' && newRequiresDoc === true) {
+        newStatus = 'PENDING_ATTENDANCE';
+      }
+
+      updatedRecord = {
+        ...r,
+        studentId: targetStudent.id,
+        studentName: targetStudent.name,
+        grade: targetStudent.grade,
+        classNum: targetStudent.classNum,
+        studentNum: targetStudent.studentNum,
+        kind: newKind,
+        category: newCategory,
+        type: updates.type !== undefined ? updates.type : r.type,
+        typeName: updates.typeName !== undefined ? updates.typeName : r.typeName,
+        startDate: updates.startDate !== undefined ? updates.startDate : r.startDate,
+        endDate: updates.endDate !== undefined ? updates.endDate : r.endDate,
+        daysCount: updates.daysCount !== undefined ? updates.daysCount : r.daysCount,
+        periodText: updates.periodText !== undefined ? updates.periodText : r.periodText,
+        reason: updates.reason !== undefined ? updates.reason : r.reason,
+        requiresDocument: newRequiresDoc,
+        status: newStatus,
+        memo: updates.memo !== undefined ? updates.memo : r.memo,
+      };
+      return updatedRecord;
+    }
+    return r;
+  });
+
+  if (updatedRecord) {
+    saveAbsenceRecords(updated);
+  }
+  return updatedRecord;
+}
+
 // 2. 교사가 [등교 확인 🏫] 클릭 -> 학생에게 알림 발송 및 미수령 상태로 변경
 export function markAttended(recordId: string): AbsenceRecord | null {
   const records = getAbsenceRecords();

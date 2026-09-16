@@ -18,13 +18,15 @@ import {
   Calendar,
   Sparkles,
   FileSpreadsheet,
-  Trash2
+  Trash2,
+  Edit2
 } from 'lucide-react';
 import { 
   getStudents, 
   getAbsenceRecords, 
   saveAbsenceRecords,
   createAbsenceRecord, 
+  updateAbsenceRecord,
   markAttended, 
   markApproved, 
   triggerRemind, 
@@ -59,6 +61,7 @@ export default function TeacherDashboard() {
 
   // Modals
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
+  const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [isApproveModalOpen, setIsApproveModalOpen] = useState(false);
   const [selectedRecordToApprove, setSelectedRecordToApprove] = useState<AbsenceRecord | null>(null);
 
@@ -170,7 +173,7 @@ export default function TeacherDashboard() {
     }
   };
 
-  const handleCreateRecord = (e: React.FormEvent) => {
+  const handleSubmitRecord = (e: React.FormEvent) => {
     e.preventDefault();
     const targetStudent = students.find(s => s.id === newStudentId);
     if (!targetStudent) return;
@@ -208,20 +211,38 @@ export default function TeacherDashboard() {
       derivedTypeName = `${newCategory} ${newKind}`;
     }
 
-    createAbsenceRecord({
-      student: targetStudent,
-      kind: newKind,
-      category: newCategory,
-      type: derivedType,
-      typeName: derivedTypeName,
-      startDate: newStartDate,
-      endDate: newEndDate,
-      daysCount: Number(newDaysCount),
-      periodText: newPeriodText,
-      reason: newReason,
-      requiresDocument: newRequiresDocument,
-      memo: newMemo,
-    });
+    if (editingRecordId) {
+      updateAbsenceRecord(editingRecordId, {
+        student: targetStudent,
+        kind: newKind,
+        category: newCategory,
+        type: derivedType,
+        typeName: derivedTypeName,
+        startDate: newStartDate,
+        endDate: newEndDate,
+        daysCount: Number(newDaysCount),
+        periodText: newPeriodText,
+        reason: newReason,
+        requiresDocument: newRequiresDocument,
+        memo: newMemo,
+      });
+      setEditingRecordId(null);
+    } else {
+      createAbsenceRecord({
+        student: targetStudent,
+        kind: newKind,
+        category: newCategory,
+        type: derivedType,
+        typeName: derivedTypeName,
+        startDate: newStartDate,
+        endDate: newEndDate,
+        daysCount: Number(newDaysCount),
+        periodText: newPeriodText,
+        reason: newReason,
+        requiresDocument: newRequiresDocument,
+        memo: newMemo,
+      });
+    }
 
     setIsNewModalOpen(false);
     loadData();
@@ -261,6 +282,7 @@ export default function TeacherDashboard() {
   };
 
   const handleOpenNewModal = () => {
+    setEditingRecordId(null);
     const today = getTodayString();
     setNewStartDate(today);
     setNewEndDate(today);
@@ -270,6 +292,24 @@ export default function TeacherDashboard() {
     setNewReason('감기몸살 및 발열');
     setNewRequiresDocument(true);
     setNewPeriodText('전일');
+    setNewMemo('');
+    if (students.length > 0) setNewStudentId(students[0].id);
+    setIsNewModalOpen(true);
+  };
+
+  const handleOpenEditModal = (rec: AbsenceRecord) => {
+    setEditingRecordId(rec.id);
+    setNewStudentId(rec.studentId);
+    const normalizedCategory = (rec.category === '출석 인정' ? '출석인정' : rec.category) as AttendanceCategory;
+    setNewCategory(normalizedCategory);
+    setNewSpecialType(rec.type);
+    setNewStartDate(rec.startDate);
+    setNewEndDate(rec.endDate);
+    setNewDaysCount(rec.daysCount);
+    setNewPeriodText(rec.periodText || '전일');
+    setNewReason(rec.reason);
+    setNewRequiresDocument(rec.requiresDocument !== false);
+    setNewMemo(rec.memo || '');
     setIsNewModalOpen(true);
   };
 
@@ -537,10 +577,20 @@ export default function TeacherDashboard() {
                       </div>
                     ) : (
                       pendingAttendanceRecords.map((rec) => (
-                        <div key={rec.id} className="bg-[#fcfbf9] p-3 rounded-[6px] border border-[#f2f0ed] space-y-1.5">
+                        <div key={rec.id} className="bg-[#fcfbf9] p-3 rounded-[6px] border border-[#f2f0ed] space-y-1.5 hover:border-[#cbd5e1] transition-colors">
                           <div className="flex items-center justify-between">
                             <span className="font-bold text-xs text-[#121212]">{rec.studentNum}번 {rec.studentName}</span>
-                            <span className="badge-pill badge-stone text-[9px]">{rec.typeName}</span>
+                            <div className="flex items-center space-x-1">
+                              <span className="badge-pill badge-stone text-[9px]">{rec.typeName}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditModal(rec)}
+                                className="text-[#94a3b8] hover:text-[#0086fc] p-1 rounded hover:bg-[#f1f5f9] transition-colors cursor-pointer"
+                                title="출결 수정"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                              </button>
+                            </div>
                           </div>
                           <p className="text-[11px] text-[#474645] line-clamp-1">{rec.reason}</p>
                           <div className="text-[10px] text-[#7e7e7d]">기간: {rec.startDate} ({rec.daysCount}일)</div>
@@ -575,10 +625,20 @@ export default function TeacherDashboard() {
                       </div>
                     ) : (
                       attendedNotifiedRecords.map((rec) => (
-                        <div key={rec.id} className="bg-[#fcfbf9] p-3 rounded-[6px] border border-[#f2f0ed] space-y-1.5">
+                        <div key={rec.id} className="bg-[#fcfbf9] p-3 rounded-[6px] border border-[#f2f0ed] space-y-1.5 hover:border-[#cbd5e1] transition-colors">
                           <div className="flex items-center justify-between">
                             <span className="font-bold text-xs text-[#121212]">{rec.studentNum}번 {rec.studentName}</span>
-                            <span className="badge-pill badge-orange text-[9px]">알림 {rec.remindCount}회</span>
+                            <div className="flex items-center space-x-1">
+                              <span className="badge-pill badge-orange text-[9px]">알림 {rec.remindCount}회</span>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditModal(rec)}
+                                className="text-[#94a3b8] hover:text-[#0086fc] p-1 rounded hover:bg-[#f1f5f9] transition-colors cursor-pointer"
+                                title="출결 수정"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                              </button>
+                            </div>
                           </div>
                           <p className="text-[11px] text-[#474645] line-clamp-1">{rec.reason}</p>
                           <div className="flex items-center justify-between pt-1 border-t border-[#f2f0ed]">
@@ -616,10 +676,20 @@ export default function TeacherDashboard() {
                       </div>
                     ) : (
                       pickedUpRecords.map((rec) => (
-                        <div key={rec.id} className="bg-[#fcfbf9] p-3 rounded-[6px] border border-[#f2f0ed] space-y-1.5">
+                        <div key={rec.id} className="bg-[#fcfbf9] p-3 rounded-[6px] border border-[#f2f0ed] space-y-1.5 hover:border-[#cbd5e1] transition-colors">
                           <div className="flex items-center justify-between">
                             <span className="font-bold text-xs text-[#121212]">{rec.studentNum}번 {rec.studentName}</span>
-                            <span className="badge-pill badge-stone text-[9px]">{rec.typeName}</span>
+                            <div className="flex items-center space-x-1">
+                              <span className="badge-pill badge-stone text-[9px]">{rec.typeName}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditModal(rec)}
+                                className="text-[#94a3b8] hover:text-[#0086fc] p-1 rounded hover:bg-[#f1f5f9] transition-colors cursor-pointer"
+                                title="출결 수정"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                              </button>
+                            </div>
                           </div>
                           <p className="text-[11px] text-[#474645] line-clamp-1">{rec.reason}</p>
                           <div className="text-[10px] text-[#0086fc] font-medium">✍️ 자필 작성 및 증빙 동봉 중</div>
@@ -648,10 +718,20 @@ export default function TeacherDashboard() {
                       </div>
                     ) : (
                       submittedRecords.map((rec) => (
-                        <div key={rec.id} className="bg-[#f0fdf4] p-3 rounded-[6px] border border-[#a3f3ca] space-y-1.5">
+                        <div key={rec.id} className="bg-[#f0fdf4] p-3 rounded-[6px] border border-[#a3f3ca] space-y-1.5 hover:border-[#86efac] transition-colors">
                           <div className="flex items-center justify-between">
                             <span className="font-bold text-xs text-[#121212]">{rec.studentNum}번 {rec.studentName}</span>
-                            <span className="badge-pill badge-mint text-[9px]">제출 완료</span>
+                            <div className="flex items-center space-x-1">
+                              <span className="badge-pill badge-mint text-[9px]">제출 완료</span>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditModal(rec)}
+                                className="text-[#94a3b8] hover:text-[#0086fc] p-1 rounded hover:bg-white transition-colors cursor-pointer"
+                                title="출결 수정"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                              </button>
+                            </div>
                           </div>
                           <p className="text-[11px] text-[#474645] line-clamp-1">{rec.reason}</p>
                           <div className="text-[10px] text-[#0086fc] truncate">
@@ -830,14 +910,26 @@ export default function TeacherDashboard() {
                                 )}
                               </td>
                               <td className="py-2.5 px-3 text-right whitespace-nowrap">
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteRecord(rec.id, rec.studentName)}
-                                  className="text-[#94a3b8] hover:text-[#e11d48] p-1 transition-colors cursor-pointer"
-                                  title="기록 삭제"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                <div className="flex items-center justify-end space-x-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenEditModal(rec)}
+                                    className="text-[#475569] hover:text-[#0086fc] hover:bg-[#f1f5f9] px-2 py-1 rounded text-xs font-semibold transition-colors cursor-pointer inline-flex items-center gap-1 border border-[#e2e8f0]"
+                                    title="출결 기록 수정"
+                                  >
+                                    <Edit2 className="w-3 h-3 text-[#0086fc]" />
+                                    <span>수정</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteRecord(rec.id, rec.studentName)}
+                                    className="text-[#94a3b8] hover:text-[#e11d48] hover:bg-[#fef2f2] px-2 py-1 rounded text-xs font-semibold transition-colors cursor-pointer inline-flex items-center gap-1 border border-[#f1f5f9]"
+                                    title="기록 삭제"
+                                  >
+                                    <Trash2 className="w-3 h-3 text-[#e11d48]" />
+                                    <span>삭제</span>
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           );
@@ -859,19 +951,29 @@ export default function TeacherDashboard() {
                 
                 {/* Modal Title Bar */}
                 <div className="flex items-center justify-between px-4 py-2.5 bg-[#f8fafc] border-b border-[#cbd5e1]">
-                  <h3 className="font-bold text-sm text-[#1e293b] tracking-tight">
-                    출결마감구분
+                  <h3 className="font-bold text-sm text-[#1e293b] tracking-tight flex items-center gap-1.5">
+                    {editingRecordId ? (
+                      <>
+                        <Edit2 className="w-4 h-4 text-[#0086fc]" />
+                        <span>출결 기록 수정 (나이스 출결마감구분)</span>
+                      </>
+                    ) : (
+                      <span>출결마감구분</span>
+                    )}
                   </h3>
                   <button
                     type="button"
-                    onClick={() => setIsNewModalOpen(false)}
+                    onClick={() => {
+                      setIsNewModalOpen(false);
+                      setEditingRecordId(null);
+                    }}
                     className="text-[#64748b] hover:text-[#0f172a] font-bold text-base leading-none p-1 cursor-pointer"
                   >
                     ✕
                   </button>
                 </div>
 
-                <form onSubmit={handleCreateRecord} className="p-4 sm:p-5 space-y-4 text-xs">
+                <form onSubmit={handleSubmitRecord} className="p-4 sm:p-5 space-y-4 text-xs">
                   {/* Target Student Selection */}
                   <div>
                     <label className="block text-[11px] font-bold text-[#334155] mb-1">
@@ -1069,20 +1171,45 @@ export default function TeacherDashboard() {
                   </div>
 
                   {/* Modal Action Buttons matching NEIS screenshot */}
-                  <div className="pt-2 flex items-center justify-center space-x-2">
-                    <button
-                      type="submit"
-                      className="bg-[#243757] hover:bg-[#1d2d47] text-white px-5 py-1.5 rounded-[3px] text-xs font-bold shadow-xs cursor-pointer min-w-[70px]"
-                    >
-                      적용
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsNewModalOpen(false)}
-                      className="bg-white hover:bg-[#f1f5f9] text-[#334155] border border-[#cbd5e1] px-5 py-1.5 rounded-[3px] text-xs font-medium cursor-pointer min-w-[70px]"
-                    >
-                      닫기
-                    </button>
+                  <div className="pt-3 flex items-center justify-between border-t border-[#f1f5f9] mt-2">
+                    {editingRecordId ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const currentRec = records.find(r => r.id === editingRecordId);
+                          if (currentRec) {
+                            handleDeleteRecord(currentRec.id, currentRec.studentName);
+                            setIsNewModalOpen(false);
+                            setEditingRecordId(null);
+                          }
+                        }}
+                        className="bg-white hover:bg-[#fee2e2] text-[#e11d48] border border-[#fca5a5] px-3 py-1.5 rounded-[3px] text-xs font-semibold cursor-pointer flex items-center gap-1 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>기록 삭제</span>
+                      </button>
+                    ) : (
+                      <div></div>
+                    )}
+
+                    <div className="flex items-center space-x-2">
+                      <button
+                        type="submit"
+                        className="bg-[#243757] hover:bg-[#1d2d47] text-white px-5 py-1.5 rounded-[3px] text-xs font-bold shadow-xs cursor-pointer min-w-[70px]"
+                      >
+                        {editingRecordId ? '수정 완료' : '적용'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsNewModalOpen(false);
+                          setEditingRecordId(null);
+                        }}
+                        className="bg-white hover:bg-[#f1f5f9] text-[#334155] border border-[#cbd5e1] px-5 py-1.5 rounded-[3px] text-xs font-medium cursor-pointer min-w-[70px]"
+                      >
+                        닫기
+                      </button>
+                    </div>
                   </div>
                 </form>
               </div>
