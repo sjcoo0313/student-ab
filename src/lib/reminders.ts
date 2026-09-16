@@ -3,7 +3,8 @@ import {
   getAbsenceRecords, 
   saveAbsenceRecords, 
   getStudents,
-  addNotification 
+  addNotification,
+  getStudentConsecutiveIllnessDays
 } from '@/lib/storage';
 import { playRemindSound } from '@/lib/sound';
 
@@ -203,8 +204,9 @@ export function dispatchScheduledReminder(
     dispatchedNames.push(`${rec.studentNum}번 ${rec.studentName}`);
 
     // 단계별 맞춤 안내 문구 생성
-    const is3DaysIllness = rec.type === 'ILLNESS_OVER_3' || (rec.category === '질병' && (rec.daysCount || 1) >= 3);
-    const docNotice = is3DaysIllness ? ' (※ 3일 이상 질병결석: 의사 진단서 또는 의사 소견서 필수 지참)' : '';
+    const consecutiveIllnessDays = rec.category === '질병' ? getStudentConsecutiveIllnessDays(rec.studentId, rec) : 1;
+    const is3DaysIllness = rec.type === 'ILLNESS_OVER_3' || (rec.category === '질병' && ((rec.daysCount || 1) >= 3 || consecutiveIllnessDays >= 3));
+    const docNotice = is3DaysIllness ? ' (※ 3일 이상 연속 질병결석: 의사 진단서 또는 의사 소견서 필수 지참)' : '';
 
     let messageBody = '';
     if (rec.type === 'FIELD_EXPERIENCE') {

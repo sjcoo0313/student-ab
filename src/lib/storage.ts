@@ -654,6 +654,61 @@ export function checkStudentMenstrualMonthlyLimit(
   };
 }
 
+// 💡 학생의 질병 결석 연속 일수 계산 (단일 레코드 일수 + 연속된 날짜에 등록된 분할 레코드 누적)
+export function getStudentConsecutiveIllnessDays(
+  studentId: string,
+  targetRecord?: Partial<AbsenceRecord> | null
+): number {
+  if (!studentId) return targetRecord?.daysCount || 1;
+  const records = getAbsenceRecords().filter(
+    r => r.studentId === studentId && (r.kind || '결석') === '결석' && r.category === '질병'
+  );
+
+  const dateSet = new Set<string>();
+  const addRange = (start?: string, end?: string) => {
+    if (!start) return;
+    const cur = new Date(start);
+    const last = new Date(end || start);
+    if (isNaN(cur.getTime()) || isNaN(last.getTime())) return;
+    while (cur <= last) {
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const dStr = `${cur.getFullYear()}-${pad(cur.getMonth() + 1)}-${pad(cur.getDate())}`;
+      dateSet.add(dStr);
+      cur.setDate(cur.getDate() + 1);
+    }
+  };
+
+  records.forEach(r => addRange(r.startDate, r.endDate));
+  if (targetRecord?.startDate) {
+    addRange(targetRecord.startDate, targetRecord.endDate);
+  }
+
+  const sortedDates = Array.from(dateSet).sort();
+  if (sortedDates.length === 0) return targetRecord?.daysCount || 1;
+
+  let maxChain = 1;
+  let currentChain = 1;
+
+  for (let i = 1; i < sortedDates.length; i++) {
+    const prev = new Date(sortedDates[i - 1]);
+    const curr = new Date(sortedDates[i]);
+    const diffDays = Math.round((curr.getTime() - prev.getTime()) / (1000 * 3600 * 24));
+
+    // 연속 판정: 달력상 1일 차이이거나, 금요일(5)에서 월요일(1)로 주말(3일 차이)을 건너뛴 경우
+    const isConsecutive = diffDays === 1 || (diffDays === 3 && prev.getDay() === 5 && curr.getDay() === 1);
+
+    if (isConsecutive) {
+      currentChain += 1;
+      if (currentChain > maxChain) maxChain = currentChain;
+    } else {
+      currentChain = 1;
+    }
+  }
+
+  const baseCount = targetRecord?.daysCount || 1;
+  return Math.max(baseCount, maxChain);
+}
+
 // 1. 교사가 출결/결석 등록
 export function createAbsenceRecord(data: {
   student: Student;
@@ -680,6 +735,15 @@ export function createAbsenceRecord(data: {
     }
   }
 
+  // 💡 연속 3일 이상 질병결석 여부 자동 판별 (지정 일수 3일 이상 or 연속된 질병결석 레코드 합산 3일 이상)
+  const consecutiveDays = (data.kind || '결석') === '결석' && data.category === '질병'
+    ? getStudentConsecutiveIllnessDays(data.student.id, { startDate: data.startDate, endDate: data.endDate, daysCount: data.daysCount })
+    : data.daysCount;
+
+  const isIllnessOver3 = (data.kind || '결석') === '결석' && data.category === '질병' && (data.daysCount >= 3 || consecutiveDays >= 3);
+  const derivedType = isIllnessOver3 ? 'ILLNESS_OVER_3' : data.type;
+  const derivedTypeName = isIllnessOver3 ? '질병결석 (3일 이상 진단서)' : data.typeName;
+
   const records = getAbsenceRecords();
   const requiresDoc = data.requiresDocument !== undefined 
     ? data.requiresDocument 
@@ -694,8 +758,8 @@ export function createAbsenceRecord(data: {
     studentNum: data.student.studentNum,
     kind: data.kind || '결석',
     category: data.category,
-    type: data.type,
-    typeName: data.typeName,
+    type: derivedType,
+    typeName: derivedTypeName,
     startDate: data.startDate,
     endDate: data.endDate,
     daysCount: data.daysCount,
@@ -707,6 +771,10 @@ export function createAbsenceRecord(data: {
       ? ['학부모 의견서(생리)'] 
       : data.type === 'FIELD_EXPERIENCE'
       ? ['체험학습 보고서(NEIS)', '일자별 배경 사진(날짜당 1장)', '보호자 동반 사진']
+      : isIllnessOver3
+      ? ['의사 진단서']
+      : data.category === '질병'
+      ? ['진료확인서', '학부모 의견서']
       : [],
     createdAt: new Date().toISOString(),
     remindCount: 0,
@@ -778,6 +846,30 @@ export function updateAbsenceRecord(recordId: string, updates: {
         newStatus = 'PENDING_ATTENDANCE';
       }
 
+      const newEndDate = updates.endDate !== undefined ? updates.endDate : r.endDate;
+      const newDaysCount = updates.daysCount !== undefined ? updates.daysCount : r.daysCount;
+
+      let finalType = updates.type !== undefined ? updates.type : r.type;
+      let finalTypeName = updates.typeName !== undefined ? updates.typeName : r.typeName;
+
+      // 💡 질병결석 시 연속 결석 일수 3일 이상 자동 감지
+      let finalAttachments = r.attachments || [];
+      if ((newKind || '결석') === '결석' && newCategory === '질병') {
+        const consecutiveDays = getStudentConsecutiveIllnessDays(targetStudent.id, {
+          id: r.id,
+          startDate: newStartDate,
+          endDate: newEndDate,
+          daysCount: newDaysCount,
+        });
+        if (newDaysCount >= 3 || consecutiveDays >= 3) {
+          finalType = 'ILLNESS_OVER_3';
+          finalTypeName = '질병결석 (3일 이상 진단서)';
+          if (!finalAttachments.includes('의사 진단서') && !finalAttachments.includes('의사 소견서')) {
+            finalAttachments = ['의사 진단서', ...finalAttachments.filter(a => a !== '진료확인서')];
+          }
+        }
+      }
+
       updatedRecord = {
         ...r,
         studentId: targetStudent.id,
@@ -787,15 +879,16 @@ export function updateAbsenceRecord(recordId: string, updates: {
         studentNum: targetStudent.studentNum,
         kind: newKind,
         category: newCategory,
-        type: updates.type !== undefined ? updates.type : r.type,
-        typeName: updates.typeName !== undefined ? updates.typeName : r.typeName,
-        startDate: updates.startDate !== undefined ? updates.startDate : r.startDate,
-        endDate: updates.endDate !== undefined ? updates.endDate : r.endDate,
-        daysCount: updates.daysCount !== undefined ? updates.daysCount : r.daysCount,
+        type: finalType,
+        typeName: finalTypeName,
+        startDate: newStartDate,
+        endDate: newEndDate,
+        daysCount: newDaysCount,
         periodText: updates.periodText !== undefined ? updates.periodText : r.periodText,
         reason: updates.reason !== undefined ? updates.reason : r.reason,
         requiresDocument: newRequiresDoc,
         status: newStatus,
+        attachments: finalAttachments,
         memo: updates.memo !== undefined ? updates.memo : r.memo,
       };
 

@@ -26,7 +26,8 @@ import {
   getMyStudent,
   setMyStudentId,
   saveMyStudentProfile,
-  updateStudentPin
+  updateStudentPin,
+  getStudentConsecutiveIllnessDays
 } from '@/lib/storage';
 import { Student, AbsenceRecord, AttachmentProof } from '@/types';
 import { Lock, LogOut, UserCheck, ShieldCheck, KeyRound } from 'lucide-react';
@@ -192,7 +193,12 @@ export default function StudentMobilePage() {
   const activeRecord = pendingDocRecords[0];
   const myApprovedRecords = studentRecords.filter(r => r.status === 'APPROVED');
 
-  const isIllnessOver3 = activeRecord?.type === 'ILLNESS_OVER_3' || (activeRecord?.category === '질병' && (activeRecord?.daysCount || 1) >= 3);
+  const consecutiveIllnessDays = activeRecord
+    ? getStudentConsecutiveIllnessDays(activeRecord.studentId, activeRecord)
+    : 1;
+
+  const isIllnessOver3 = activeRecord?.type === 'ILLNESS_OVER_3' || 
+    (activeRecord?.category === '질병' && ((activeRecord?.daysCount || 1) >= 3 || consecutiveIllnessDays >= 3));
 
   useEffect(() => {
     if (activeRecord) {
@@ -202,8 +208,8 @@ export default function StudentMobilePage() {
         setCheckedAttachments(['체험학습 보고서(NEIS)', '일자별 배경 사진(날짜당 1장)', '보호자 동반 사진']);
       } else if (activeRecord.type === 'MENSTRUAL') {
         setCheckedAttachments(['학부모 의견서(생리)']);
-      } else if (activeRecord.type === 'ILLNESS_OVER_3' || (activeRecord.category === '질병' && (activeRecord.daysCount || 1) >= 3)) {
-        // 3일 이상 질병결석: 학교 결석신고서 <서식 1호> 규정 (의사 진단서 또는 의사 소견서 필수 지참)
+      } else if (isIllnessOver3) {
+        // 3일 이상 연속 질병결석: 학교 결석신고서 <서식 1호> 규정 (의사 진단서 또는 의사 소견서 필수 지참)
         setCheckedAttachments(['의사 진단서']);
       } else if (activeRecord.category === '질병') {
         // 2일 이내 질병결석
@@ -214,7 +220,7 @@ export default function StudentMobilePage() {
       setOtherAttachmentText(activeRecord.otherAttachmentText || '');
       setStudentMemo(activeRecord.studentMemo || activeRecord.memo || '');
     }
-  }, [activeRecord?.id]);
+  }, [activeRecord?.id, isIllnessOver3]);
 
   const handlePickUp = () => {
     if (!activeRecord) return;
@@ -652,7 +658,7 @@ export default function StudentMobilePage() {
                 <div className="mb-3 p-3 bg-[#fff0eb] rounded-[8px] border border-[#ff3e00]/30 text-xs text-[#121212] space-y-1.5">
                   <div className="flex items-center gap-1.5 font-bold text-[#ff3e00]">
                     <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>3일 이상 질병결석 증빙 안내 (&lt;서식 1호&gt; 결석신고서)</span>
+                    <span>연속 {Math.max(activeRecord.daysCount || 1, consecutiveIllnessDays)}일 질병결석 서류 규정 안내 (&lt;서식 1호&gt; 결석신고서)</span>
                   </div>
                   <p className="text-[11px] text-[#474645] leading-relaxed">
                     • 3일 이상 연속 질병결석(또는 지필평가)은 학교 규정에 따라 반드시 <strong>[의사 진단서]</strong> 또는 <strong>[의사 소견서]</strong> 중 1부를 첨부해야 합니다.<br />

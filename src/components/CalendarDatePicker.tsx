@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Sparkles, Plus, Minus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, RotateCcw, Plus, Minus, AlertCircle } from 'lucide-react';
 
 interface CalendarDatePickerProps {
   startDate: string; // YYYY-MM-DD
@@ -52,7 +52,6 @@ export default function CalendarDatePicker({
 
   const [currentYear, setCurrentYear] = useState(initialDate.getFullYear());
   const [currentMonth, setCurrentMonth] = useState(initialDate.getMonth()); // 0-indexed
-  const [activeTab, setActiveTab] = useState<'start' | 'end'>('start');
   const [hoverDate, setHoverDate] = useState<string | null>(null);
 
   // Keep month view in sync if external startDate changes
@@ -90,11 +89,30 @@ export default function CalendarDatePicker({
     setCurrentYear(today.getFullYear());
     setCurrentMonth(today.getMonth());
     onChange(tStr, tStr, 1);
-    setActiveTab('start');
   };
 
   const pad = (n: number) => String(n).padStart(2, '0');
   const toISO = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+  // 빠른 날짜 이동 버튼 (오늘, 어제, 내일, 1일로 리셋)
+  const handleQuickJump = (type: 'today' | 'yesterday' | 'tomorrow' | 'resetToOneDay') => {
+    const base = new Date();
+    if (type === 'today') {
+      const dStr = toISO(base);
+      onChange(dStr, dStr, 1);
+    } else if (type === 'yesterday') {
+      base.setDate(base.getDate() - 1);
+      const dStr = toISO(base);
+      onChange(dStr, dStr, 1);
+    } else if (type === 'tomorrow') {
+      base.setDate(base.getDate() + 1);
+      const dStr = toISO(base);
+      onChange(dStr, dStr, 1);
+    } else if (type === 'resetToOneDay') {
+      const curStart = startDate || todayStr;
+      onChange(curStart, curStart, 1);
+    }
+  };
 
   // 일수 증감 스태퍼 (+1일 / -1일)
   const handleAdjustDays = (delta: number) => {
@@ -105,32 +123,6 @@ export default function CalendarDatePicker({
     newEnd.setDate(newEnd.getDate() + (newCount - 1));
     const newEndStr = toISO(newEnd);
     onChange(startDate || todayStr, newEndStr, newCount);
-  };
-
-  // 퀵 프리셋 버튼 핸들러
-  const handleQuickPreset = (preset: 'today' | '2days' | '3days' | '4days' | '5days' | '7days') => {
-    const baseDate = startDate ? new Date(startDate) : new Date();
-    const sStr = toISO(baseDate);
-
-    if (preset === 'today') {
-      const dStr = getTodayString();
-      onChange(dStr, dStr, 1);
-      setActiveTab('start');
-      return;
-    }
-
-    let daysToAdd = 1;
-    if (preset === '2days') daysToAdd = 2;
-    else if (preset === '3days') daysToAdd = 3;
-    else if (preset === '4days') daysToAdd = 4;
-    else if (preset === '5days') daysToAdd = 5;
-    else if (preset === '7days') daysToAdd = 7;
-
-    const endD = new Date(baseDate);
-    endD.setDate(endD.getDate() + (daysToAdd - 1));
-    const eStr = toISO(endD);
-    onChange(sStr, eStr, daysToAdd);
-    setActiveTab('start');
   };
 
   // Generate calendar days
@@ -168,31 +160,66 @@ export default function CalendarDatePicker({
     daysGrid.push({ day: d, dateStr, isCurrentMonth: false, isWeekend: dObj.getDay() });
   }
 
+  // 💡 핵심: 날짜를 연속적으로 클릭하여 결석 일수를 자연스럽게 늘리거나 줄이는 핸들러
   const handleDateClick = (dateStr: string) => {
     if (singleDateOnly) {
       onChange(dateStr, dateStr, 1);
       return;
     }
 
-    if (activeTab === 'start') {
-      if (endDate && dateStr > endDate) {
-        onChange(dateStr, dateStr, 1);
-      } else {
-        const count = calculateDaysCount(dateStr, endDate || dateStr);
-        onChange(dateStr, endDate || dateStr, count);
+    if (!startDate) {
+      onChange(dateStr, dateStr, 1);
+      return;
+    }
+
+    const s = startDate;
+    const e = endDate || startDate;
+
+    // 1) 시작일을 다시 클릭한 경우: 여러 날 선택 중이었다면 시작일 1일만 선택으로 초기화
+    if (dateStr === s) {
+      onChange(s, s, 1);
+      return;
+    }
+
+    // 2) 현재 종료일을 다시 클릭한 경우: 결석 일수를 1일 줄임 (예: 16~18 선택 중 18 클릭 -> 16~17로 축소)
+    if (dateStr === e && e > s) {
+      const eDate = new Date(e);
+      eDate.setDate(eDate.getDate() - 1);
+      const newEndStr = toISO(eDate);
+      const newCount = calculateDaysCount(s, newEndStr);
+      onChange(s, newEndStr, newCount);
+      return;
+    }
+
+    // 3) 선택 범위 내부의 날짜를 클릭한 경우 (s < dateStr < e): 클릭한 날짜까지로 종료일 축소 (예: 16~20 중 18 클릭 -> 16~18)
+    if (dateStr > s && dateStr < e) {
+      const newCount = calculateDaysCount(s, dateStr);
+      onChange(s, dateStr, newCount);
+      return;
+    }
+
+    // 4) 현재 종료일 이후의 날짜를 클릭한 경우 (dateStr > e): 연속적으로 범위를 확장!
+    //    예: 16일(1일) -> 17일 클릭(2일) -> 18일 클릭(3일: 진단서 안내 자동 발동) -> 19일 클릭(4일)
+    if (dateStr > e) {
+      const newCount = calculateDaysCount(s, dateStr);
+      onChange(s, dateStr, newCount);
+      return;
+    }
+
+    // 5) 시작일보다 이전의 날짜를 클릭한 경우 (dateStr < s)
+    if (dateStr < s) {
+      // 바로 하루 전날이면 시작일을 앞쪽으로 하루 확장
+      const prevDay = new Date(s);
+      prevDay.setDate(prevDay.getDate() - 1);
+      if (dateStr === toISO(prevDay)) {
+        const newCount = calculateDaysCount(dateStr, e);
+        onChange(dateStr, e, newCount);
+        return;
       }
-      setActiveTab('end');
-    } else {
-      // selecting end date
-      if (dateStr < startDate) {
-        // 클릭한 날짜가 시작일 이전이면 시작일로 재지정
-        onChange(dateStr, dateStr, 1);
-        setActiveTab('end');
-      } else {
-        const count = calculateDaysCount(startDate, dateStr);
-        onChange(startDate, dateStr, count);
-        setActiveTab('start');
-      }
+
+      // 하루 이상 떨어진 이전 날짜면 해당 날짜 1일 선택으로 새롭게 시작
+      onChange(dateStr, dateStr, 1);
+      return;
     }
   };
 
@@ -202,167 +229,76 @@ export default function CalendarDatePicker({
     if (!startDate || !endDate) return false;
     return dStr >= startDate && dStr <= endDate;
   };
-  const isHoverInRange = (dStr: string) => {
-    if (activeTab !== 'end' || !hoverDate || !startDate) return false;
-    if (hoverDate > startDate) {
-      return dStr >= startDate && dStr <= hoverDate;
-    }
-    return false;
-  };
   const isToday = (dStr: string) => dStr === todayStr;
 
   const currentDaysCount = calculateDaysCount(startDate, endDate);
+  const is3DaysOrMore = currentDaysCount >= 3;
 
   return (
     <div className="bg-[#ffffff] border border-[#cbd5e1] rounded-[10px] p-3 shadow-xs space-y-2.5 font-sans">
-      {/* 1. Quick Presets Bar (연속 일수 빠른 선택) */}
-      <div className="flex flex-wrap items-center gap-1.5 pb-2 border-b border-[#f1f5f9]">
-        <span className="text-[11px] font-bold text-[#475569] mr-0.5 flex items-center">
-          <Sparkles className="w-3 h-3 text-[#f59e0b] mr-1" />
-          연속 일수:
-        </span>
-        <button
-          type="button"
-          onClick={() => handleQuickPreset('today')}
-          className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-colors cursor-pointer ${
-            startDate === todayStr && endDate === todayStr
-              ? 'bg-[#1e293b] text-white border-[#1e293b]'
-              : 'bg-white text-[#475569] border-[#cbd5e1] hover:border-[#94a3b8]'
-          }`}
-        >
-          오늘 1일
-        </button>
-        {!singleDateOnly && (
-          <>
-            <button
-              type="button"
-              onClick={() => handleQuickPreset('2days')}
-              className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-colors cursor-pointer ${
-                currentDaysCount === 2
-                  ? 'bg-[#1e293b] text-white border-[#1e293b]'
-                  : 'bg-white text-[#475569] border-[#cbd5e1] hover:border-[#94a3b8]'
-              }`}
-            >
-              2일간
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickPreset('3days')}
-              className={`px-2.5 py-0.5 rounded text-[11px] font-bold border transition-all cursor-pointer flex items-center gap-1 ${
-                currentDaysCount === 3
-                  ? 'bg-[#dc2626] text-white border-[#dc2626] shadow-xs'
-                  : 'bg-[#fef2f2] text-[#dc2626] border-[#fca5a5] hover:bg-[#fee2e2]'
-              }`}
-              title="3일 이상 질병결석: 결석신고서 양식에 따라 의사 진단서/소견서 제출 필수"
-            >
-              <span>🏥 3일간 (진단서 필요)</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickPreset('4days')}
-              className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-colors cursor-pointer ${
-                currentDaysCount === 4
-                  ? 'bg-[#1e293b] text-white border-[#1e293b]'
-                  : 'bg-white text-[#475569] border-[#cbd5e1] hover:border-[#94a3b8]'
-              }`}
-            >
-              4일간
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickPreset('5days')}
-              className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-colors cursor-pointer ${
-                currentDaysCount === 5
-                  ? 'bg-[#1e293b] text-white border-[#1e293b]'
-                  : 'bg-white text-[#475569] border-[#cbd5e1] hover:border-[#94a3b8]'
-              }`}
-            >
-              5일간(1주일)
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickPreset('7days')}
-              className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-colors cursor-pointer ${
-                currentDaysCount === 7
-                  ? 'bg-[#1e293b] text-white border-[#1e293b]'
-                  : 'bg-white text-[#475569] border-[#cbd5e1] hover:border-[#94a3b8]'
-              }`}
-            >
-              7일간
-            </button>
-          </>
+      {/* 1. 빠른 날짜 선택 & 초기화 바 */}
+      <div className="flex flex-wrap items-center justify-between gap-1.5 pb-2 border-b border-[#f1f5f9]">
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => handleQuickJump('today')}
+            className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-colors cursor-pointer ${
+              startDate === todayStr && endDate === todayStr
+                ? 'bg-[#1e293b] text-white border-[#1e293b]'
+                : 'bg-white text-[#475569] border-[#cbd5e1] hover:border-[#94a3b8]'
+            }`}
+          >
+            📍 오늘 ({formatKoreanDate(todayStr, false).slice(5)})
+          </button>
+          <button
+            type="button"
+            onClick={() => handleQuickJump('yesterday')}
+            className="px-2 py-0.5 rounded text-[11px] font-medium bg-white text-[#475569] border border-[#cbd5e1] hover:border-[#94a3b8] cursor-pointer"
+          >
+            어제
+          </button>
+          <button
+            type="button"
+            onClick={() => handleQuickJump('tomorrow')}
+            className="px-2 py-0.5 rounded text-[11px] font-medium bg-white text-[#475569] border border-[#cbd5e1] hover:border-[#94a3b8] cursor-pointer"
+          >
+            내일
+          </button>
+        </div>
+
+        {!singleDateOnly && currentDaysCount > 1 && (
+          <button
+            type="button"
+            onClick={() => handleQuickJump('resetToOneDay')}
+            className="px-2 py-0.5 rounded text-[11px] font-medium bg-[#f8fafc] text-[#64748b] border border-[#cbd5e1] hover:bg-[#fee2e2] hover:text-[#dc2626] hover:border-[#fca5a5] transition-colors cursor-pointer flex items-center gap-1"
+            title="현재 시작일 기준 1일로 재설정"
+          >
+            <RotateCcw className="w-3 h-3" />
+            <span>1일로 초기화</span>
+          </button>
         )}
       </div>
 
-      {/* 2. Direct Start/End Selection Tabs & Days Stepper */}
-      {!singleDateOnly && (
-        <div className="flex items-center justify-between gap-2 p-1.5 bg-[#f8fafc] rounded-[6px] border border-[#e2e8f0]">
-          <div className="flex items-center gap-1.5 flex-1">
-            <button
-              type="button"
-              onClick={() => setActiveTab('start')}
-              className={`flex-1 py-1 px-2 rounded text-left border transition-all cursor-pointer ${
-                activeTab === 'start'
-                  ? 'bg-white border-[#2563eb] text-[#1e40af] shadow-xs ring-1 ring-[#2563eb]/20'
-                  : 'bg-transparent border-transparent text-[#64748b] hover:bg-white'
-              }`}
-            >
-              <div className="text-[9px] font-bold uppercase tracking-wider text-[#64748b]">1. 시작일</div>
-              <div className="text-xs font-bold text-[#0f172a] truncate">{startDate}</div>
-            </button>
-
-            <span className="text-[#94a3b8] font-bold text-xs">~</span>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('end')}
-              className={`flex-1 py-1 px-2 rounded text-left border transition-all cursor-pointer ${
-                activeTab === 'end'
-                  ? 'bg-white border-[#2563eb] text-[#1e40af] shadow-xs ring-1 ring-[#2563eb]/20'
-                  : 'bg-transparent border-transparent text-[#64748b] hover:bg-white'
-              }`}
-            >
-              <div className="text-[9px] font-bold uppercase tracking-wider text-[#64748b]">2. 종료일</div>
-              <div className="text-xs font-bold text-[#0f172a] truncate">{endDate}</div>
-            </button>
-          </div>
-
-          {/* Stepper (+ / - 일수 조절) */}
-          <div className="flex items-center bg-white border border-[#cbd5e1] rounded px-1.5 py-0.5 shadow-2xs">
-            <button
-              type="button"
-              onClick={() => handleAdjustDays(-1)}
-              disabled={currentDaysCount <= 1}
-              className="p-1 text-[#475569] hover:text-[#0f172a] disabled:text-[#cbd5e1] cursor-pointer disabled:cursor-not-allowed"
-              title="1일 줄이기"
-            >
-              <Minus className="w-3 h-3" />
-            </button>
-            <span className={`px-2 text-xs font-extrabold ${currentDaysCount >= 3 ? 'text-[#dc2626]' : 'text-[#0f172a]'}`}>
-              {currentDaysCount}일간
-            </span>
-            <button
-              type="button"
-              onClick={() => handleAdjustDays(1)}
-              className="p-1 text-[#475569] hover:text-[#0f172a] cursor-pointer"
-              title="1일 늘리기 (연속 선택)"
-            >
-              <Plus className="w-3 h-3" />
-            </button>
-          </div>
-        </div>
-      )}
+      {/* 2. 연속 클릭 안내 팁 */}
+      <div className="flex items-center gap-1.5 px-2 py-1.5 bg-[#f8fafc] rounded-[6px] border border-[#e2e8f0] text-[11px] text-[#475569]">
+        <span className="text-sm">👆</span>
+        <span>
+          달력에서 날짜를 <strong>연속 클릭</strong>하면 결석 기간이 늘어납니다.{' '}
+          <span className="text-[#dc2626] font-semibold">(연속 3일 이상 시 의사 진단서 필수 자동 전환)</span>
+        </span>
+      </div>
 
       {/* 3. Calendar Month Navigation Header */}
-      <div className="flex items-center justify-between px-1 pt-1">
+      <div className="flex items-center justify-between px-1 pt-0.5">
         <div className="flex items-center space-x-1.5">
           <CalendarIcon className="w-4 h-4 text-[#1e293b]" />
           <span className="text-xs sm:text-sm font-bold text-[#0f172a]">
             {currentYear}년 {currentMonth + 1}월
           </span>
-          {currentDaysCount >= 3 && (
-            <span className="text-[10px] bg-[#fee2e2] text-[#dc2626] font-bold px-1.5 py-0.5 rounded border border-[#fca5a5]">
-              3일 이상 질병결석
+          {is3DaysOrMore && (
+            <span className="text-[10px] bg-[#fee2e2] text-[#dc2626] font-extrabold px-1.5 py-0.5 rounded border border-[#fca5a5] flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" />
+              <span>연속 {currentDaysCount}일 (진단서 필수)</span>
             </span>
           )}
         </div>
@@ -410,7 +346,6 @@ export default function CalendarDatePicker({
       <div className="grid grid-cols-7 gap-y-1 gap-x-0">
         {daysGrid.map((item, idx) => {
           const inRange = isInRange(item.dateStr);
-          const isHoverRange = isHoverInRange(item.dateStr);
           const isStart = isSelectedStart(item.dateStr);
           const isEnd = isSelectedEnd(item.dateStr);
           const today = isToday(item.dateStr);
@@ -423,9 +358,13 @@ export default function CalendarDatePicker({
               onMouseEnter={() => setHoverDate(item.dateStr)}
             >
               {/* Continuous Connected Ribbon Background */}
-              {isMultiple && (inRange || isHoverRange) && (
+              {isMultiple && inRange && (
                 <div
-                  className={`absolute inset-y-1 bg-[#fff8e8] border-y border-[#ffcd6c] z-0 ${
+                  className={`absolute inset-y-1 ${
+                    is3DaysOrMore 
+                      ? 'bg-[#fee2e2] border-y border-[#fca5a5]' 
+                      : 'bg-[#fff8e8] border-y border-[#ffcd6c]'
+                  } z-0 ${
                     isStart
                       ? 'left-1/2 right-0 rounded-l-none'
                       : isEnd
@@ -441,9 +380,13 @@ export default function CalendarDatePicker({
                 onClick={() => handleDateClick(item.dateStr)}
                 className={`relative z-10 w-8 h-8 rounded-[6px] flex flex-col items-center justify-center text-xs font-semibold transition-all cursor-pointer ${
                   isStart || isEnd
-                    ? 'bg-[#1e293b] text-white shadow-xs font-bold'
+                    ? is3DaysOrMore
+                      ? 'bg-[#dc2626] text-white shadow-xs font-bold'
+                      : 'bg-[#1e293b] text-white shadow-xs font-bold'
                     : inRange
-                    ? 'text-[#b45309] font-bold hover:bg-[#ffeec2]'
+                    ? is3DaysOrMore
+                      ? 'text-[#991b1b] font-bold hover:bg-[#fecaca]'
+                      : 'text-[#b45309] font-bold hover:bg-[#ffeec2]'
                     : !item.isCurrentMonth
                     ? 'text-[#cbd5e1] hover:bg-[#f8fafc]'
                     : item.isWeekend === 0
@@ -457,7 +400,7 @@ export default function CalendarDatePicker({
               >
                 <span>{item.day}</span>
                 {today && (
-                  <span className={`w-1 h-1 rounded-full ${isStart || isEnd ? 'bg-[#f59e0b]' : 'bg-[#ef4444]'}`}></span>
+                  <span className={`w-1 h-1 rounded-full ${isStart || isEnd ? 'bg-white' : 'bg-[#ef4444]'}`}></span>
                 )}
               </button>
             </div>
@@ -465,10 +408,10 @@ export default function CalendarDatePicker({
         })}
       </div>
 
-      {/* 6. Selected Date Summary Footer */}
+      {/* 6. Selected Date Summary Footer & Stepper */}
       <div className="p-2 bg-[#f8fafc] rounded-[6px] border border-[#e2e8f0] flex items-center justify-between text-xs">
         <div className="space-y-0.5">
-          <div className="font-bold text-[#0f172a] flex items-center gap-1.5 text-xs">
+          <div className="font-bold text-[#0f172a] flex items-center gap-1 text-xs">
             <span>{formatKoreanDate(startDate)}</span>
             {startDate !== endDate && (
               <>
@@ -478,13 +421,38 @@ export default function CalendarDatePicker({
             )}
           </div>
           <div className="text-[10px] text-[#64748b]">
-            {activeTab === 'end' ? '달력에서 종료일을 클릭하세요' : '달력에서 시작일을 클릭하거나 + 버튼으로 기간을 늘리세요'}
+            {is3DaysOrMore
+              ? '🏥 3일 이상 질병결석: 의사 진단서 또는 소견서 필수'
+              : '달력 날짜를 클릭하여 결석 기간을 지정하세요'}
           </div>
         </div>
 
         <div className="flex items-center gap-1.5">
+          {/* Stepper (+ / -) */}
+          {!singleDateOnly && (
+            <div className="flex items-center bg-white border border-[#cbd5e1] rounded px-1 py-0.5 shadow-2xs">
+              <button
+                type="button"
+                onClick={() => handleAdjustDays(-1)}
+                disabled={currentDaysCount <= 1}
+                className="p-1 text-[#475569] hover:text-[#0f172a] disabled:text-[#cbd5e1] cursor-pointer disabled:cursor-not-allowed"
+                title="1일 줄이기"
+              >
+                <Minus className="w-3 h-3" />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleAdjustDays(1)}
+                className="p-1 text-[#475569] hover:text-[#0f172a] cursor-pointer"
+                title="1일 늘리기"
+              >
+                <Plus className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+
           <span className={`px-2 py-0.5 rounded text-xs font-extrabold border ${
-            currentDaysCount >= 3
+            is3DaysOrMore
               ? 'bg-[#fee2e2] text-[#dc2626] border-[#fca5a5]'
               : 'bg-[#fef3c7] text-[#b45309] border-[#fde68a]'
           }`}>

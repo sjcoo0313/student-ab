@@ -35,7 +35,8 @@ import {
   markApproved, 
   triggerRemind, 
   subscribeToSyncEvents,
-  checkStudentMenstrualMonthlyLimit
+  checkStudentMenstrualMonthlyLimit,
+  getStudentConsecutiveIllnessDays
 } from '@/lib/storage';
 import { exportAbsenceStatisticsToExcel } from '@/lib/exportExcel';
 import { Student, AbsenceRecord, AbsenceStatus, AttendanceKind, AttendanceCategory, AbsenceType, VerificationMethod } from '@/types';
@@ -1465,7 +1466,18 @@ export default function TeacherDashboard() {
                         setNewEndDate(end);
                         setNewDaysCount(count);
                         if (newKind === '결석' && newCategory === '질병') {
-                          if (count >= 3) {
+                          const targetStudent = students.find(s => s.id === newStudentId);
+                          const consecutive = targetStudent
+                            ? getStudentConsecutiveIllnessDays(targetStudent.id, { 
+                                id: editingRecordId || undefined, 
+                                startDate: start, 
+                                endDate: end, 
+                                daysCount: count 
+                              })
+                            : count;
+                          const effectiveCount = Math.max(count, consecutive);
+
+                          if (effectiveCount >= 3) {
                             setNewSpecialType('ILLNESS_OVER_3');
                             if (newReason === '감기몸살 및 발열') setNewReason('질병 치료 (3일 이상 진단서)');
                           } else {
@@ -1477,15 +1489,26 @@ export default function TeacherDashboard() {
                     />
 
                     {/* 질병결석 3일 이상 vs 2일 이내 학교 서식 기준 안내 배너 */}
-                    {newKind === '결석' && newCategory === '질병' && (
-                      newDaysCount >= 3 ? (
+                    {newKind === '결석' && newCategory === '질병' && (() => {
+                      const targetStudent = students.find(s => s.id === newStudentId);
+                      const consecutive = targetStudent
+                        ? getStudentConsecutiveIllnessDays(targetStudent.id, { 
+                            id: editingRecordId || undefined, 
+                            startDate: newStartDate, 
+                            endDate: newEndDate, 
+                            daysCount: newDaysCount 
+                          })
+                        : newDaysCount;
+                      const effectiveDays = Math.max(newDaysCount, consecutive);
+
+                      return effectiveDays >= 3 ? (
                         <div className="p-3 bg-[#fef2f2] border border-[#fca5a5] rounded-[6px] text-xs space-y-1 mt-2 animate-in fade-in">
                           <div className="font-bold text-[#b91c1c] flex items-center gap-1.5">
                             <AlertTriangle className="w-4 h-4 text-[#dc2626] shrink-0" />
-                            <span>3일 이상 질병결석 서류 안내 (학교 결석신고서 기준)</span>
+                            <span>연속 {effectiveDays}일 질병결석 서류 규정 안내 (&lt;서식 1호&gt; 결석신고서 기준)</span>
                           </div>
                           <p className="text-[11px] text-[#7f1d1d] leading-relaxed">
-                            • 결석 기간이 <strong>{newDaysCount}일(3일 이상)</strong>이므로 결석신고서 규정에 따라 반드시 <strong>의사 진단서</strong> 또는 <strong>의사 소견서</strong> 중 1부를 제출해야 합니다.<br />
+                            • 연속 결석 기간이 <strong>{effectiveDays}일(3일 이상)</strong>이므로 결석신고서 규정에 따라 반드시 <strong>의사 진단서</strong> 또는 <strong>의사 소견서</strong> 중 1부를 제출해야 합니다.<br />
                             • 2일 이내에 사용되는 단순 진료확인서·처방전은 3일 이상 결석 시 증빙으로 인정되지 않으며, 학생 모바일 앱에도 <strong>진단서/소견서 지참 필수 안내</strong>가 자동으로 전달됩니다.
                           </p>
                         </div>
@@ -1495,11 +1518,11 @@ export default function TeacherDashboard() {
                             <span>📋 2일 이내 질병결석 서류 안내</span>
                           </div>
                           <p className="text-[11px] text-[#0c4a6e]">
-                            2일 이내 질병결석은 진료확인서, 학부모 의견서, 처방전/약봉투 등으로 제출 가능합니다.
+                            2일 이내 질병결석은 진료확인서, 학부모 의견서, 처방전/약봉투 등으로 제출 가능합니다. (연속 3일 이상 클릭 시 진단서 필수로 자동 전환됩니다)
                           </p>
                         </div>
-                      )
-                    )}
+                      );
+                    })()}
                   </div>
 
                   {/* Requires Document Toggle */}
