@@ -621,8 +621,13 @@ export default function StatisticsPage() {
                                     📋 출결 기록완료
                                   </span>
                                 ) : r.status === 'APPROVED' ? (
-                                  <span className="badge-pill badge-mint text-[10px] font-bold">
-                                    ✓ 서류 승인완료
+                                  <span className="badge-pill badge-mint text-[10px] font-bold inline-flex items-center gap-1">
+                                    <span>✓ 서류 승인완료</span>
+                                    {r.archivedFromBoard && (
+                                      <span className="bg-[#bbf7d0] text-[#166534] px-1 py-0.2 text-[9px] rounded font-bold" title="칸반 보드에서 정리되었으나 출결 통계 및 마감 데이터에 영구 보존 중">
+                                        보관보존
+                                      </span>
+                                    )}
                                   </span>
                                 ) : r.status === 'SUBMITTED' ? (
                                   <span className="badge-pill badge-sky text-[10px] font-bold">

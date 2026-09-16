@@ -23,7 +23,8 @@ import {
   RotateCcw,
   Undo2,
   MessageSquare,
-  Settings
+  Settings,
+  Archive
 } from 'lucide-react';
 import { 
   getStudents, 
@@ -38,7 +39,10 @@ import {
   subscribeToSyncEvents,
   checkStudentMenstrualMonthlyLimit,
   getStudentConsecutiveIllnessDays,
-  getServerStorageInfo
+  getServerStorageInfo,
+  archiveRecordFromBoard,
+  unarchiveRecordToBoard,
+  archiveAllApprovedRecords
 } from '@/lib/storage';
 import { exportAbsenceStatisticsToExcel } from '@/lib/exportExcel';
 import { Student, AbsenceRecord, AbsenceStatus, AttendanceKind, AttendanceCategory, AbsenceType, VerificationMethod } from '@/types';
@@ -100,6 +104,7 @@ export default function TeacherDashboard() {
 
   const [storageInfo, setStorageInfo] = useState(getServerStorageInfo());
   const [isStorageModalOpen, setIsStorageModalOpen] = useState(false);
+  const [isArchivedApprovedModalOpen, setIsArchivedApprovedModalOpen] = useState(false);
 
   const loadData = () => {
     const stds = getStudents();
@@ -338,7 +343,51 @@ export default function TeacherDashboard() {
     loadData();
   };
 
+  const handleArchiveRecord = (id: string, name: string) => {
+    archiveRecordFromBoard(id);
+    loadData();
+  };
+
+  const handleUnarchiveRecord = (id: string) => {
+    unarchiveRecordToBoard(id);
+    loadData();
+  };
+
+  const handleArchiveAllApproved = () => {
+    if (approvedRecords.length === 0) return;
+    if (confirm(`승인 완료된 ${approvedRecords.length}건을 칸반 보드에서 정리하시겠습니까?\n\n※ 보드에서만 숨겨지며, 일일/주간/월말 출결 통계 및 나이스 마감 데이터에는 안전하게 영구 보존됩니다.`)) {
+      const count = archiveAllApprovedRecords();
+      loadData();
+      alert(`${count}건이 보드에서 정리되었습니다.\n출결 통계(/stats) 및 전체 출결 기록부에는 안전하게 보존되어 집계됩니다.`);
+    }
+  };
+
+  const handlePermanentDeleteRecord = (id: string, name: string) => {
+    if (confirm(`⚠️ [${name}] 학생의 기록을 통계에서도 완전히 영구 삭제하시겠습니까?\n\n이 작업은 출결 통계 및 나이스 마감 데이터에서도 영구히 삭제되며 되돌릴 수 없습니다.`)) {
+      const remaining = records.filter(r => r.id !== id);
+      saveAbsenceRecords(remaining);
+      loadData();
+    }
+  };
+
   const handleDeleteRecord = (id: string, name: string) => {
+    const target = records.find(r => r.id === id);
+    if (!target) return;
+
+    // 최종 승인 완료 건인 경우: 보드에서 삭제(정리)하되 통계에는 영구 보존!
+    if (target.status === 'APPROVED') {
+      if (target.archivedFromBoard) {
+        // 이미 보관된 건을 다시 삭제 시도하는 경우: 영구 삭제 여부 확인
+        handlePermanentDeleteRecord(id, name);
+      } else {
+        if (confirm(`[${name}] 학생의 기록은 '최종 승인 완료'된 출결 건입니다.\n\n칸반 보드에서 삭제(정리)하시겠습니까?\n\n※ [확인]을 누르면 보드에서는 깔끔하게 정리(숨김)되지만, 일일/월말 출결 통계와 나이스 마감 데이터에는 100% 안전하게 보존됩니다.`)) {
+          archiveRecordFromBoard(id);
+          loadData();
+        }
+      }
+      return;
+    }
+
     if (confirm(`[${name}] 학생의 해당 출결 기록을 삭제하시겠습니까?`)) {
       const remaining = records.filter(r => r.id !== id);
       saveAbsenceRecords(remaining);
@@ -409,7 +458,8 @@ export default function TeacherDashboard() {
   const attendedNotifiedRecords = filteredDocRecords.filter(r => r.status === 'ATTENDED_NOTIFIED');
   const pickedUpRecords = filteredDocRecords.filter(r => r.status === 'FORM_PICKED_UP');
   const submittedRecords = filteredDocRecords.filter(r => r.status === 'SUBMITTED');
-  const approvedRecords = filteredDocRecords.filter(r => r.status === 'APPROVED');
+  const approvedRecords = filteredDocRecords.filter(r => r.status === 'APPROVED' && !r.archivedFromBoard);
+  const archivedApprovedRecords = filteredDocRecords.filter(r => r.status === 'APPROVED' && r.archivedFromBoard);
   const unfulfilledRecords = getUnfulfilledAbsenceRecords();
 
   // 2) 전체 출결 마감 기록부 탭 데이터 (모든 출결 건: 결석/지각/조퇴/결과)
@@ -703,7 +753,8 @@ export default function TeacherDashboard() {
                     미완결 {pendingAttendanceRecords.length + attendedNotifiedRecords.length + pickedUpRecords.length + submittedRecords.length}명 누적
                   </span>
                   <span className="badge-pill bg-[#16a34a] text-white text-[11px] font-bold shrink-0 self-start sm:self-auto">
-                    최종 승인 {approvedRecords.length}건
+                    최종 승인 {approvedRecords.length + archivedApprovedRecords.length}건
+                    {archivedApprovedRecords.length > 0 && ` (보관 ${archivedApprovedRecords.length})`}
                   </span>
                 </div>
               </div>
@@ -1024,9 +1075,21 @@ export default function TeacherDashboard() {
                       <CheckCircle2 className="w-3.5 h-3.5 text-[#16a34a]" />
                       <h4 className="font-semibold text-xs text-[#121212]">5. 최종 승인 완료</h4>
                     </div>
-                    <span className="badge-pill badge-mint text-[10px]" title="날짜 경과 포함 누적 승인 건수">
-                      누적 {approvedRecords.length}
-                    </span>
+                    <div className="flex items-center space-x-1">
+                      {approvedRecords.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleArchiveAllApproved}
+                          className="text-[10px] text-[#059669] hover:bg-[#ecfdf5] hover:text-[#047857] px-1.5 py-0.5 rounded border border-[#a7f3d0] font-semibold transition-colors cursor-pointer"
+                          title="승인 완료된 카드를 보드에서 한 번에 정리합니다. (출결 통계에는 안전하게 보존됨)"
+                        >
+                          전체 정리
+                        </button>
+                      )}
+                      <span className="badge-pill badge-mint text-[10px]" title="보드 표시 승인 건수">
+                        누적 {approvedRecords.length}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="mt-2.5 space-y-2 flex-1 overflow-y-auto max-h-[480px]">
@@ -1074,7 +1137,16 @@ export default function TeacherDashboard() {
                               승인일: {new Date(rec.approvedAt).toLocaleDateString('ko-KR')}
                             </div>
                           )}
-                          <div className="pt-1 border-t border-[#d1fae5] flex justify-end">
+                          <div className="pt-1 border-t border-[#d1fae5] flex items-center justify-between">
+                            <button
+                              type="button"
+                              onClick={() => handleArchiveRecord(rec.id, rec.studentName)}
+                              className="text-[10px] text-[#059669] hover:text-[#047857] hover:bg-[#ecfdf5] px-2 py-1 rounded border border-[#a7f3d0] transition-colors cursor-pointer flex items-center gap-1 font-semibold bg-white"
+                              title="보드에서 삭제(정리)합니다. 월말 출결 통계 및 나이스 마감에는 영구 보존됩니다."
+                            >
+                              <Archive className="w-2.5 h-2.5 text-[#059669]" />
+                              <span>보드 정리(통계 보존)</span>
+                            </button>
                             <button
                               type="button"
                               onClick={() => handleRevertStatus(rec.id, 'SUBMITTED', '최종 승인 취소 -> 4단계(승인 대기)로 되돌림')}
@@ -1082,13 +1154,26 @@ export default function TeacherDashboard() {
                               title="최종 승인을 취소하고 4단계(제출함 투입/승인 대기)로 되돌립니다."
                             >
                               <RotateCcw className="w-2.5 h-2.5 text-[#64748b]" />
-                              <span>↩ 4단계(승인 대기)로</span>
+                              <span>↩ 4단계로</span>
                             </button>
                           </div>
                         </div>
                       ))
                     )}
                   </div>
+
+                  {archivedApprovedRecords.length > 0 && (
+                    <div className="pt-2 border-t border-[#e2e8f0]">
+                      <button
+                        type="button"
+                        onClick={() => setIsArchivedApprovedModalOpen(true)}
+                        className="w-full py-1.5 px-2 rounded bg-[#f8fafc] hover:bg-[#f1f5f9] text-[#475569] text-[11px] font-semibold border border-[#cbd5e1] transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <Archive className="w-3 h-3 text-[#059669]" />
+                        <span>보관된 승인 내역 ({archivedApprovedRecords.length}건) 보기</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1245,8 +1330,13 @@ export default function TeacherDashboard() {
                                   </span>
                                 ) : rec.status === 'APPROVED' ? (
                                   <div className="flex items-center gap-1.5">
-                                    <span className="text-[11px] text-[#15803d] bg-[#dcfce7] px-2 py-0.5 rounded font-medium">
-                                      ✓ 서류 승인완료
+                                    <span className="text-[11px] text-[#15803d] bg-[#dcfce7] px-2 py-0.5 rounded font-medium inline-flex items-center gap-1">
+                                      <span>✓ 서류 승인완료</span>
+                                      {rec.archivedFromBoard && (
+                                        <span className="bg-[#bbf7d0] text-[#166534] px-1 py-0.2 text-[9px] rounded font-bold" title="칸반 보드에서는 정리되었으나 출결 통계 및 나이스 마감 데이터에 영구 보존 중">
+                                          통계보존
+                                        </span>
+                                      )}
                                     </span>
                                     <button
                                       type="button"
@@ -1324,10 +1414,10 @@ export default function TeacherDashboard() {
                                     type="button"
                                     onClick={() => handleDeleteRecord(rec.id, rec.studentName)}
                                     className="text-[#94a3b8] hover:text-[#e11d48] hover:bg-[#fef2f2] px-2 py-1 rounded text-xs font-semibold transition-colors cursor-pointer inline-flex items-center gap-1 border border-[#f1f5f9]"
-                                    title="기록 삭제"
+                                    title={rec.status === 'APPROVED' ? (rec.archivedFromBoard ? '통계에서도 완전히 영구 삭제' : '칸반 보드에서 정리 (통계에는 안전하게 보존됨)') : '기록 삭제'}
                                   >
                                     <Trash2 className="w-3 h-3 text-[#e11d48]" />
-                                    <span>삭제</span>
+                                    <span>{rec.status === 'APPROVED' ? (rec.archivedFromBoard ? '영구삭제' : '보드정리') : '삭제'}</span>
                                   </button>
                                 </div>
                               </td>
@@ -1954,6 +2044,113 @@ export default function TeacherDashboard() {
               loadData();
             }}
           />
+
+          {/* Archived Approved Records Modal */}
+          {isArchivedApprovedModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
+              <div className="bg-white rounded-[12px] max-w-2xl w-full p-5 border border-[#e5d5c3] shadow-xl space-y-4 max-h-[85vh] flex flex-col">
+                <div className="flex items-center justify-between pb-3 border-b border-[#f2f0ed]">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-8 h-8 rounded-full bg-[#ecfdf5] text-[#059669] flex items-center justify-center">
+                      <Archive className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-sm text-[#121212]">
+                        보관된 최종 승인 내역 ({archivedApprovedRecords.length}건)
+                      </h3>
+                      <p className="text-[11px] text-[#7e7e7d]">
+                        칸반 보드에서는 정리(숨김)되었으나, 출결 통계 및 나이스 마감 데이터에는 안전하게 보존 중인 기록입니다.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsArchivedApprovedModalOpen(false)}
+                    className="text-[#7e7e7d] hover:text-[#121212] p-1 text-base cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="overflow-y-auto flex-1 space-y-2 pr-1">
+                  {archivedApprovedRecords.length === 0 ? (
+                    <div className="py-12 text-center text-xs text-[#7e7e7d]">
+                      보관된 승인 내역이 없습니다.
+                    </div>
+                  ) : (
+                    archivedApprovedRecords.map((rec) => (
+                      <div
+                        key={rec.id}
+                        className="p-3 bg-[#f8fafc] rounded-[8px] border border-[#e2e8f0] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-xs text-[#1e293b]">
+                              {rec.studentNum}번 {rec.studentName}
+                            </span>
+                            <span className="badge-pill badge-mint text-[10px]">
+                              ✓ 최종승인 (통계보존)
+                            </span>
+                            <span className="text-[10px] text-[#64748b]">
+                              {rec.kind || '결석'} · {rec.category} ({rec.typeName})
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-[#475569]">
+                            기간: <strong className="text-[#1e293b]">{rec.startDate}</strong> {rec.endDate !== rec.startDate ? `~ ${rec.endDate}` : ''} ({rec.daysCount}일) · {rec.reason}
+                          </div>
+                          <div className="text-[10px] text-[#94a3b8] flex items-center gap-2">
+                            <span>승인일: {rec.approvedAt ? new Date(rec.approvedAt).toLocaleDateString('ko-KR') : '-'}</span>
+                            {rec.archivedAt && (
+                              <span>보관일: {new Date(rec.archivedAt).toLocaleDateString('ko-KR')}</span>
+                            )}
+                            <span>확인: {rec.verificationMethod || '대면 확인'}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleUnarchiveRecord(rec.id);
+                            }}
+                            className="px-2.5 py-1 rounded bg-white hover:bg-[#f1f5f9] text-[#2563eb] text-xs font-semibold border border-[#bfdbfe] transition-colors cursor-pointer flex items-center gap-1"
+                            title="칸반 보드 5단계로 다시 표시합니다."
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            <span>보드로 복원</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handlePermanentDeleteRecord(rec.id, rec.studentName);
+                            }}
+                            className="px-2.5 py-1 rounded bg-white hover:bg-[#fee2e2] text-[#e11d48] text-xs font-semibold border border-[#fecaca] transition-colors cursor-pointer flex items-center gap-1"
+                            title="통계에서도 완전히 영구 삭제합니다."
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>영구 삭제</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="pt-2 border-t border-[#f2f0ed] flex items-center justify-between">
+                  <span className="text-[11px] text-[#16a34a] font-medium">
+                    ✓ 여기에 보관된 모든 기록은 [출결 통계] 및 [나이스 엑셀 다운로드]에 100% 정상 집계됩니다.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsArchivedApprovedModalOpen(false)}
+                    className="btn-dark-pill text-xs py-2 px-4 cursor-pointer"
+                  >
+                    닫기
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
         </div>
       </main>

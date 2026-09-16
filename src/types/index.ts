@@ -89,6 +89,9 @@ export interface AbsenceRecord {
   // Field trip specific rules
   fieldTripDeadline?: string; // YYYY-MM-DD (보고서 제출 마감일: 다녀온 후 7일 이내)
   hasDelegationForm?: boolean; // 보호자 외 인솔자 위임장 필요 여부
+  // Board archiving (Col 5) - keeps record in statistics while hiding from active Kanban board
+  archivedFromBoard?: boolean; // 최종 승인 후 칸반 보드에서 정리/숨김 여부 (출결 통계 및 나이스 마감에는 영구 보존)
+  archivedAt?: string; // 보드에서 정리된 일시
 }
 
 export interface SystemNotification {

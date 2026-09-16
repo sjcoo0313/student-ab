@@ -1184,6 +1184,70 @@ export function markApproved(
   return updatedRecord;
 }
 
+// 5-1. 최종 승인 완료 건을 칸반 보드에서 정리/숨김 (통계에는 영구 보존)
+export function archiveRecordFromBoard(recordId: string): boolean {
+  const records = getAbsenceRecords();
+  let found = false;
+  const updated = records.map(r => {
+    if (r.id === recordId) {
+      found = true;
+      return {
+        ...r,
+        archivedFromBoard: true,
+        archivedAt: new Date().toISOString(),
+      };
+    }
+    return r;
+  });
+  if (found) {
+    saveAbsenceRecords(updated);
+  }
+  return found;
+}
+
+// 5-2. 보관된 승인 건을 다시 칸반 보드로 복원
+export function unarchiveRecordToBoard(recordId: string): boolean {
+  const records = getAbsenceRecords();
+  let found = false;
+  const updated = records.map(r => {
+    if (r.id === recordId) {
+      found = true;
+      return {
+        ...r,
+        archivedFromBoard: false,
+        archivedAt: undefined,
+      };
+    }
+    return r;
+  });
+  if (found) {
+    saveAbsenceRecords(updated);
+  }
+  return found;
+}
+
+// 5-3. 모든 최종 승인 완료 건 일괄 정리 (보드에서 숨김, 통계에는 100% 보존)
+export function archiveAllApprovedRecords(): number {
+  const records = getAbsenceRecords();
+  let count = 0;
+  const now = new Date().toISOString();
+  const updated = records.map(r => {
+    if (r.status === 'APPROVED' && !r.archivedFromBoard) {
+      count++;
+      return {
+        ...r,
+        archivedFromBoard: true,
+        archivedAt: now,
+      };
+    }
+    return r;
+  });
+  if (count > 0) {
+    saveAbsenceRecords(updated);
+  }
+  return count;
+}
+
 // 6. 교사가 [다시 알림 보내기 🔔] 클릭
 export function triggerRemind(recordId: string): AbsenceRecord | null {
   const records = getAbsenceRecords();
