@@ -166,10 +166,10 @@ export async function readServerDb(): Promise<ServerDatabase> {
       const raw = fs.readFileSync(LOCAL_DB_FILE, 'utf-8');
       const parsed = JSON.parse(raw);
       const db: ServerDatabase = {
-        students: Array.isArray(parsed.students) ? parsed.students : INITIAL_STUDENTS,
-        records: Array.isArray(parsed.records) ? parsed.records : [],
+        students: Array.isArray(parsed.students) && parsed.students.length > 0 ? parsed.students : INITIAL_STUDENTS,
+        records: Array.isArray(parsed.records) && parsed.records.length > 0 ? parsed.records : INITIAL_RECORDS,
         notifications: Array.isArray(parsed.notifications) ? parsed.notifications : [],
-        teacherPin: parsed.teacherPin || '1234',
+        teacherPin: parsed.teacherPin || '1125',
         lastUpdated: parsed.lastUpdated || 0,
         reminderSettings: parsed.reminderSettings,
       };
@@ -184,9 +184,9 @@ export async function readServerDb(): Promise<ServerDatabase> {
   if (!globalThis._studentServerDbCache) {
     globalThis._studentServerDbCache = {
       students: INITIAL_STUDENTS,
-      records: [],
+      records: INITIAL_RECORDS,
       notifications: [],
-      teacherPin: '1234',
+      teacherPin: '1125',
       lastUpdated: 0,
     };
   }

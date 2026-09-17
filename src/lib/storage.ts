@@ -75,7 +75,120 @@ function getFormattedDate(offsetDays = 0): string {
   return `${year}-${month}-${day}`;
 }
 
-export const INITIAL_RECORDS: AbsenceRecord[] = [];
+export const INITIAL_RECORDS: AbsenceRecord[] = [
+  {
+    id: 'rec-20260917-std-30204',
+    studentId: 'std-30204-3',
+    studentName: '박서은',
+    grade: 3,
+    classNum: 2,
+    studentNum: 4,
+    kind: '결석',
+    category: '출석인정',
+    type: 'FIELD_EXPERIENCE',
+    typeName: '현장체험학습 (보고서를 7일이내 NEIS로 제출)',
+    startDate: '2026-09-17',
+    endDate: '2026-09-18',
+    daysCount: 2,
+    periodText: '전일',
+    reason: '가족동반 현장체험학습',
+    status: 'PENDING_ATTENDANCE',
+    requiresDocument: true,
+    attachments: ['체험학습 보고서(NEIS)', '일자별 배경 사진(날짜당 1장)', '보호자 동반 사진'],
+    remindCount: 0,
+    createdAt: '2026-09-17T08:00:00.000Z',
+  },
+  {
+    id: 'rec-20260917-std-30206',
+    studentId: 'std-30206-5',
+    studentName: '변가담',
+    grade: 3,
+    classNum: 2,
+    studentNum: 6,
+    kind: '조퇴',
+    category: '미인정',
+    type: 'STANDARD_RECORD',
+    typeName: '조퇴(미인정)',
+    startDate: '2026-09-17',
+    endDate: '2026-09-17',
+    daysCount: 1,
+    periodText: '2교시',
+    reason: '학원(2교시-)',
+    status: 'RECORDED',
+    requiresDocument: false,
+    attachments: [],
+    remindCount: 0,
+    createdAt: '2026-09-17T09:00:00.000Z',
+  },
+  {
+    id: 'rec-20260917-std-30211',
+    studentId: 'std-30211-10',
+    studentName: '이현빈',
+    grade: 3,
+    classNum: 2,
+    studentNum: 11,
+    kind: '조퇴',
+    category: '미인정',
+    type: 'STANDARD_RECORD',
+    typeName: '조퇴(미인정)',
+    startDate: '2026-09-17',
+    endDate: '2026-09-17',
+    daysCount: 1,
+    periodText: '5교시 이후',
+    reason: '학원',
+    status: 'RECORDED',
+    requiresDocument: false,
+    attachments: [],
+    remindCount: 0,
+    createdAt: '2026-09-17T13:00:00.000Z',
+  },
+  {
+    id: 'rec-20260916-std-30206',
+    studentId: 'std-30206-5',
+    studentName: '변가담',
+    grade: 3,
+    classNum: 2,
+    studentNum: 6,
+    kind: '결석',
+    category: '질병',
+    type: 'ILLNESS_UNDER_3',
+    typeName: '질병결석 (2일 이내)',
+    startDate: '2026-09-16',
+    endDate: '2026-09-16',
+    daysCount: 1,
+    periodText: '전일',
+    reason: '감기몸살 및 발열',
+    status: 'ATTENDED_NOTIFIED',
+    requiresDocument: true,
+    attachments: ['진료확인서', '학부모 의견서'],
+    remindCount: 1,
+    createdAt: '2026-09-16T08:00:00.000Z',
+    attendedAt: '2026-09-17T08:30:00.000Z',
+  },
+  {
+    id: 'rec-20260916-std-30209',
+    studentId: 'std-30209-8',
+    studentName: '이윤서',
+    grade: 3,
+    classNum: 2,
+    studentNum: 9,
+    kind: '결석',
+    category: '질병',
+    type: 'ILLNESS_UNDER_3',
+    typeName: '질병결석 (2일 이내)',
+    startDate: '2026-09-16',
+    endDate: '2026-09-16',
+    daysCount: 1,
+    periodText: '전일',
+    reason: '감기몸살 및 발열',
+    status: 'ATTENDED_NOTIFIED',
+    requiresDocument: true,
+    attachments: ['진료확인서', '학부모 의견서'],
+    remindCount: 1,
+    createdAt: '2026-09-16T08:00:00.000Z',
+    attendedAt: '2026-09-17T08:30:00.000Z',
+  },
+];
 
 export const SAMPLE_RECORDS: AbsenceRecord[] = [
   {
@@ -354,9 +467,42 @@ export async function fetchServerSync(): Promise<boolean> {
     try { oldNotifs = JSON.parse(oldNotifsStr); } catch {}
     const newNotifs: SystemNotification[] = Array.isArray(data.notifications) ? data.notifications : [];
 
-    // Records sync: Server is the source of truth across all devices (no false re-hydration)
-    if (Array.isArray(data.records)) {
-      localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(data.records));
+    // Records sync with Cold-Start & Wipe Protection:
+    const localRecordsStr = localStorage.getItem(STORAGE_KEYS.RECORDS);
+    let localRecords: AbsenceRecord[] = [];
+    if (localRecordsStr !== null) {
+      try { localRecords = JSON.parse(localRecordsStr || '[]'); } catch {}
+    }
+    const serverRecords: AbsenceRecord[] = Array.isArray(data.records) ? data.records : [];
+    const isExplicitClear = localStorage.getItem('hoengseong_explicit_clear_action') === 'true';
+
+    if (serverRecords.length > 0) {
+      localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(serverRecords));
+      localStorage.setItem('hoengseong_records_vault_v1', JSON.stringify(serverRecords));
+      localStorage.removeItem('hoengseong_explicit_clear_action');
+    } else if (localRecords.length > 0 && serverRecords.length === 0 && !isExplicitClear) {
+      // Server returned empty records (cold boot / redeployment on serverless), but client has real records!
+      // PROTECT local records and heal the server with the real records!
+      postServerSync('SAVE_RECORDS', { records: localRecords });
+    } else if (localRecords.length === 0 && serverRecords.length === 0 && !isExplicitClear) {
+      // Both are empty: check emergency vault or INITIAL_RECORDS
+      const vaultStr = localStorage.getItem('hoengseong_records_vault_v1');
+      let restoredFromVault = false;
+      if (vaultStr) {
+        try {
+          const vaultRecords = JSON.parse(vaultStr);
+          if (Array.isArray(vaultRecords) && vaultRecords.length > 0) {
+            localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(vaultRecords));
+            postServerSync('SAVE_RECORDS', { records: vaultRecords });
+            restoredFromVault = true;
+          }
+        } catch {}
+      }
+      if (!restoredFromVault && INITIAL_RECORDS.length > 0) {
+        localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(INITIAL_RECORDS));
+        localStorage.setItem('hoengseong_records_vault_v1', JSON.stringify(INITIAL_RECORDS));
+        postServerSync('SAVE_RECORDS', { records: INITIAL_RECORDS });
+      }
     }
 
     // Students sync:
@@ -546,21 +692,40 @@ export function saveStudents(students: Student[]) {
 }
 
 export function getAbsenceRecords(): AbsenceRecord[] {
-  if (typeof window === 'undefined') return [];
+  if (typeof window === 'undefined') return INITIAL_RECORDS;
   const stored = localStorage.getItem(STORAGE_KEYS.RECORDS);
+  const isExplicitClear = localStorage.getItem('hoengseong_explicit_clear_action') === 'true';
+
   if (stored === null) {
-    const hasInitialized = localStorage.getItem('hoengseong_app_has_run_v1');
-    if (!hasInitialized) {
+    if (!isExplicitClear) {
       localStorage.setItem('hoengseong_app_has_run_v1', 'true');
       localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(INITIAL_RECORDS));
+      localStorage.setItem('hoengseong_records_vault_v1', JSON.stringify(INITIAL_RECORDS));
       return INITIAL_RECORDS;
     }
     return [];
   }
   try {
     const list: AbsenceRecord[] = JSON.parse(stored);
+    if ((!Array.isArray(list) || list.length === 0) && !isExplicitClear) {
+      const vaultStr = localStorage.getItem('hoengseong_records_vault_v1');
+      if (vaultStr) {
+        try {
+          const vault = JSON.parse(vaultStr);
+          if (Array.isArray(vault) && vault.length > 0) {
+            localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(vault));
+            return vault;
+          }
+        } catch {}
+      }
+      if (INITIAL_RECORDS.length > 0) {
+        localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(INITIAL_RECORDS));
+        localStorage.setItem('hoengseong_records_vault_v1', JSON.stringify(INITIAL_RECORDS));
+        return INITIAL_RECORDS;
+      }
+    }
     let changed = false;
-    const migrated = list.map(r => {
+    const migrated = (list || []).map(r => {
       let updated = { ...r };
       if (!updated.kind) {
         changed = true;
@@ -592,13 +757,17 @@ export function getAbsenceRecords(): AbsenceRecord[] {
     }
     return migrated;
   } catch {
-    return [];
+    return INITIAL_RECORDS;
   }
 }
 
 export function saveAbsenceRecords(records: AbsenceRecord[]) {
   if (typeof window === 'undefined') return;
   localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(records));
+  if (records.length > 0) {
+    localStorage.setItem('hoengseong_records_vault_v1', JSON.stringify(records));
+    localStorage.removeItem('hoengseong_explicit_clear_action');
+  }
   broadcastUpdate('RECORDS_UPDATED', records);
   postServerSync('SAVE_RECORDS', { records });
 }
@@ -1531,6 +1700,8 @@ export function resetStudentLoginStatus(studentId: string): void {
 // 8. 데이터 초기화 및 완전 삭제
 export async function clearAllAbsenceData(): Promise<void> {
   if (typeof window === 'undefined') return;
+  localStorage.setItem('hoengseong_explicit_clear_action', 'true');
+  localStorage.removeItem('hoengseong_records_vault_v1');
   localStorage.setItem('hoengseong_app_has_run_v1', 'true');
   localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify([]));
   localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify([]));
@@ -1543,6 +1714,8 @@ export async function clearAllAbsenceData(): Promise<void> {
 
 export async function wipeEntireDatabase(): Promise<void> {
   if (typeof window === 'undefined') return;
+  localStorage.setItem('hoengseong_explicit_clear_action', 'true');
+  localStorage.removeItem('hoengseong_records_vault_v1');
   localStorage.setItem('hoengseong_app_has_run_v1', 'true');
   localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify([]));
   localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify([]));
@@ -1560,9 +1733,11 @@ export async function wipeEntireDatabase(): Promise<void> {
 
 export async function loadSampleMockData(): Promise<void> {
   if (typeof window === 'undefined') return;
+  localStorage.removeItem('hoengseong_explicit_clear_action');
   localStorage.setItem('hoengseong_app_has_run_v1', 'true');
   localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(SAMPLE_STUDENTS));
   localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(SAMPLE_RECORDS));
+  localStorage.setItem('hoengseong_records_vault_v1', JSON.stringify(SAMPLE_RECORDS));
   localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify([]));
   localStorage.setItem(STORAGE_KEYS.CURRENT_STUDENT, 'std-30203');
   localStorage.removeItem('hoengseong_daily_reminders_log_v1');
