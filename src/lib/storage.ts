@@ -222,8 +222,10 @@ export const INITIAL_RECORDS: AbsenceRecord[] = [
     attendedAt: '2026-09-17T08:30:00.000Z',
     pickedUpAt: '2026-09-17T09:00:00.000Z',
     submittedAt: '2026-09-17T14:30:00.000Z',
-    approvedAt: '2026-09-18T09:00:00.000Z',
-    updatedAt: '2026-09-18T09:00:00.000Z',
+    approvedAt: '2026-09-17T15:00:00.000Z',
+    updatedAt: '2026-09-17T15:00:00.000Z',
+    archivedFromBoard: true,
+    archivedAt: '2026-09-17T15:00:00.000Z',
     verificationMethod: '학생 사전 대면 보고',
   },
   {
@@ -250,8 +252,10 @@ export const INITIAL_RECORDS: AbsenceRecord[] = [
     attendedAt: '2026-09-17T08:30:00.000Z',
     pickedUpAt: '2026-09-17T09:00:00.000Z',
     submittedAt: '2026-09-17T14:30:00.000Z',
-    approvedAt: '2026-09-18T09:00:00.000Z',
-    updatedAt: '2026-09-18T09:00:00.000Z',
+    approvedAt: '2026-09-17T15:00:00.000Z',
+    updatedAt: '2026-09-17T15:00:00.000Z',
+    archivedFromBoard: true,
+    archivedAt: '2026-09-17T15:00:00.000Z',
     verificationMethod: '학생 사전 대면 보고',
   },
 ];
@@ -602,6 +606,29 @@ export async function fetchServerSync(): Promise<boolean> {
               // 타임스탬프가 같더라도 더 상위 단계(3/4/5단계)로 진행된 상태를 절대 강등시키지 않음
               recordMap.set(r.id, r);
               hasLocalExclusiveOrNewer = true;
+            } else if (r.status === 'APPROVED' && existing.status === 'APPROVED') {
+              // 💡 보드 정리(archivedFromBoard) 상태 영구 보존:
+              // 교사가 보드 정리를 완료한 승인 건은 서버의 미정리(unarchived) 스냅샷에 의해 다시 5단계 보드로 되살아나지 않음
+              if (r.archivedFromBoard && !existing.archivedFromBoard) {
+                recordMap.set(r.id, {
+                  ...existing,
+                  ...r,
+                  archivedFromBoard: true,
+                  archivedAt: r.archivedAt || new Date().toISOString(),
+                  updatedAt: r.updatedAt || new Date().toISOString(),
+                });
+                hasLocalExclusiveOrNewer = true;
+              }
+            } else if (r.archivedFromBoard && !existing.archivedFromBoard && existing.status === 'APPROVED') {
+              // 타임스탬프 차이가 있더라도 로컬에서 이미 보드 정리된 승인 건은 영구 정리 상태 유지
+              recordMap.set(r.id, {
+                ...existing,
+                ...r,
+                archivedFromBoard: true,
+                archivedAt: r.archivedAt || new Date().toISOString(),
+                updatedAt: r.updatedAt || new Date().toISOString(),
+              });
+              hasLocalExclusiveOrNewer = true;
             }
           }
         }
@@ -627,6 +654,9 @@ export async function fetchServerSync(): Promise<boolean> {
                   if (vTime > sTime || (vTime === sTime && vStage > sStage)) {
                     recordMap.set(r.id, r);
                     hasLocalExclusiveOrNewer = true;
+                  } else if (r.status === 'APPROVED' && r.archivedFromBoard && !existing.archivedFromBoard) {
+                    recordMap.set(r.id, { ...existing, ...r, archivedFromBoard: true });
+                    hasLocalExclusiveOrNewer = true;
                   }
                 }
               }
@@ -650,8 +680,17 @@ export async function fetchServerSync(): Promise<boolean> {
                 const sTime = getRecordLatestTimestamp(existing);
                 const snapStage = STAGE_PRIORITY[r.status] || 0;
                 const sStage = STAGE_PRIORITY[existing.status] || 0;
+
+                // 💡 과거 스냅샷에 의해 이미 보드 정리된 카드가 다시 보드로 되살아나는 것 완벽 방지
+                if (existing.archivedFromBoard && !r.archivedFromBoard && existing.status === 'APPROVED') {
+                  continue;
+                }
+
                 if (snapTime > sTime || (snapTime === sTime && snapStage > sStage)) {
                   recordMap.set(r.id, r);
+                  hasLocalExclusiveOrNewer = true;
+                } else if (r.status === 'APPROVED' && r.archivedFromBoard && !existing.archivedFromBoard) {
+                  recordMap.set(r.id, { ...existing, ...r, archivedFromBoard: true });
                   hasLocalExclusiveOrNewer = true;
                 }
               }
@@ -660,8 +699,8 @@ export async function fetchServerSync(): Promise<boolean> {
         }
       }
 
-      // 5. If completely empty, seed from INITIAL_RECORDS
-      if (recordMap.size === 0 && INITIAL_RECORDS.length > 0) {
+      // 5. If completely empty, seed from INITIAL_RECORDS (only if no records were deleted)
+      if (recordMap.size === 0 && INITIAL_RECORDS.length > 0 && deletedIds.size === 0) {
         for (const r of INITIAL_RECORDS) {
           if (r && r.id && !deletedIds.has(r.id)) {
             recordMap.set(r.id, r);
@@ -1380,6 +1419,11 @@ export function updateAbsenceRecord(recordId: string, updates: {
       };
 
       // 만약 이전 단계로 되돌린 경우 타임스탬프 정리
+      if (newStatus !== 'APPROVED') {
+        updatedRecord.archivedFromBoard = undefined;
+        updatedRecord.archivedAt = undefined;
+      }
+
       if (newStatus === 'PENDING_ATTENDANCE') {
         updatedRecord.attendedAt = undefined;
         updatedRecord.pickedUpAt = undefined;
@@ -1425,7 +1469,12 @@ export function updateAbsenceRecordStatus(
         updatedAt: nowIso,
       };
 
-      // 되돌리는 단계에 맞추어 타임스탬프 정리 및 보정
+      // 되돌리는 단계에 맞추어 타임스탬프 및 보관 상태 정리
+      if (targetStatus !== 'APPROVED') {
+        updatedRecord.archivedFromBoard = undefined;
+        updatedRecord.archivedAt = undefined;
+      }
+
       if (targetStatus === 'PENDING_ATTENDANCE') {
         updatedRecord.attendedAt = undefined;
         updatedRecord.pickedUpAt = undefined;

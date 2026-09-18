@@ -293,8 +293,10 @@
       "attendedAt": "2026-09-17T08:30:00.000Z",
       "pickedUpAt": "2026-09-17T09:00:00.000Z",
       "submittedAt": "2026-09-17T14:30:00.000Z",
-      "approvedAt": "2026-09-18T09:00:00.000Z",
-      "updatedAt": "2026-09-18T09:00:00.000Z",
+      "approvedAt": "2026-09-17T15:00:00.000Z",
+      "updatedAt": "2026-09-17T15:00:00.000Z",
+      "archivedFromBoard": true,
+      "archivedAt": "2026-09-17T15:00:00.000Z",
       "verificationMethod": "학생 사전 대면 보고"
     },
     {
@@ -323,8 +325,10 @@
       "attendedAt": "2026-09-17T08:30:00.000Z",
       "pickedUpAt": "2026-09-17T09:00:00.000Z",
       "submittedAt": "2026-09-17T14:30:00.000Z",
-      "approvedAt": "2026-09-18T09:00:00.000Z",
-      "updatedAt": "2026-09-18T09:00:00.000Z",
+      "approvedAt": "2026-09-17T15:00:00.000Z",
+      "updatedAt": "2026-09-17T15:00:00.000Z",
+      "archivedFromBoard": true,
+      "archivedAt": "2026-09-17T15:00:00.000Z",
       "verificationMethod": "학생 사전 대면 보고"
     }
   ],

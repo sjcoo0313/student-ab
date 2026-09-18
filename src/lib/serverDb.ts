@@ -172,8 +172,8 @@ export async function readServerDb(): Promise<ServerDatabase> {
       const raw = fs.readFileSync(LOCAL_DB_FILE, 'utf-8');
       const parsed = JSON.parse(raw);
       const db: ServerDatabase = {
-        students: Array.isArray(parsed.students) && parsed.students.length > 0 ? parsed.students : INITIAL_STUDENTS,
-        records: Array.isArray(parsed.records) && parsed.records.length > 0 ? parsed.records : INITIAL_RECORDS,
+        students: Array.isArray(parsed.students) ? parsed.students : INITIAL_STUDENTS,
+        records: Array.isArray(parsed.records) ? parsed.records : INITIAL_RECORDS,
         notifications: Array.isArray(parsed.notifications) ? parsed.notifications : [],
         teacherPin: parsed.teacherPin || '1125',
         lastUpdated: parsed.lastUpdated || 0,
