@@ -283,14 +283,19 @@
       "daysCount": 1,
       "periodText": "전일",
       "reason": "감기몸살 및 발열",
-      "status": "ATTENDED_NOTIFIED",
+      "status": "APPROVED",
       "requiresDocument": true,
       "attachments": [
         "진료확인서",
         "학부모 의견서"
       ],
       "createdAt": "2026-09-16T08:00:00.000Z",
-      "attendedAt": "2026-09-17T08:30:00.000Z"
+      "attendedAt": "2026-09-17T08:30:00.000Z",
+      "pickedUpAt": "2026-09-17T09:00:00.000Z",
+      "submittedAt": "2026-09-17T14:30:00.000Z",
+      "approvedAt": "2026-09-18T09:00:00.000Z",
+      "updatedAt": "2026-09-18T09:00:00.000Z",
+      "verificationMethod": "학생 사전 대면 보고"
     },
     {
       "id": "rec-20260916-std-30209",
@@ -308,19 +313,24 @@
       "daysCount": 1,
       "periodText": "전일",
       "reason": "감기몸살 및 발열",
-      "status": "ATTENDED_NOTIFIED",
+      "status": "APPROVED",
       "requiresDocument": true,
       "attachments": [
         "진료확인서",
         "학부모 의견서"
       ],
       "createdAt": "2026-09-16T08:00:00.000Z",
-      "attendedAt": "2026-09-17T08:30:00.000Z"
+      "attendedAt": "2026-09-17T08:30:00.000Z",
+      "pickedUpAt": "2026-09-17T09:00:00.000Z",
+      "submittedAt": "2026-09-17T14:30:00.000Z",
+      "approvedAt": "2026-09-18T09:00:00.000Z",
+      "updatedAt": "2026-09-18T09:00:00.000Z",
+      "verificationMethod": "학생 사전 대면 보고"
     }
   ],
   "notifications": [],
   "teacherPin": "1125",
-  "lastUpdated": 1789558399167,
+  "lastUpdated": 1789698999000,
   "reminderSettings": {
     "enabled": true,
     "slots": [

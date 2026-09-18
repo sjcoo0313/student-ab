@@ -213,12 +213,17 @@ export const INITIAL_RECORDS: AbsenceRecord[] = [
     daysCount: 1,
     periodText: '전일',
     reason: '감기몸살 및 발열',
-    status: 'ATTENDED_NOTIFIED',
+    status: 'APPROVED',
     requiresDocument: true,
     attachments: ['진료확인서', '학부모 의견서'],
     remindCount: 1,
     createdAt: '2026-09-16T08:00:00.000Z',
     attendedAt: '2026-09-17T08:30:00.000Z',
+    pickedUpAt: '2026-09-17T09:00:00.000Z',
+    submittedAt: '2026-09-17T14:30:00.000Z',
+    approvedAt: '2026-09-18T09:00:00.000Z',
+    updatedAt: '2026-09-18T09:00:00.000Z',
+    verificationMethod: '학생 사전 대면 보고',
   },
   {
     id: 'rec-20260916-std-30209',
@@ -236,12 +241,17 @@ export const INITIAL_RECORDS: AbsenceRecord[] = [
     daysCount: 1,
     periodText: '전일',
     reason: '감기몸살 및 발열',
-    status: 'ATTENDED_NOTIFIED',
+    status: 'APPROVED',
     requiresDocument: true,
     attachments: ['진료확인서', '학부모 의견서'],
     remindCount: 1,
     createdAt: '2026-09-16T08:00:00.000Z',
     attendedAt: '2026-09-17T08:30:00.000Z',
+    pickedUpAt: '2026-09-17T09:00:00.000Z',
+    submittedAt: '2026-09-17T14:30:00.000Z',
+    approvedAt: '2026-09-18T09:00:00.000Z',
+    updatedAt: '2026-09-18T09:00:00.000Z',
+    verificationMethod: '학생 사전 대면 보고',
   },
 ];
 
@@ -493,6 +503,28 @@ let activeSyncInterval: NodeJS.Timeout | null = null;
 let activeListenerCount = 0;
 let currentServerStorageInfo: { type: string; isCloud: boolean; name: string } | null = null;
 
+export const STAGE_PRIORITY: Record<AbsenceStatus, number> = {
+  PENDING_ATTENDANCE: 1,
+  ATTENDED_NOTIFIED: 2,
+  FORM_PICKED_UP: 3,
+  SUBMITTED: 4,
+  APPROVED: 5,
+  RECORDED: 6,
+};
+
+export function getRecordLatestTimestamp(r: Partial<AbsenceRecord>): number {
+  if (!r) return 0;
+  return Math.max(
+    r.updatedAt ? new Date(r.updatedAt).getTime() : 0,
+    r.approvedAt ? new Date(r.approvedAt).getTime() : 0,
+    r.submittedAt ? new Date(r.submittedAt).getTime() : 0,
+    r.pickedUpAt ? new Date(r.pickedUpAt).getTime() : 0,
+    r.attendedAt ? new Date(r.attendedAt).getTime() : 0,
+    r.archivedAt ? new Date(r.archivedAt).getTime() : 0,
+    r.createdAt ? new Date(r.createdAt).getTime() : 0
+  );
+}
+
 export function getServerStorageInfo() {
   return currentServerStorageInfo;
 }
@@ -557,9 +589,16 @@ export async function fetchServerSync(): Promise<boolean> {
             recordMap.set(r.id, r);
             hasLocalExclusiveOrNewer = true;
           } else {
-            const localTime = new Date(r.updatedAt || r.createdAt || 0).getTime();
-            const serverTime = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
+            const localTime = getRecordLatestTimestamp(r);
+            const serverTime = getRecordLatestTimestamp(existing);
+            const localStage = STAGE_PRIORITY[r.status] || 0;
+            const serverStage = STAGE_PRIORITY[existing.status] || 0;
+
             if (localTime > serverTime) {
+              recordMap.set(r.id, r);
+              hasLocalExclusiveOrNewer = true;
+            } else if (localTime === serverTime && localStage > serverStage) {
+              // 타임스탬프가 같더라도 더 상위 단계(3/4/5단계)로 진행된 상태를 절대 강등시키지 않음
               recordMap.set(r.id, r);
               hasLocalExclusiveOrNewer = true;
             }
@@ -574,9 +613,21 @@ export async function fetchServerSync(): Promise<boolean> {
           const vaultRecords: AbsenceRecord[] = JSON.parse(vaultStr);
           if (Array.isArray(vaultRecords)) {
             for (const r of vaultRecords) {
-              if (r && r.id && !deletedIds.has(r.id) && !recordMap.has(r.id)) {
-                recordMap.set(r.id, r);
-                hasLocalExclusiveOrNewer = true;
+              if (r && r.id && !deletedIds.has(r.id)) {
+                const existing = recordMap.get(r.id);
+                if (!existing) {
+                  recordMap.set(r.id, r);
+                  hasLocalExclusiveOrNewer = true;
+                } else {
+                  const vTime = getRecordLatestTimestamp(r);
+                  const sTime = getRecordLatestTimestamp(existing);
+                  const vStage = STAGE_PRIORITY[r.status] || 0;
+                  const sStage = STAGE_PRIORITY[existing.status] || 0;
+                  if (vTime > sTime || (vTime === sTime && vStage > sStage)) {
+                    recordMap.set(r.id, r);
+                    hasLocalExclusiveOrNewer = true;
+                  }
+                }
               }
             }
           }
@@ -588,9 +639,21 @@ export async function fetchServerSync(): Promise<boolean> {
       for (const snapList of Object.values(snapshots)) {
         if (Array.isArray(snapList)) {
           for (const r of snapList) {
-            if (r && r.id && !deletedIds.has(r.id) && !recordMap.has(r.id)) {
-              recordMap.set(r.id, r);
-              hasLocalExclusiveOrNewer = true;
+            if (r && r.id && !deletedIds.has(r.id)) {
+              const existing = recordMap.get(r.id);
+              if (!existing) {
+                recordMap.set(r.id, r);
+                hasLocalExclusiveOrNewer = true;
+              } else {
+                const snapTime = getRecordLatestTimestamp(r);
+                const sTime = getRecordLatestTimestamp(existing);
+                const snapStage = STAGE_PRIORITY[r.status] || 0;
+                const sStage = STAGE_PRIORITY[existing.status] || 0;
+                if (snapTime > sTime || (snapTime === sTime && snapStage > sStage)) {
+                  recordMap.set(r.id, r);
+                  hasLocalExclusiveOrNewer = true;
+                }
+              }
             }
           }
         }
@@ -1184,6 +1247,7 @@ export function createAbsenceRecord(data: {
       ? ['진료확인서', '학부모 의견서']
       : [],
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     remindCount: 0,
     memo: data.memo,
     fieldTripDeadline: data.type === 'FIELD_EXPERIENCE' ? (() => {
@@ -1216,6 +1280,7 @@ export function updateAbsenceRecord(recordId: string, updates: {
 }): AbsenceRecord | null {
   const records = getAbsenceRecords();
   let updatedRecord: AbsenceRecord | null = null;
+  const nowIso = new Date().toISOString();
 
   const updated = records.map(r => {
     if (r.id === recordId) {
@@ -1297,6 +1362,7 @@ export function updateAbsenceRecord(recordId: string, updates: {
         status: newStatus,
         attachments: finalAttachments,
         memo: updates.memo !== undefined ? updates.memo : r.memo,
+        updatedAt: nowIso,
       };
 
       // 만약 이전 단계로 되돌린 경우 타임스탬프 정리
@@ -1335,12 +1401,14 @@ export function updateAbsenceRecordStatus(
 ): AbsenceRecord | null {
   const records = getAbsenceRecords();
   let updatedRecord: AbsenceRecord | null = null;
+  const nowIso = new Date().toISOString();
 
   const updated = records.map(r => {
     if (r.id === recordId) {
       updatedRecord = {
         ...r,
         status: targetStatus,
+        updatedAt: nowIso,
       };
 
       // 되돌리는 단계에 맞추어 타임스탬프 정리 및 보정
@@ -1398,15 +1466,17 @@ export function updateAbsenceRecordStatus(
 export function markAttended(recordId: string): AbsenceRecord | null {
   const records = getAbsenceRecords();
   let updatedRecord: AbsenceRecord | null = null;
+  const nowIso = new Date().toISOString();
 
   const updated = records.map(r => {
     if (r.id === recordId) {
       updatedRecord = {
         ...r,
         status: 'ATTENDED_NOTIFIED',
-        attendedAt: new Date().toISOString(),
+        attendedAt: nowIso,
         remindCount: r.remindCount + 1,
-        lastRemindedAt: new Date().toISOString(),
+        lastRemindedAt: nowIso,
+        updatedAt: nowIso,
       };
       return updatedRecord;
     }
@@ -1437,13 +1507,15 @@ export function markAttended(recordId: string): AbsenceRecord | null {
 export function markFormPickedUp(recordId: string): AbsenceRecord | null {
   const records = getAbsenceRecords();
   let updatedRecord: AbsenceRecord | null = null;
+  const nowIso = new Date().toISOString();
 
   const updated = records.map(r => {
     if (r.id === recordId) {
       updatedRecord = {
         ...r,
         status: 'FORM_PICKED_UP',
-        pickedUpAt: new Date().toISOString(),
+        pickedUpAt: nowIso,
+        updatedAt: nowIso,
       };
       return updatedRecord;
     }
@@ -1465,6 +1537,7 @@ export function markSubmitted(
 ): AbsenceRecord | null {
   const records = getAbsenceRecords();
   let updatedRecord: AbsenceRecord | null = null;
+  const nowIso = new Date().toISOString();
 
   const updated = records.map(r => {
     if (r.id === recordId) {
@@ -1473,8 +1546,9 @@ export function markSubmitted(
         status: 'SUBMITTED',
         attachments,
         otherAttachmentText: otherText,
-        submittedAt: new Date().toISOString(),
+        submittedAt: nowIso,
         studentMemo: studentMemo?.trim() ? studentMemo.trim() : r.studentMemo,
+        updatedAt: nowIso,
       };
       return updatedRecord;
     }
@@ -1513,13 +1587,15 @@ export function markApproved(
 ): AbsenceRecord | null {
   const records = getAbsenceRecords();
   let updatedRecord: AbsenceRecord | null = null;
+  const nowIso = new Date().toISOString();
 
   const updated = records.map(r => {
     if (r.id === recordId) {
       updatedRecord = {
         ...r,
         status: 'APPROVED',
-        approvedAt: new Date().toISOString(),
+        approvedAt: nowIso,
+        updatedAt: nowIso,
         verificationMethod: method,
         verificationNote: note,
       };
@@ -1538,13 +1614,15 @@ export function markApproved(
 export function archiveRecordFromBoard(recordId: string): boolean {
   const records = getAbsenceRecords();
   let found = false;
+  const nowIso = new Date().toISOString();
   const updated = records.map(r => {
     if (r.id === recordId) {
       found = true;
       return {
         ...r,
         archivedFromBoard: true,
-        archivedAt: new Date().toISOString(),
+        archivedAt: nowIso,
+        updatedAt: nowIso,
       };
     }
     return r;
@@ -1559,6 +1637,7 @@ export function archiveRecordFromBoard(recordId: string): boolean {
 export function unarchiveRecordToBoard(recordId: string): boolean {
   const records = getAbsenceRecords();
   let found = false;
+  const nowIso = new Date().toISOString();
   const updated = records.map(r => {
     if (r.id === recordId) {
       found = true;
@@ -1566,6 +1645,7 @@ export function unarchiveRecordToBoard(recordId: string): boolean {
         ...r,
         archivedFromBoard: false,
         archivedAt: undefined,
+        updatedAt: nowIso,
       };
     }
     return r;
@@ -1588,6 +1668,7 @@ export function archiveAllApprovedRecords(): number {
         ...r,
         archivedFromBoard: true,
         archivedAt: now,
+        updatedAt: now,
       };
     }
     return r;
@@ -1602,13 +1683,15 @@ export function archiveAllApprovedRecords(): number {
 export function triggerRemind(recordId: string): AbsenceRecord | null {
   const records = getAbsenceRecords();
   let updatedRecord: AbsenceRecord | null = null;
+  const nowIso = new Date().toISOString();
 
   const updated = records.map(r => {
     if (r.id === recordId) {
       updatedRecord = {
         ...r,
         remindCount: r.remindCount + 1,
-        lastRemindedAt: new Date().toISOString(),
+        lastRemindedAt: nowIso,
+        updatedAt: nowIso,
       };
       return updatedRecord;
     }

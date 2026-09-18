@@ -82,6 +82,7 @@ export async function POST(req: NextRequest) {
               ...r,
               status: 'SUBMITTED' as const,
               submittedAt: nowIso,
+              updatedAt: nowIso,
               attachments: Array.isArray(attachments) ? attachments : r.attachments,
             };
           }
@@ -119,6 +120,7 @@ export async function POST(req: NextRequest) {
               ...r,
               status: 'FORM_PICKED_UP' as const,
               pickedUpAt: nowIso,
+              updatedAt: nowIso,
             };
           }
           return r;
@@ -140,6 +142,7 @@ export async function POST(req: NextRequest) {
               attendedAt: nowIso,
               remindCount: (r.remindCount || 0) + 1,
               lastRemindedAt: nowIso,
+              updatedAt: nowIso,
             };
           }
           return r;
@@ -175,6 +178,7 @@ export async function POST(req: NextRequest) {
               ...r,
               status: 'APPROVED' as const,
               approvedAt: nowIso,
+              updatedAt: nowIso,
               verificationMethod,
               verificationNote,
             };
