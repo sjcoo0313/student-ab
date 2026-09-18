@@ -125,6 +125,11 @@ export function getStorageInfo(): StorageInfo {
 }
 
 export async function readServerDb(): Promise<ServerDatabase> {
+  // 0. If in-memory cache has been updated during this serverless lifetime, retain it!
+  if (globalThis._studentServerDbCache && globalThis._studentServerDbCache.lastUpdated > 0) {
+    return globalThis._studentServerDbCache;
+  }
+
   // 1. Try Upstash Redis / Vercel KV (Highest priority cloud persistence)
   const upstashData = await readFromUpstash();
   if (upstashData) {

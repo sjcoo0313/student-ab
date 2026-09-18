@@ -30,6 +30,7 @@ import {
   getStudents, 
   getAbsenceRecords, 
   saveAbsenceRecords,
+  deleteAbsenceRecord,
   createAbsenceRecord, 
   updateAbsenceRecord,
   updateAbsenceRecordStatus,
@@ -364,8 +365,7 @@ export default function TeacherDashboard() {
 
   const handlePermanentDeleteRecord = (id: string, name: string) => {
     if (confirm(`⚠️ [${name}] 학생의 기록을 통계에서도 완전히 영구 삭제하시겠습니까?\n\n이 작업은 출결 통계 및 나이스 마감 데이터에서도 영구히 삭제되며 되돌릴 수 없습니다.`)) {
-      const remaining = records.filter(r => r.id !== id);
-      saveAbsenceRecords(remaining);
+      deleteAbsenceRecord(id);
       loadData();
     }
   };
@@ -389,8 +389,7 @@ export default function TeacherDashboard() {
     }
 
     if (confirm(`[${name}] 학생의 해당 출결 기록을 삭제하시겠습니까?`)) {
-      const remaining = records.filter(r => r.id !== id);
-      saveAbsenceRecords(remaining);
+      deleteAbsenceRecord(id);
       loadData();
     }
   };

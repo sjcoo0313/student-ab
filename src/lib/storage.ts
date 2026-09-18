@@ -3,11 +3,66 @@ import { Student, AbsenceRecord, AbsenceStatus, SystemNotification, AttachmentPr
 const STORAGE_KEYS = {
   STUDENTS: 'hoengseong_students_v1',
   RECORDS: 'hoengseong_absence_records_v1',
+  DELETED_RECORD_IDS: 'hoengseong_deleted_record_ids_v1',
+  DAILY_SNAPSHOTS: 'hoengseong_daily_snapshots_v1',
   NOTIFICATIONS: 'hoengseong_notifications_v1',
   CURRENT_STUDENT: 'hoengseong_current_student_id',
   TEACHER_PIN: 'hoengseong_teacher_pin_v1',
   REMINDER_SETTINGS: 'hoengseong_reminder_settings_v1',
 };
+
+export function getDeletedRecordIds(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.DELETED_RECORD_IDS);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function addDeletedRecordId(id: string): void {
+  if (typeof window === 'undefined' || !id) return;
+  const set = getDeletedRecordIds();
+  set.add(id);
+  localStorage.setItem(STORAGE_KEYS.DELETED_RECORD_IDS, JSON.stringify(Array.from(set)));
+}
+
+export function clearDeletedRecordIds(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(STORAGE_KEYS.DELETED_RECORD_IDS);
+}
+
+export function saveDailySnapshot(records: AbsenceRecord[]): void {
+  if (typeof window === 'undefined' || !Array.isArray(records) || records.length === 0) return;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.DAILY_SNAPSHOTS);
+    const snapshots: Record<string, AbsenceRecord[]> = raw ? JSON.parse(raw) : {};
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const today = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    snapshots[today] = records;
+    const keys = Object.keys(snapshots);
+    if (keys.length > 30) {
+      keys.sort().slice(0, keys.length - 30).forEach(k => delete snapshots[k]);
+    }
+    localStorage.setItem(STORAGE_KEYS.DAILY_SNAPSHOTS, JSON.stringify(snapshots));
+  } catch (err) {
+    console.warn('saveDailySnapshot error:', err);
+  }
+}
+
+export function getDailySnapshots(): Record<string, AbsenceRecord[]> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.DAILY_SNAPSHOTS);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
 
 export const SAMPLE_STUDENTS: Student[] = [
   { id: 'std-30201', grade: 3, classNum: 2, studentNum: 1, name: '강서윤', phone: '010-1111-0001', parentPhone: '010-2222-0001', pin: '1234' },
@@ -467,7 +522,7 @@ export async function fetchServerSync(): Promise<boolean> {
     try { oldNotifs = JSON.parse(oldNotifsStr); } catch {}
     const newNotifs: SystemNotification[] = Array.isArray(data.notifications) ? data.notifications : [];
 
-    // Records sync with Cold-Start & Wipe Protection:
+    // Records Smart Bidirectional Merge (Cold-Start & Overwrite Shield):
     const localRecordsStr = localStorage.getItem(STORAGE_KEYS.RECORDS);
     let localRecords: AbsenceRecord[] = [];
     if (localRecordsStr !== null) {
@@ -476,32 +531,91 @@ export async function fetchServerSync(): Promise<boolean> {
     const serverRecords: AbsenceRecord[] = Array.isArray(data.records) ? data.records : [];
     const isExplicitClear = localStorage.getItem('hoengseong_explicit_clear_action') === 'true';
 
-    if (serverRecords.length > 0) {
-      localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(serverRecords));
-      localStorage.setItem('hoengseong_records_vault_v1', JSON.stringify(serverRecords));
-      localStorage.removeItem('hoengseong_explicit_clear_action');
-    } else if (localRecords.length > 0 && serverRecords.length === 0 && !isExplicitClear) {
-      // Server returned empty records (cold boot / redeployment on serverless), but client has real records!
-      // PROTECT local records and heal the server with the real records!
-      postServerSync('SAVE_RECORDS', { records: localRecords });
-    } else if (localRecords.length === 0 && serverRecords.length === 0 && !isExplicitClear) {
-      // Both are empty: check emergency vault or INITIAL_RECORDS
+    if (!isExplicitClear) {
+      const deletedIds = getDeletedRecordIds();
+      const recordMap = new Map<string, AbsenceRecord>();
+
+      // 1. Put server records into map (excluding intentionally deleted ones)
+      for (const r of serverRecords) {
+        if (r && r.id && !deletedIds.has(r.id)) {
+          recordMap.set(r.id, r);
+        }
+      }
+
+      // 2. Put local records into map (NEVER delete local records created by user!)
+      let hasLocalExclusiveOrNewer = false;
+      for (const r of localRecords) {
+        if (r && r.id && !deletedIds.has(r.id)) {
+          const existing = recordMap.get(r.id);
+          if (!existing) {
+            recordMap.set(r.id, r);
+            hasLocalExclusiveOrNewer = true;
+          } else {
+            const localTime = new Date(r.updatedAt || r.createdAt || 0).getTime();
+            const serverTime = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
+            if (localTime > serverTime) {
+              recordMap.set(r.id, r);
+              hasLocalExclusiveOrNewer = true;
+            }
+          }
+        }
+      }
+
+      // 3. Inspect emergency vault
       const vaultStr = localStorage.getItem('hoengseong_records_vault_v1');
-      let restoredFromVault = false;
       if (vaultStr) {
         try {
-          const vaultRecords = JSON.parse(vaultStr);
-          if (Array.isArray(vaultRecords) && vaultRecords.length > 0) {
-            localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(vaultRecords));
-            postServerSync('SAVE_RECORDS', { records: vaultRecords });
-            restoredFromVault = true;
+          const vaultRecords: AbsenceRecord[] = JSON.parse(vaultStr);
+          if (Array.isArray(vaultRecords)) {
+            for (const r of vaultRecords) {
+              if (r && r.id && !deletedIds.has(r.id) && !recordMap.has(r.id)) {
+                recordMap.set(r.id, r);
+                hasLocalExclusiveOrNewer = true;
+              }
+            }
           }
         } catch {}
       }
-      if (!restoredFromVault && INITIAL_RECORDS.length > 0) {
-        localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(INITIAL_RECORDS));
-        localStorage.setItem('hoengseong_records_vault_v1', JSON.stringify(INITIAL_RECORDS));
-        postServerSync('SAVE_RECORDS', { records: INITIAL_RECORDS });
+
+      // 4. Inspect daily snapshots
+      const snapshots = getDailySnapshots();
+      for (const snapList of Object.values(snapshots)) {
+        if (Array.isArray(snapList)) {
+          for (const r of snapList) {
+            if (r && r.id && !deletedIds.has(r.id) && !recordMap.has(r.id)) {
+              recordMap.set(r.id, r);
+              hasLocalExclusiveOrNewer = true;
+            }
+          }
+        }
+      }
+
+      // 5. If completely empty, seed from INITIAL_RECORDS
+      if (recordMap.size === 0 && INITIAL_RECORDS.length > 0) {
+        for (const r of INITIAL_RECORDS) {
+          if (r && r.id && !deletedIds.has(r.id)) {
+            recordMap.set(r.id, r);
+          }
+        }
+        hasLocalExclusiveOrNewer = true;
+      }
+
+      const mergedRecords = Array.from(recordMap.values());
+      mergedRecords.sort((a, b) => {
+        const dateA = a.startDate || '';
+        const dateB = b.startDate || '';
+        if (dateA !== dateB) return dateB.localeCompare(dateA);
+        return (b.createdAt || '').localeCompare(a.createdAt || '');
+      });
+
+      // Save merged truth locally, into emergency vault, and into daily snapshot
+      localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(mergedRecords));
+      localStorage.setItem('hoengseong_records_vault_v1', JSON.stringify(mergedRecords));
+      saveDailySnapshot(mergedRecords);
+
+      // If local had records the server didn't have (or was newer), heal the server immediately!
+      if (hasLocalExclusiveOrNewer || mergedRecords.length > serverRecords.length) {
+        postServerSync('SAVE_RECORDS', { records: mergedRecords });
       }
     }
 
@@ -766,10 +880,19 @@ export function saveAbsenceRecords(records: AbsenceRecord[]) {
   localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(records));
   if (records.length > 0) {
     localStorage.setItem('hoengseong_records_vault_v1', JSON.stringify(records));
+    saveDailySnapshot(records);
     localStorage.removeItem('hoengseong_explicit_clear_action');
   }
   broadcastUpdate('RECORDS_UPDATED', records);
   postServerSync('SAVE_RECORDS', { records });
+}
+
+export function deleteAbsenceRecord(id: string): void {
+  if (typeof window === 'undefined' || !id) return;
+  addDeletedRecordId(id);
+  const current = getAbsenceRecords();
+  const remaining = current.filter(r => r.id !== id);
+  saveAbsenceRecords(remaining);
 }
 
 // 💡 레코드와 알림을 단일 네트워크 요청으로 일괄 동기화 (경쟁 상태 방지)
@@ -777,6 +900,11 @@ export function saveRecordsAndNotifications(records: AbsenceRecord[], notificati
   if (typeof window === 'undefined') return;
   localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(records));
   localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(notifications));
+  if (records.length > 0) {
+    localStorage.setItem('hoengseong_records_vault_v1', JSON.stringify(records));
+    saveDailySnapshot(records);
+    localStorage.removeItem('hoengseong_explicit_clear_action');
+  }
   broadcastUpdate('RECORDS_UPDATED', records);
   broadcastUpdate('NOTIFICATIONS_UPDATED', notifications);
   postServerSync('BATCH_SYNC', { records, notifications });
@@ -1702,6 +1830,8 @@ export async function clearAllAbsenceData(): Promise<void> {
   if (typeof window === 'undefined') return;
   localStorage.setItem('hoengseong_explicit_clear_action', 'true');
   localStorage.removeItem('hoengseong_records_vault_v1');
+  clearDeletedRecordIds();
+  localStorage.removeItem(STORAGE_KEYS.DAILY_SNAPSHOTS);
   localStorage.setItem('hoengseong_app_has_run_v1', 'true');
   localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify([]));
   localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify([]));
@@ -1716,6 +1846,8 @@ export async function wipeEntireDatabase(): Promise<void> {
   if (typeof window === 'undefined') return;
   localStorage.setItem('hoengseong_explicit_clear_action', 'true');
   localStorage.removeItem('hoengseong_records_vault_v1');
+  clearDeletedRecordIds();
+  localStorage.removeItem(STORAGE_KEYS.DAILY_SNAPSHOTS);
   localStorage.setItem('hoengseong_app_has_run_v1', 'true');
   localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify([]));
   localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify([]));

@@ -87,6 +87,7 @@ export interface AbsenceRecord {
   lastRemindedAt?: string;
   memo?: string;
   studentMemo?: string; // 학생이 제출함 투입 시 담임교사에게 전달한 메모
+  updatedAt?: string; // ISO
   // Field trip specific rules
   fieldTripDeadline?: string; // YYYY-MM-DD (보고서 제출 마감일: 다녀온 후 7일 이내)
   hasDelegationForm?: boolean; // 보호자 외 인솔자 위임장 필요 여부
