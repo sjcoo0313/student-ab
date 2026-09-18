@@ -451,7 +451,7 @@ export default function TeacherDashboard() {
       r.reason.includes(searchQuery);
     // 날짜가 지나도 승인 전까지는 계속 누적되어 보여야 함
     return matchesSearch;
-  });
+  }).sort((a, b) => (Number(a.studentNum) || 0) - (Number(b.studentNum) || 0));
 
   const pendingAttendanceRecords = filteredDocRecords.filter(r => r.status === 'PENDING_ATTENDANCE');
   const attendedNotifiedRecords = filteredDocRecords.filter(r => r.status === 'ATTENDED_NOTIFIED');
@@ -470,6 +470,12 @@ export default function TeacherDashboard() {
     const matchesCat = registerCategoryFilter === 'ALL' || r.category === registerCategoryFilter || (registerCategoryFilter === '출석인정' && r.category === '출석 인정');
     const matchesDate = !filterOnlySelectedDate || isDateInRange(selectedDashboardDate, r.startDate, r.endDate);
     return matchesSearch && matchesKind && matchesCat && matchesDate;
+  }).sort((a, b) => {
+    // 1차: 최신 날짜 우선
+    const dateComp = (b.startDate || '').localeCompare(a.startDate || '');
+    if (dateComp !== 0) return dateComp;
+    // 2차: 같은 날짜 내에서는 번호 오름차순 (1번 -> 2번 -> ...)
+    return (Number(a.studentNum) || 0) - (Number(b.studentNum) || 0);
   });
 
   // 전체 통계 카운트

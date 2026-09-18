@@ -74,7 +74,9 @@ export default function StatisticsPage() {
   };
 
   // 1. 일일 통계 데이터 (선택된 날짜 기준 전체 출결 변동: 결석, 지각, 조퇴, 결과)
-  const dailyRecords = records.filter(r => isDateInRange(selectedDate, r.startDate, r.endDate));
+  const dailyRecords = records
+    .filter(r => isDateInRange(selectedDate, r.startDate, r.endDate))
+    .sort((a, b) => (Number(a.studentNum) || 0) - (Number(b.studentNum) || 0));
   
   const dailyTotal = dailyRecords.length;
   const dailyAbsence = dailyRecords.filter(r => (r.kind || '결석') === '결석').length;
@@ -132,7 +134,9 @@ export default function StatisticsPage() {
   const currentWeekDates = getWeekDates(selectedDate);
 
   const weeklyDayStats = currentWeekDates.map((dateStr, idx) => {
-    const dayRecords = records.filter(r => isDateInRange(dateStr, r.startDate, r.endDate));
+    const dayRecords = records
+      .filter(r => isDateInRange(dateStr, r.startDate, r.endDate))
+      .sort((a, b) => (Number(a.studentNum) || 0) - (Number(b.studentNum) || 0));
     const absence = dayRecords.filter(r => (r.kind || '결석') === '결석').length;
     const late = dayRecords.filter(r => r.kind === '지각').length;
     const early = dayRecords.filter(r => r.kind === '조퇴').length;
