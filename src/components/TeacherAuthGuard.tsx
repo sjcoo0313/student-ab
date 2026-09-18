@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Lock, KeyRound, CheckCircle2, AlertCircle, Eye, EyeOff, ShieldCheck, LogOut } from 'lucide-react';
+import { Lock, KeyRound, CheckCircle2, AlertCircle, Eye, EyeOff, ShieldCheck, LogOut, BellRing } from 'lucide-react';
 import { verifyTeacherPinServer, setTeacherPin, isTeacherLoggedIn, setTeacherLoggedIn } from '@/lib/storage';
+import NotificationPermissionModal from '@/components/NotificationPermissionModal';
+import { isCurrentDeviceSubscribed } from '@/lib/pushClient';
 
 interface TeacherAuthGuardProps {
   children: React.ReactNode;
@@ -14,6 +16,8 @@ export default function TeacherAuthGuard({ children }: TeacherAuthGuardProps) {
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isChangePinOpen, setIsChangePinOpen] = useState(false);
+  const [isPushModalOpen, setIsPushModalOpen] = useState(false);
+  const [isPushSubscribed, setIsPushSubscribed] = useState(false);
   const [showPin, setShowPin] = useState(false);
 
   // Change PIN state
@@ -25,6 +29,7 @@ export default function TeacherAuthGuard({ children }: TeacherAuthGuardProps) {
 
   useEffect(() => {
     setIsAuthenticated(isTeacherLoggedIn());
+    isCurrentDeviceSubscribed().then((subbed) => setIsPushSubscribed(subbed));
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -162,6 +167,16 @@ export default function TeacherAuthGuard({ children }: TeacherAuthGuardProps) {
           </div>
           <div className="flex items-center space-x-2">
             <button
+              onClick={() => setIsPushModalOpen(true)}
+              className={`btn-sand-pill text-[11px] py-1 px-2.5 border-none hover:bg-white flex items-center gap-1 ${
+                isPushSubscribed ? 'text-[#16a34a] font-semibold' : 'text-[#7e7e7d]'
+              }`}
+              title="교사 스마트폰/PC 백그라운드 푸시 알림 설정"
+            >
+              <BellRing className="w-3 h-3 text-[#ff7900]" />
+              <span>{isPushSubscribed ? '알림 켜짐' : '기기 알림'}</span>
+            </button>
+            <button
               onClick={() => {
                 setIsChangePinOpen(true);
                 setChangeError('');
@@ -182,6 +197,16 @@ export default function TeacherAuthGuard({ children }: TeacherAuthGuardProps) {
           </div>
         </div>
       </div>
+
+      {/* Push Notification Permission Modal */}
+      <NotificationPermissionModal
+        isOpen={isPushModalOpen}
+        onClose={() => {
+          setIsPushModalOpen(false);
+          isCurrentDeviceSubscribed().then((subbed) => setIsPushSubscribed(subbed));
+        }}
+        role="TEACHER"
+      />
 
       {children}
 

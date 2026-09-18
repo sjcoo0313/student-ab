@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readServerDb, writeServerDb, getStorageInfo } from '@/lib/serverDb';
 import { SAMPLE_STUDENTS, SAMPLE_RECORDS } from '@/lib/storage';
 import { AbsenceRecord } from '@/types';
+import { sendPushToStudent, sendPushToTeacher } from '@/lib/pushServer';
 
 export const dynamic = 'force-dynamic';
 
@@ -113,6 +114,13 @@ export async function POST(req: NextRequest) {
             read: false,
             attachments: Array.isArray(attachments) ? attachments : foundRec.attachments,
           });
+
+          // 📲 교사 스마트폰/PC로 백그라운드 웹 푸시 발송 (앱이 닫혀있어도 도착)
+          sendPushToTeacher({
+            title: `📨 [서류 제출] ${foundRec.studentNum}번 ${foundRec.studentName}`,
+            body: `${foundRec.studentName} 학생이 [${foundRec.typeName}] 서류를 교실 제출함에 넣었습니다!`,
+            url: '/teacher',
+          }).catch(() => {});
         }
 
         updated = await writeServerDb({ records: newRecords, notifications: newNotifs });
@@ -182,6 +190,17 @@ export async function POST(req: NextRequest) {
             timestamp: nowIso,
             read: false,
           });
+
+          // 📲 학생 스마트폰으로 백그라운드 웹 푸시 발송
+          sendPushToStudent(foundRec.studentId, {
+            title: isFieldTrip
+              ? '🎒 [등교 확인] 현장체험학습 보고서를 NEIS로 제출해주세요!'
+              : '🏫 [등교 확인] 결석신고서 서류 양식을 챙겨주세요!',
+            body: isFieldTrip
+              ? `${foundRec.studentName} 학생, 등교를 환영해요! 현장체험학습은 7일 이내에 NEIS로 보고서를 제출해주세요.`
+              : `${foundRec.studentName} 학생, 등교를 환영해요! 교실 앞 서류함에서 [${foundRec.typeName}] 양식을 1장 챙겨서 가방에 넣어두세요.`,
+            url: '/',
+          }).catch(() => {});
         }
 
         updated = await writeServerDb({ records: newRecords, notifications: newNotifs });
@@ -191,6 +210,7 @@ export async function POST(req: NextRequest) {
       case 'APPROVE_RECORD': {
         const { recordId, verificationMethod, verificationNote } = body;
         const nowIso = new Date().toISOString();
+        const foundRec = current.records.find((r) => r.id === recordId);
         const newRecords = current.records.map((r) => {
           if (r.id === recordId) {
             return {
@@ -204,6 +224,16 @@ export async function POST(req: NextRequest) {
           }
           return r;
         });
+
+        // 📲 학생 스마트폰으로 최종 승인 완료 축하 푸시 발송
+        if (foundRec) {
+          sendPushToStudent(foundRec.studentId, {
+            title: '🎉 [최종 승인 완료] 결석신고서가 승인되었습니다!',
+            body: `${foundRec.studentName} 학생의 [${foundRec.typeName}] 출결 서류가 담임선생님께 최종 승인 처리되었습니다.`,
+            url: '/',
+          }).catch(() => {});
+        }
+
         updated = await writeServerDb({ records: newRecords });
         break;
       }

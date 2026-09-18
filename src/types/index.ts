@@ -141,3 +141,23 @@ export interface DailyReminderLog {
     };
   };
 }
+
+export interface PushSubscriptionItem {
+  id: string;
+  role: 'STUDENT' | 'TEACHER';
+  studentId?: string;
+  studentName?: string;
+  subscription: {
+    endpoint: string;
+    expirationTime?: number | null;
+    keys: {
+      p256dh: string;
+      auth: string;
+    };
+  };
+  deviceInfo?: string;
+  userAgent?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+

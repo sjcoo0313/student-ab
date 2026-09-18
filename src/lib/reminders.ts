@@ -357,6 +357,24 @@ export function dispatchScheduledReminder(
     reminderLog: currentLog 
   });
 
+  // 📲 대상 학생들의 스마트폰으로 백그라운드 웹 푸시 일괄 발송 (앱이 꺼져있어도 잠금화면에 도착)
+  const targetStudentIds = unfulfilled.map(r => r.studentId).filter(Boolean);
+  if (targetStudentIds.length > 0 && typeof window !== 'undefined') {
+    fetch('/api/push/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        target: 'MULTIPLE_STUDENTS',
+        studentIds: targetStudentIds,
+        payload: {
+          title: `⏰ [${slot.periodName || slot.title}] 결석신고서 챙기기 알림`,
+          body: '담임선생님께서 서류 챙기기 및 제출 안내 알림을 보냈습니다. 확인해주세요!',
+          url: '/',
+        },
+      }),
+    }).catch(() => {});
+  }
+
   return {
     dispatchedCount: unfulfilled.length,
     studentNames: dispatchedNames,

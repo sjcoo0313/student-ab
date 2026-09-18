@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import Navbar from '@/components/Navbar';
+import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 
 export const metadata: Metadata = {
   title: '스마트 출결 관리 시스템',
@@ -34,6 +35,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="출결관리" />
       </head>
       <body className="min-h-screen bg-[#fbfaf9] text-[#343433] font-sans antialiased selection:bg-[#ffcd6c] selection:text-[#121212]">
+        <ServiceWorkerRegister />
         <Navbar />
         {children}
       </body>

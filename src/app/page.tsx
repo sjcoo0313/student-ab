@@ -33,13 +33,15 @@ import {
   recordStudentLogin
 } from '@/lib/storage';
 import { Student, AbsenceRecord, AttachmentProof, ReminderSettings, DailyReminderLog } from '@/types';
-import { Lock, LogOut, UserCheck, ShieldCheck, KeyRound } from 'lucide-react';
+import { Lock, LogOut, UserCheck, ShieldCheck, KeyRound, BellRing } from 'lucide-react';
 import { 
   getCurrentTimeString, 
   requestBrowserNotificationPermission,
   getReminderSettings,
   getTodayReminderLog
 } from '@/lib/reminders';
+import NotificationPermissionModal from '@/components/NotificationPermissionModal';
+import { isCurrentDeviceSubscribed } from '@/lib/pushClient';
 import Link from 'next/link';
 
 export default function StudentMobilePage() {
@@ -65,6 +67,8 @@ export default function StudentMobilePage() {
   const [changePinSuccess, setChangePinSuccess] = useState(false);
 
   const [isAppInstallGuideOpen, setIsAppInstallGuideOpen] = useState(false);
+  const [isPushModalOpen, setIsPushModalOpen] = useState(false);
+  const [isPushSubscribed, setIsPushSubscribed] = useState(false);
 
   // 시크릿 제스처: 꽃 아이콘(🌸) 연속 3회 탭 또는 3초간 길게 누르면 교사 모드 진입
   const tapCountRef = React.useRef(0);
@@ -143,6 +147,8 @@ export default function StudentMobilePage() {
     const unsubscribe = subscribeToSyncEvents(() => {
       loadData();
     });
+
+    isCurrentDeviceSubscribed().then((subbed) => setIsPushSubscribed(subbed));
 
     return () => {
       clearInterval(clockTimer);
@@ -427,7 +433,21 @@ export default function StudentMobilePage() {
               </div>
 
               {/* Responsive Action Buttons */}
-              <div className="grid grid-cols-2 gap-2 mt-3.5 pt-3 border-t border-[#f2f0ed]">
+              <div className="grid grid-cols-3 gap-2 mt-3.5 pt-3 border-t border-[#f2f0ed]">
+                <button
+                  type="button"
+                  onClick={() => setIsPushModalOpen(true)}
+                  className={`w-full flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-[8px] border text-xs font-semibold transition-all active:scale-[0.98] cursor-pointer ${
+                    isPushSubscribed 
+                      ? 'border-[#a7f3d0] bg-[#ecfdf5] text-[#047857]' 
+                      : 'border-[#ffcd6c] bg-[#fff8e8] text-[#b45309]'
+                  }`}
+                  title="스마트폰 잠금화면 알림 설정"
+                >
+                  <BellRing className={`w-3.5 h-3.5 shrink-0 ${isPushSubscribed ? 'text-[#059669]' : 'text-[#d97706]'}`} />
+                  <span className="truncate">{isPushSubscribed ? '알림 켜짐' : '기기 알림'}</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => {
@@ -438,17 +458,17 @@ export default function StudentMobilePage() {
                     setChangePinError(null);
                     setChangePinSuccess(false);
                   }}
-                  className="w-full flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-[8px] border border-[#e5d5c3] bg-[#fcfbf9] hover:bg-[#f2f0ed] text-[#474645] hover:text-[#121212] text-xs font-semibold transition-all active:scale-[0.98]"
+                  className="w-full flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-[8px] border border-[#e5d5c3] bg-[#fcfbf9] hover:bg-[#f2f0ed] text-[#474645] hover:text-[#121212] text-xs font-semibold transition-all active:scale-[0.98]"
                   title="내 비밀번호 변경"
                 >
                   <KeyRound className="w-3.5 h-3.5 text-[#d48f00] shrink-0" />
-                  <span className="truncate">비밀번호 변경</span>
+                  <span className="truncate">비번 변경</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="w-full flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-[8px] border border-[#fed7d7] bg-[#fff5f5] hover:bg-[#ffe3e3] text-[#c53030] text-xs font-semibold transition-all active:scale-[0.98]"
+                  className="w-full flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-[8px] border border-[#fed7d7] bg-[#fff5f5] hover:bg-[#ffe3e3] text-[#c53030] text-xs font-semibold transition-all active:scale-[0.98]"
                   title="로그아웃하고 다른 학생으로 변경"
                 >
                   <LogOut className="w-3.5 h-3.5 text-[#e53e3e] shrink-0" />
@@ -456,6 +476,28 @@ export default function StudentMobilePage() {
                 </button>
               </div>
             </div>
+
+            {/* Notification Prompt Banner if not subscribed */}
+            {!isPushSubscribed && (
+              <div className="bg-[#fff8e8] border border-[#ffcd6c] rounded-[10px] p-3.5 flex items-center justify-between gap-3 shadow-2xs animate-in fade-in">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-full bg-[#ffeed0] text-[#d48f00] flex items-center justify-center shrink-0 border border-[#ffcd6c]">
+                    <BellRing className="w-4 h-4 text-[#d48f00]" />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="font-bold text-xs text-[#92400e] truncate">스마트폰 잠금화면 알림 켜기</h4>
+                    <p className="text-[11px] text-[#b45309] line-clamp-1">어플이 꺼져도 담임선생님의 서류 알림 핑을 받을 수 있어요.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsPushModalOpen(true)}
+                  className="btn-dark-pill text-[11px] py-1.5 px-3 whitespace-nowrap shrink-0 cursor-pointer shadow-xs"
+                >
+                  알림 켜기 🔔
+                </button>
+              </div>
+            )}
 
             {/* Dynamic Action Area for Authenticated Student */}
             {/* Dynamic Action Area for Authenticated Student */}
@@ -789,6 +831,18 @@ export default function StudentMobilePage() {
           </div>
         </div>
       )}
+
+      {/* Push Notification Permission Modal */}
+      <NotificationPermissionModal
+        isOpen={isPushModalOpen}
+        onClose={() => {
+          setIsPushModalOpen(false);
+          isCurrentDeviceSubscribed().then((subbed) => setIsPushSubscribed(subbed));
+        }}
+        role="STUDENT"
+        studentId={myStudent?.id}
+        studentName={myStudent?.name}
+      />
 
       </div>
     </main>

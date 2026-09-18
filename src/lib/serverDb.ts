@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { Student, AbsenceRecord, SystemNotification, ReminderSettings, DailyReminderLog } from '@/types';
+import { Student, AbsenceRecord, SystemNotification, ReminderSettings, DailyReminderLog, PushSubscriptionItem } from '@/types';
 import { INITIAL_STUDENTS, INITIAL_RECORDS } from '@/lib/storage';
 
 export interface ServerDatabase {
@@ -11,6 +11,7 @@ export interface ServerDatabase {
   teacherPin: string;
   reminderSettings?: ReminderSettings;
   reminderLog?: DailyReminderLog;
+  pushSubscriptions?: PushSubscriptionItem[];
   lastUpdated: number;
 }
 
@@ -178,6 +179,8 @@ export async function readServerDb(): Promise<ServerDatabase> {
         teacherPin: parsed.teacherPin || '1125',
         lastUpdated: parsed.lastUpdated || 0,
         reminderSettings: parsed.reminderSettings,
+        reminderLog: parsed.reminderLog,
+        pushSubscriptions: Array.isArray(parsed.pushSubscriptions) ? parsed.pushSubscriptions : [],
       };
       globalThis._studentServerDbCache = db;
       return db;
@@ -193,6 +196,7 @@ export async function readServerDb(): Promise<ServerDatabase> {
       records: INITIAL_RECORDS,
       notifications: [],
       teacherPin: '1125',
+      pushSubscriptions: [],
       lastUpdated: 0,
     };
   }
@@ -220,12 +224,17 @@ export async function writeServerDb(updates: Partial<ServerDatabase>): Promise<S
           ? updates.notifications
           : (current.notifications || []);
 
+        const mergedPushSubscriptions = Array.isArray(updates.pushSubscriptions)
+          ? updates.pushSubscriptions
+          : (current.pushSubscriptions || []);
+
         const updated: ServerDatabase = {
           ...current,
           ...updates,
           students: mergedStudents,
           records: mergedRecords,
           notifications: mergedNotifications,
+          pushSubscriptions: mergedPushSubscriptions,
           lastUpdated: Date.now(),
         };
 

@@ -1775,6 +1775,19 @@ export function triggerRemind(recordId: string): AbsenceRecord | null {
     const isFieldTrip = rec.type === 'FIELD_EXPERIENCE';
     const isPickedUp = rec.status === 'FORM_PICKED_UP';
     const isAttendedNotified = rec.status === 'ATTENDED_NOTIFIED';
+
+    const studentTitle = isFieldTrip
+      ? '🎒 [담임선생님 알림] 현장체험학습 보고서를 NEIS로 제출해주세요!'
+      : isPickedUp
+      ? '✍️ [담임선생님 알림] 작성한 결석계를 교실 제출함에 넣어주세요!'
+      : '📄 [담임선생님 알림] 결석신고서 서류 양식을 챙겨주세요!';
+
+    const studentMessage = isFieldTrip
+      ? `${rec.studentName} 학생! 현장체험학습은 종이 결석계가 아니에요. 복귀 후 7일 이내에 NEIS로 보고서를 제출해야 출석 인정이 됩니다. (일자별 사진 + 보호자 동반 사진 필수!)`
+      : isPickedUp
+      ? `${rec.studentName} 학생! 결석신고서에 부모님 서명과 증빙서류를 챙기셨나요? 작성을 마쳤다면 교실 제출함에 넣고, 화면 아래 [제출 완료] 버튼을 눌러주세요!`
+      : `${rec.studentName} 학생! 아직 교실 앞 서류함에서 [${rec.typeName}] 서류 양식을 챙기지 않았어요. 쉬는 시간이나 점심시간에 서류함에서 양식을 1장 챙겨 가방에 넣어두세요! (집에서 부모님 서명 필요)`;
+
     addNotification({
       type: 'REMIND_ALERT',
       title: isFieldTrip 
@@ -1787,22 +1800,31 @@ export function triggerRemind(recordId: string): AbsenceRecord | null {
         : isPickedUp
         ? `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생에게 작성 중인 [${rec.typeName}] 서류를 완성하여 교실 제출함에 넣어달라는 제출 독려 알림을 전송했습니다.`
         : `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생에게 교실 서류함에서 [${rec.typeName}] 양식을 챙기라는 안내 알림을 전송했습니다.`,
-      studentTitle: isFieldTrip
-        ? '🎒 [담임선생님 알림] 현장체험학습 보고서를 NEIS로 제출해주세요!'
-        : isPickedUp
-        ? '✍️ [담임선생님 알림] 작성한 결석계를 교실 제출함에 넣어주세요!'
-        : '📄 [담임선생님 알림] 결석신고서 서류 양식을 챙겨주세요!',
-      studentMessage: isFieldTrip
-        ? `${rec.studentName} 학생! 현장체험학습은 종이 결석계가 아니에요. 복귀 후 7일 이내에 NEIS로 보고서를 제출해야 출석 인정이 됩니다. (일자별 사진 + 보호자 동반 사진 필수!)`
-        : isPickedUp
-        ? `${rec.studentName} 학생! 결석신고서에 부모님 서명과 증빙서류를 챙기셨나요? 작성을 마쳤다면 교실 제출함에 넣고, 화면 아래 [제출 완료] 버튼을 눌러주세요!`
-        : `${rec.studentName} 학생! 아직 교실 앞 서류함에서 [${rec.typeName}] 서류 양식을 챙기지 않았어요. 쉬는 시간이나 점심시간에 서류함에서 양식을 1장 챙겨 가방에 넣어두세요! (집에서 부모님 서명 필요)`,
+      studentTitle,
+      studentMessage,
       studentName: rec.studentName,
       grade: rec.grade,
       classNum: rec.classNum,
       studentNum: rec.studentNum,
       recordId: recordId,
     });
+
+    // 📲 학생 스마트폰으로 백그라운드 웹 푸시 발송 (앱이 꺼져있어도 잠금화면에 직접 도착)
+    if (typeof window !== 'undefined' && rec.studentId) {
+      fetch('/api/push/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target: 'STUDENT',
+          studentId: rec.studentId,
+          payload: {
+            title: studentTitle,
+            body: studentMessage,
+            url: '/',
+          },
+        }),
+      }).catch(() => {});
+    }
   }
   return updatedRecord;
 }
