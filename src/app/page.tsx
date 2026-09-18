@@ -112,9 +112,6 @@ export default function StudentMobilePage() {
       setRecords(getAbsenceRecords());
       const curr = getMyStudent();
       setMyStudent(curr);
-      if (curr) {
-        recordStudentLogin(curr.id);
-      }
       if (stds.length > 0 && !curr) {
         setAuthGrade(stds[0].grade);
         setAuthClassNum(stds[0].classNum);
@@ -127,6 +124,12 @@ export default function StudentMobilePage() {
   useEffect(() => {
     loadData();
     requestBrowserNotificationPermission();
+
+    // 앱 첫 마운트 시 1회만 접속 기록 핑 (스로틀링 적용)
+    const curr = getMyStudent();
+    if (curr) {
+      recordStudentLogin(curr.id);
+    }
 
     const clockTimer = setInterval(() => {
       setCurrentTime(getCurrentTimeString());

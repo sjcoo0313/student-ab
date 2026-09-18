@@ -501,8 +501,14 @@ export async function fetchServerSync(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
   if (isSyncing) return false;
   isSyncing = true;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
   try {
-    const res = await fetch('/api/sync', { cache: 'no-store' });
+    const res = await fetch('/api/sync', { 
+      cache: 'no-store',
+      signal: controller.signal 
+    });
+    clearTimeout(timeoutId);
     if (!res.ok) return false;
     const data = await res.json();
     if (!data.success) return false;
@@ -666,6 +672,8 @@ export async function fetchServerSync(): Promise<boolean> {
 
 export async function postServerSync(action: string, payload: Record<string, unknown> = {}): Promise<void> {
   if (typeof window === 'undefined') return;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 6000);
   try {
     const res = await fetch('/api/sync', {
       method: 'POST',
@@ -673,7 +681,9 @@ export async function postServerSync(action: string, payload: Record<string, unk
       body: JSON.stringify({ action, ...payload }),
       cache: 'no-store',
       keepalive: true,
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
     if (res.ok) {
       const data = await res.json();
       if (data.success) {
@@ -686,6 +696,7 @@ export async function postServerSync(action: string, payload: Record<string, unk
       }
     }
   } catch (err) {
+    clearTimeout(timeoutId);
     console.error('postServerSync error:', err);
   }
 }
@@ -712,9 +723,30 @@ export function subscribeToSyncEvents(callback: (type: string, payload?: unknown
     }
   };
 
+  const startPolling = () => {
+    if (!activeSyncInterval && activeListenerCount > 0) {
+      activeSyncInterval = setInterval(() => {
+        if (document.visibilityState === 'visible') {
+          fetchServerSync();
+        }
+      }, 5000);
+    }
+  };
+
+  const stopPolling = () => {
+    if (activeSyncInterval) {
+      clearInterval(activeSyncInterval);
+      activeSyncInterval = null;
+    }
+  };
+
   const handleVisibilityOrFocus = () => {
     if (document.visibilityState === 'visible') {
       fetchServerSync();
+      startPolling();
+    } else {
+      // 모바일 화면 꺼짐 또는 백그라운드 전환 시 폴링 즉시 중단 (배터리 및 CPU 절약)
+      stopPolling();
     }
   };
 
@@ -726,13 +758,11 @@ export function subscribeToSyncEvents(callback: (type: string, payload?: unknown
   window.addEventListener('focus', handleVisibilityOrFocus);
   document.addEventListener('visibilitychange', handleVisibilityOrFocus);
 
-  // Periodic server sync polling (2s) for real-time sync across different phones & PC
+  // 모바일 배터리 및 부하 최적화: 5초 주기 실시간 동기화
   activeListenerCount++;
-  if (!activeSyncInterval) {
+  if (!activeSyncInterval && document.visibilityState === 'visible') {
     fetchServerSync();
-    activeSyncInterval = setInterval(() => {
-      fetchServerSync();
-    }, 2000);
+    startPolling();
   }
 
   return () => {
@@ -745,9 +775,8 @@ export function subscribeToSyncEvents(callback: (type: string, payload?: unknown
     document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
 
     activeListenerCount--;
-    if (activeListenerCount <= 0 && activeSyncInterval) {
-      clearInterval(activeSyncInterval);
-      activeSyncInterval = null;
+    if (activeListenerCount <= 0) {
+      stopPolling();
       activeListenerCount = 0;
     }
   };
@@ -1792,24 +1821,32 @@ export function resetStudentPinToDefault(studentId: string): boolean {
   return updateStudentPin(studentId, '1234');
 }
 
-// 학생 로그인 접속 이력 기록
-export function recordStudentLogin(studentId: string): void {
-  if (typeof window === 'undefined') return;
+// 학생 로그인 접속 이력 기록 (10분 스로틀링 & 무한루프 차단)
+export function recordStudentLogin(studentId: string, force = false): void {
+  if (typeof window === 'undefined' || !studentId) return;
   const students = getStudents();
+  const existing = students.find((s) => s.id === studentId);
+  if (!existing) return;
+
+  // 10분 이내에 이미 접속 기록이 있다면 불필요한 네트워크 통신 및 재전송 방지
+  if (!force && existing.lastLoginAt) {
+    const elapsed = Date.now() - new Date(existing.lastLoginAt).getTime();
+    if (elapsed < 10 * 60 * 1000) {
+      return;
+    }
+  }
+
   const nowIso = new Date().toISOString();
-  let updated = false;
   const newStudents = students.map((s) => {
     if (s.id === studentId) {
-      updated = true;
       return { ...s, lastLoginAt: nowIso };
     }
     return s;
   });
-  if (updated) {
-    saveStudents(newStudents);
-    broadcastUpdate('STUDENT_LOGIN_RECORDED', { studentId, lastLoginAt: nowIso });
-    postServerSync('STUDENT_LOGIN_PING', { studentId, lastLoginAt: nowIso });
-  }
+
+  // 로컬 저장만 조용히 수행하여 STUDENTS_UPDATED 브로드캐스트로 인한 loadData 무한루프 원천 차단
+  localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(newStudents));
+  postServerSync('STUDENT_LOGIN_PING', { studentId, lastLoginAt: nowIso });
 }
 
 // 학생 로그인 접속 이력 초기화 (필요시 교사가 개별/전체 초기화)
