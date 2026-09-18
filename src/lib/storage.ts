@@ -1590,11 +1590,18 @@ export function triggerRemind(recordId: string): AbsenceRecord | null {
     saveAbsenceRecords(updated);
     const rec = updatedRecord as AbsenceRecord;
     const isFieldTrip = rec.type === 'FIELD_EXPERIENCE';
+    const isPickedUp = rec.status === 'FORM_PICKED_UP';
     addNotification({
       type: 'REMIND_ALERT',
-      title: isFieldTrip ? '🔔 현장체험학습 NEIS 보고서 제출 리마인드' : '🔔 결석신고서 수령/제출 리마인드 발송',
+      title: isFieldTrip 
+        ? '🔔 현장체험학습 NEIS 보고서 제출 리마인드' 
+        : isPickedUp
+        ? '🔔 작성 중인 결석계 제출함 투입 독려 알림'
+        : '🔔 결석신고서 수령/제출 리마인드 발송',
       message: isFieldTrip
         ? `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생에게 '보고서를 7일이내 NEIS로 제출' 리마인드를 전송했습니다.`
+        : isPickedUp
+        ? `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생에게 작성 중인 [${rec.typeName}] 서류를 완성하여 교실 제출함에 넣어달라는 제출 독려 알림을 전송했습니다.`
         : `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생에게 결석신고서 수령 및 제출 리마인드를 전송했습니다.`,
       studentName: rec.studentName,
       grade: rec.grade,

@@ -327,6 +327,8 @@ export default function TeacherDashboard() {
   const handleRemind = (rec: AbsenceRecord) => {
     triggerRemind(rec.id);
     loadData();
+    const actionText = rec.status === 'FORM_PICKED_UP' ? '서류 작성 및 제출함 투입 독려' : '결석계 수령 및 제출';
+    alert(`[${rec.studentNum}번 ${rec.studentName}] 학생에게 ${actionText} 알림 핑을 전송했습니다. (누적 ${(rec.remindCount || 0) + 1}회)`);
   };
 
   const handleOpenApprove = (rec: AbsenceRecord) => {
@@ -940,6 +942,9 @@ export default function TeacherDashboard() {
                           <div className="flex items-center justify-between">
                             <span className="font-bold text-xs text-[#121212]">{rec.studentNum}번 {rec.studentName}</span>
                             <div className="flex items-center space-x-1">
+                              {(rec.remindCount || 0) > 0 && (
+                                <span className="badge-pill badge-sky text-[9px]">알림 {rec.remindCount}회</span>
+                              )}
                               <span className="badge-pill badge-stone text-[9px]">{rec.typeName}</span>
                               <button
                                 type="button"
@@ -979,15 +984,16 @@ export default function TeacherDashboard() {
                               title="서류 챙김을 취소하고 2단계(서류 미수령)로 되돌립니다."
                             >
                               <RotateCcw className="w-2.5 h-2.5 text-[#64748b]" />
-                              <span>↩ 2단계(미수령)로</span>
+                              <span>↩ 2단계로</span>
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleRevertStatus(rec.id, 'PENDING_ATTENDANCE', '등교 대기로 되돌림')}
-                              className="text-[10px] text-[#94a3b8] hover:text-[#0f172a] hover:bg-[#f1f5f9] px-1.5 py-1 rounded border border-dashed border-[#cbd5e1] transition-colors cursor-pointer"
-                              title="1단계(등교 확인 대기)로 바로 되돌립니다."
+                              onClick={() => handleRemind(rec)}
+                              className="badge-pill badge-sky hover:bg-[#0086fc] hover:text-white transition-colors cursor-pointer text-[10px] flex items-center gap-0.5 font-bold"
+                              title="서류를 완성하여 교실 제출함에 넣도록 학생에게 제출 독려 알림을 전송합니다."
                             >
-                              <span>1단계로</span>
+                              <Bell className="w-3 h-3 inline mr-0.5" />
+                              <span>다시 알림</span>
                             </button>
                           </div>
                         </div>
