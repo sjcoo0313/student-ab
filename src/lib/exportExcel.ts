@@ -4,7 +4,8 @@ import { AbsenceRecord, Student } from '@/types';
 export function exportAbsenceStatisticsToExcel(
   records: AbsenceRecord[],
   students: Student[],
-  filename = '학급_스마트_출결마감_기록부.xlsx'
+  filename = '학급_스마트_출결마감_기록부.xlsx',
+  targetMonth?: number
 ) {
   const wb = XLSX.utils.book_new();
 
@@ -48,33 +49,86 @@ export function exportAbsenceStatisticsToExcel(
   const wsRecords = XLSX.utils.json_to_sheet(recordsData);
   XLSX.utils.book_append_sheet(wb, wsRecords, '출결마감_상세기록');
 
-  // 2. 월별/학생별 출결 집계 시트 (NEIS 마감용 4종류 x 4구분)
-  const currentMonth = new Date().getMonth() + 1;
-  const studentStats = students.map((s, idx) => {
-    const sRecords = records.filter(r => r.studentId === s.id);
-    
-    // 종류별 집계
-    const absenceCount = sRecords.filter(r => (r.kind || '결석') === '결석').length;
-    const lateCount = sRecords.filter(r => r.kind === '지각').length;
-    const earlyLeaveCount = sRecords.filter(r => r.kind === '조퇴').length;
-    const skipCount = sRecords.filter(r => r.kind === '결과').length;
+  // 2. 월별/학생별 출결 집계 시트 (NEIS 마감용 4종류 x 4구분 + 특기사항)
+  const monthToUse = targetMonth || (new Date().getMonth() + 1);
+  const isCat = (rCat: string, target: '질병' | '미인정' | '기타' | '출석인정') => {
+    if (target === '출석인정') return rCat === '출석인정' || rCat === '출석 인정';
+    return rCat === target;
+  };
 
-    // 구분별 집계
-    const illnessCount = sRecords.filter(r => r.category === '질병').length;
-    const unexcusedCount = sRecords.filter(r => r.category === '미인정').length;
-    const otherCount = sRecords.filter(r => r.category === '기타').length;
-    const approvedCount = sRecords.filter(r => r.category === '출석인정' || r.category === '출석 인정').length;
+  const formatMMDD = (dStr: string) => {
+    if (!dStr) return '';
+    const parts = dStr.split('-');
+    if (parts.length >= 3) return `${parts[1]}.${parts[2]}`;
+    return dStr;
+  };
 
-    const menstrualRecords = sRecords.filter(r => r.type === 'MENSTRUAL');
-    const menstrualThisMonth = menstrualRecords.filter(r => {
-      const m = new Date(r.startDate).getMonth() + 1;
-      return m === currentMonth;
-    }).length;
+  const sortedStudents = [...students].sort((a, b) => (Number(a.studentNum) || 0) - (Number(b.studentNum) || 0));
 
-    const fieldTripRecords = sRecords.filter(r => r.type === 'FIELD_EXPERIENCE');
-    const totalFieldTripDays = fieldTripRecords.reduce((acc, cur) => acc + cur.daysCount, 0);
+  const studentStats = sortedStudents.map((s, idx) => {
+    // 해당 월 레코드 필터
+    const monthRecords = records.filter(r => {
+      if (r.studentId !== s.id) return false;
+      if (!r.startDate) return false;
+      const m = Number(r.startDate.split('-')[1]);
+      return m === monthToUse;
+    });
 
-    const pendingDocCount = sRecords.filter(r => r.requiresDocument && r.status !== 'APPROVED').length;
+    // 1. 결석 (일수 기준)
+    const absenceRecs = monthRecords.filter(r => (r.kind || '결석') === '결석');
+    const absenceIllnessDays = absenceRecs.filter(r => isCat(r.category, '질병')).reduce((sum, r) => sum + (r.daysCount || 1), 0);
+    const absenceUnexcusedDays = absenceRecs.filter(r => isCat(r.category, '미인정')).reduce((sum, r) => sum + (r.daysCount || 1), 0);
+    const absenceOtherDays = absenceRecs.filter(r => isCat(r.category, '기타')).reduce((sum, r) => sum + (r.daysCount || 1), 0);
+    const absenceApprovedDays = absenceRecs.filter(r => isCat(r.category, '출석인정')).reduce((sum, r) => sum + (r.daysCount || 1), 0);
+    const absenceTotalDays = absenceIllnessDays + absenceUnexcusedDays + absenceOtherDays + absenceApprovedDays;
+
+    // 2. 지각 (회수 기준)
+    const lateRecs = monthRecords.filter(r => r.kind === '지각');
+    const lateIllnessCount = lateRecs.filter(r => isCat(r.category, '질병')).length;
+    const lateUnexcusedCount = lateRecs.filter(r => isCat(r.category, '미인정')).length;
+    const lateOtherCount = lateRecs.filter(r => isCat(r.category, '기타')).length;
+    const lateApprovedCount = lateRecs.filter(r => isCat(r.category, '출석인정')).length;
+    const lateTotalCount = lateRecs.length;
+
+    // 3. 조퇴 (회수 기준)
+    const earlyRecs = monthRecords.filter(r => r.kind === '조퇴');
+    const earlyIllnessCount = earlyRecs.filter(r => isCat(r.category, '질병')).length;
+    const earlyUnexcusedCount = earlyRecs.filter(r => isCat(r.category, '미인정')).length;
+    const earlyOtherCount = earlyRecs.filter(r => isCat(r.category, '기타')).length;
+    const earlyApprovedCount = earlyRecs.filter(r => isCat(r.category, '출석인정')).length;
+    const earlyTotalCount = earlyRecs.length;
+
+    // 4. 결과 (회수 기준)
+    const skipRecs = monthRecords.filter(r => r.kind === '결과');
+    const skipIllnessCount = skipRecs.filter(r => isCat(r.category, '질병')).length;
+    const skipUnexcusedCount = skipRecs.filter(r => isCat(r.category, '미인정')).length;
+    const skipOtherCount = skipRecs.filter(r => isCat(r.category, '기타')).length;
+    const skipApprovedCount = skipRecs.filter(r => isCat(r.category, '출석인정')).length;
+    const skipTotalCount = skipRecs.length;
+
+    // 생리결석
+    const menstrualRecs = monthRecords.filter(r => r.type === 'MENSTRUAL');
+    const menstrualCount = menstrualRecs.length;
+
+    // 체험학습 누적 (해당 학생 전체)
+    const allStudentRecs = records.filter(r => r.studentId === s.id);
+    const fieldTripRecords = allStudentRecs.filter(r => r.type === 'FIELD_EXPERIENCE');
+    const totalFieldTripDays = fieldTripRecords.reduce((acc, cur) => acc + (cur.daysCount || 1), 0);
+
+    // 미제출 서류 진행건수
+    const pendingDocCount = monthRecords.filter(r => r.requiresDocument !== false && r.status !== 'APPROVED').length;
+
+    // 나이스 특기사항 텍스트 생성
+    const specialRemarks = monthRecords.map(r => {
+      const dateText = r.endDate && r.endDate !== r.startDate
+        ? `${formatMMDD(r.startDate)}~${formatMMDD(r.endDate)}`
+        : formatMMDD(r.startDate);
+      const reasonText = r.reason || r.typeName || '사유 미기재';
+      const kindText = r.kind || '결석';
+      const catText = r.category === '출석 인정' ? '출석인정' : r.category;
+      const countText = kindText === '결석' ? `${r.daysCount || 1}일` : '1회';
+      return `${dateText} ${reasonText} (${catText}${kindText} ${countText})`;
+    }).join('\n');
 
     return {
       연번: idx + 1,
@@ -82,25 +136,38 @@ export function exportAbsenceStatisticsToExcel(
       반: s.classNum,
       번호: s.studentNum,
       이름: s.name,
-      '결석_총건수': absenceCount,
-      '지각_총건수': lateCount,
-      '조퇴_총건수': earlyLeaveCount,
-      '결과_총건수': skipCount,
-      '질병_합계': illnessCount,
-      '미인정_합계': unexcusedCount,
-      '기타_합계': otherCount,
-      '출석인정_합계': approvedCount,
-      '당월_생리결석_횟수': `${menstrualThisMonth}회`,
-      '생리결석_월1회_초과여부': menstrualThisMonth > 1 ? '⚠️ 초과 (확인필요)' : '정상',
+      '결석_질병(일)': absenceIllnessDays,
+      '결석_미인정(일)': absenceUnexcusedDays,
+      '결석_기타(일)': absenceOtherDays,
+      '결석_인정(일)': absenceApprovedDays,
+      '결석_합계(일)': absenceTotalDays,
+      '지각_질병(회)': lateIllnessCount,
+      '지각_미인정(회)': lateUnexcusedCount,
+      '지각_기타(회)': lateOtherCount,
+      '지각_인정(회)': lateApprovedCount,
+      '지각_합계(회)': lateTotalCount,
+      '조퇴_질병(회)': earlyIllnessCount,
+      '조퇴_미인정(회)': earlyUnexcusedCount,
+      '조퇴_기타(회)': earlyOtherCount,
+      '조퇴_인정(회)': earlyApprovedCount,
+      '조퇴_합계(회)': earlyTotalCount,
+      '결과_질병(회)': skipIllnessCount,
+      '결과_미인정(회)': skipUnexcusedCount,
+      '결과_기타(회)': skipOtherCount,
+      '결과_인정(회)': skipApprovedCount,
+      '결과_합계(회)': skipTotalCount,
+      '당월_생리결석_횟수': `${menstrualCount}회`,
+      '생리결석_월1회_초과여부': menstrualCount > 1 ? '⚠️ 초과 (확인필요)' : '정상(1회이내)',
       '현장체험학습_누적일수': `${totalFieldTripDays}일`,
       '현장체험학습_한도초과여부': totalFieldTripDays > 9.5 ? '⚠️ 9.5일 초과' : '정상(9.5일이내)',
-      '미제출_결석계_진행건수': pendingDocCount > 0 ? `⚠️ ${pendingDocCount}건 진행중` : '0건 (완료)',
+      '서류_진행상태': pendingDocCount > 0 ? `⚠️ ${pendingDocCount}건 진행중` : (monthRecords.length > 0 ? '✓ 마감 완료' : '해당없음'),
+      '나이스_출결_특기사항': specialRemarks || '-',
       학생연락처: s.phone || '',
       학부모연락처: s.parentPhone || '',
     };
   });
   const wsStats = XLSX.utils.json_to_sheet(studentStats);
-  XLSX.utils.book_append_sheet(wb, wsStats, '학생별_출결통계_NEIS용');
+  XLSX.utils.book_append_sheet(wb, wsStats, `${monthToUse}월_NEIS출결통계`);
 
   // 3. 파일 다운로드
   XLSX.writeFile(wb, filename);

@@ -20,7 +20,9 @@ import {
   UserX,
   Clock3,
   LogOut,
-  AlertCircle
+  AlertCircle,
+  Copy,
+  Check
 } from 'lucide-react';
 import { getStudents, getAbsenceRecords, subscribeToSyncEvents } from '@/lib/storage';
 import { exportAbsenceStatisticsToExcel } from '@/lib/exportExcel';
@@ -38,6 +40,15 @@ export default function StatisticsPage() {
     return parts[1] || (new Date().getMonth() + 1);
   });
   const [dailyFilterKind, setDailyFilterKind] = useState<'ALL' | AttendanceKind | 'PENDING_DOC'>('ALL');
+  const [onlyShowChangedStudents, setOnlyShowChangedStudents] = useState(false);
+  const [copiedStudentId, setCopiedStudentId] = useState<string | null>(null);
+
+  const handleCopyRemarks = (id: string, text: string) => {
+    if (!text || text === '-') return;
+    navigator.clipboard.writeText(text);
+    setCopiedStudentId(id);
+    setTimeout(() => setCopiedStudentId(null), 2000);
+  };
 
   const loadData = () => {
     setStudents(getStudents());
@@ -53,7 +64,12 @@ export default function StatisticsPage() {
   }, []);
 
   const handleExportExcel = () => {
-    exportAbsenceStatisticsToExcel(records, students);
+    exportAbsenceStatisticsToExcel(
+      records,
+      students,
+      `학급_${selectedMonth}월_출결마감_통계_NEIS용.xlsx`,
+      selectedMonth
+    );
   };
 
   // 날짜 범위 확인 헬퍼
@@ -182,35 +198,147 @@ export default function StatisticsPage() {
     return currentMonthRecords.filter(r => r.category === c || (c === '출석인정' && r.category === '출석 인정')).length;
   };
 
-  const monthlyStudentMap = students.map(s => {
+  const isCatMatch = (rCat: string, targetCat: '질병' | '미인정' | '기타' | '출석인정') => {
+    if (targetCat === '출석인정') return rCat === '출석인정' || rCat === '출석 인정';
+    return rCat === targetCat;
+  };
+
+  const formatMMDD = (dStr: string) => {
+    if (!dStr) return '';
+    const parts = dStr.split('-');
+    if (parts.length >= 3) return `${parts[1]}.${parts[2]}`;
+    return dStr;
+  };
+
+  const sortedStudents = [...students].sort((a, b) => (Number(a.studentNum) || 0) - (Number(b.studentNum) || 0));
+
+  const monthlyStudentMap = sortedStudents.map(s => {
     const sRecords = currentMonthRecords.filter(r => r.studentId === s.id);
-    const absenceCount = sRecords.filter(r => (r.kind || '결석') === '결석').length;
-    const lateCount = sRecords.filter(r => r.kind === '지각').length;
-    const earlyCount = sRecords.filter(r => r.kind === '조퇴').length;
-    const skipCount = sRecords.filter(r => r.kind === '결과').length;
-    const menstrualCount = sRecords.filter(r => r.type === 'MENSTRUAL').length;
-    const illnessRecords = sRecords.filter(r => r.category === '질병');
-    const illnessDays = illnessRecords.reduce((acc, cur) => acc + (cur.daysCount || 1), 0);
-    const fieldTripRecords = sRecords.filter(r => r.type === 'FIELD_EXPERIENCE');
+    
+    // 1. 결석 (일수 기준)
+    const absenceRecs = sRecords.filter(r => (r.kind || '결석') === '결석');
+    const absenceIllnessDays = absenceRecs.filter(r => isCatMatch(r.category, '질병')).reduce((acc, cur) => acc + (cur.daysCount || 1), 0);
+    const absenceUnexcusedDays = absenceRecs.filter(r => isCatMatch(r.category, '미인정')).reduce((acc, cur) => acc + (cur.daysCount || 1), 0);
+    const absenceOtherDays = absenceRecs.filter(r => isCatMatch(r.category, '기타')).reduce((acc, cur) => acc + (cur.daysCount || 1), 0);
+    const absenceApprovedDays = absenceRecs.filter(r => isCatMatch(r.category, '출석인정')).reduce((acc, cur) => acc + (cur.daysCount || 1), 0);
+    const absenceTotalDays = absenceIllnessDays + absenceUnexcusedDays + absenceOtherDays + absenceApprovedDays;
+
+    // 2. 지각 (회수 기준)
+    const lateRecs = sRecords.filter(r => r.kind === '지각');
+    const lateIllnessCount = lateRecs.filter(r => isCatMatch(r.category, '질병')).length;
+    const lateUnexcusedCount = lateRecs.filter(r => isCatMatch(r.category, '미인정')).length;
+    const lateOtherCount = lateRecs.filter(r => isCatMatch(r.category, '기타')).length;
+    const lateApprovedCount = lateRecs.filter(r => isCatMatch(r.category, '출석인정')).length;
+    const lateTotalCount = lateRecs.length;
+
+    // 3. 조퇴 (회수 기준)
+    const earlyRecs = sRecords.filter(r => r.kind === '조퇴');
+    const earlyIllnessCount = earlyRecs.filter(r => isCatMatch(r.category, '질병')).length;
+    const earlyUnexcusedCount = earlyRecs.filter(r => isCatMatch(r.category, '미인정')).length;
+    const earlyOtherCount = earlyRecs.filter(r => isCatMatch(r.category, '기타')).length;
+    const earlyApprovedCount = earlyRecs.filter(r => isCatMatch(r.category, '출석인정')).length;
+    const earlyTotalCount = earlyRecs.length;
+
+    // 4. 결과 (회수 기준)
+    const skipRecs = sRecords.filter(r => r.kind === '결과');
+    const skipIllnessCount = skipRecs.filter(r => isCatMatch(r.category, '질병')).length;
+    const skipUnexcusedCount = skipRecs.filter(r => isCatMatch(r.category, '미인정')).length;
+    const skipOtherCount = skipRecs.filter(r => isCatMatch(r.category, '기타')).length;
+    const skipApprovedCount = skipRecs.filter(r => isCatMatch(r.category, '출석인정')).length;
+    const skipTotalCount = skipRecs.length;
+
+    // 생리결석
+    const menstrualRecs = sRecords.filter(r => r.type === 'MENSTRUAL');
+    const menstrualCount = menstrualRecs.length;
+
+    // 체험학습 누적 (해당 학생 전 기간)
+    const allStudentRecs = records.filter(r => r.studentId === s.id);
+    const fieldTripRecords = allStudentRecs.filter(r => r.type === 'FIELD_EXPERIENCE');
     const fieldTripDays = fieldTripRecords.reduce((acc, cur) => acc + (cur.daysCount || 1), 0);
+
+    // 미제출 서류 진행건수
     const pendingCount = sRecords.filter(r => r.requiresDocument !== false && r.status !== 'APPROVED').length;
+
+    // 나이스 특기사항 텍스트 생성
+    const remarkLines = sRecords.map(r => {
+      const dateText = r.endDate && r.endDate !== r.startDate
+        ? `${formatMMDD(r.startDate)}~${formatMMDD(r.endDate)}`
+        : formatMMDD(r.startDate);
+      const reasonText = r.reason || r.typeName || '사유 미기재';
+      const kindText = r.kind || '결석';
+      const catText = r.category === '출석 인정' ? '출석인정' : r.category;
+      const countText = kindText === '결석' ? `${r.daysCount || 1}일` : '1회';
+      return `${dateText} ${reasonText} (${catText}${kindText} ${countText})`;
+    });
+    const remarksString = remarkLines.join('\n');
 
     return {
       student: s,
       records: sRecords,
       totalCount: sRecords.length,
-      absenceCount,
-      lateCount,
-      earlyCount,
-      skipCount,
+      absenceCount: absenceTotalDays,
+      lateCount: lateTotalCount,
+      earlyCount: earlyTotalCount,
+      skipCount: skipTotalCount,
+      absenceIllnessDays,
+      absenceUnexcusedDays,
+      absenceOtherDays,
+      absenceApprovedDays,
+      absenceTotalDays,
+      lateIllnessCount,
+      lateUnexcusedCount,
+      lateOtherCount,
+      lateApprovedCount,
+      lateTotalCount,
+      earlyIllnessCount,
+      earlyUnexcusedCount,
+      earlyOtherCount,
+      earlyApprovedCount,
+      earlyTotalCount,
+      skipIllnessCount,
+      skipUnexcusedCount,
+      skipOtherCount,
+      skipApprovedCount,
+      skipTotalCount,
       menstrualCount,
       menstrualExceeded: menstrualCount > 1,
-      illnessDays,
+      illnessDays: absenceIllnessDays,
       fieldTripDays,
       fieldTripExceeded: fieldTripDays > 9.5,
       pendingCount,
+      remarkLines,
+      remarksString,
     };
   });
+
+  const monthlyTotals = {
+    absenceIllness: monthlyStudentMap.reduce((s, m) => s + m.absenceIllnessDays, 0),
+    absenceUnexcused: monthlyStudentMap.reduce((s, m) => s + m.absenceUnexcusedDays, 0),
+    absenceOther: monthlyStudentMap.reduce((s, m) => s + m.absenceOtherDays, 0),
+    absenceApproved: monthlyStudentMap.reduce((s, m) => s + m.absenceApprovedDays, 0),
+    absenceTotal: monthlyStudentMap.reduce((s, m) => s + m.absenceTotalDays, 0),
+
+    lateIllness: monthlyStudentMap.reduce((s, m) => s + m.lateIllnessCount, 0),
+    lateUnexcused: monthlyStudentMap.reduce((s, m) => s + m.lateUnexcusedCount, 0),
+    lateOther: monthlyStudentMap.reduce((s, m) => s + m.lateOtherCount, 0),
+    lateApproved: monthlyStudentMap.reduce((s, m) => s + m.lateApprovedCount, 0),
+    lateTotal: monthlyStudentMap.reduce((s, m) => s + m.lateTotalCount, 0),
+
+    earlyIllness: monthlyStudentMap.reduce((s, m) => s + m.earlyIllnessCount, 0),
+    earlyUnexcused: monthlyStudentMap.reduce((s, m) => s + m.earlyUnexcusedCount, 0),
+    earlyOther: monthlyStudentMap.reduce((s, m) => s + m.earlyOtherCount, 0),
+    earlyApproved: monthlyStudentMap.reduce((s, m) => s + m.earlyApprovedCount, 0),
+    earlyTotal: monthlyStudentMap.reduce((s, m) => s + m.earlyTotalCount, 0),
+
+    skipIllness: monthlyStudentMap.reduce((s, m) => s + m.skipIllnessCount, 0),
+    skipUnexcused: monthlyStudentMap.reduce((s, m) => s + m.skipUnexcusedCount, 0),
+    skipOther: monthlyStudentMap.reduce((s, m) => s + m.skipOtherCount, 0),
+    skipApproved: monthlyStudentMap.reduce((s, m) => s + m.skipApprovedCount, 0),
+    skipTotal: monthlyStudentMap.reduce((s, m) => s + m.skipTotalCount, 0),
+
+    menstrual: monthlyStudentMap.reduce((s, m) => s + m.menstrualCount, 0),
+    pending: monthlyStudentMap.reduce((s, m) => s + m.pendingCount, 0),
+  };
 
   const monthlyMenstrualExceededCount = monthlyStudentMap.filter(m => m.menstrualExceeded).length;
 
@@ -929,96 +1057,402 @@ export default function StatisticsPage() {
                 </div>
               </div>
 
-              {/* 월말 학생별 출결 마감 집계표 */}
+              {/* 월말 학생별 출결 마감 집계표 (나이스 공식 4종류 x 4구분 양식) */}
               <div className="family-card p-5">
-                <h3 className="text-base font-bold text-[#121212] mb-1">
-                  {selectedMonth}월 학생별 출결 마감 집계표
-                </h3>
-                <p className="text-xs text-[#7e7e7d] mb-4">
-                  학생별 결석/지각/조퇴/결과 건수, 생리결석 월 1회 준수 여부 및 질병결석 누적 일수를 종합 확인합니다.
-                </p>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                  <div>
+                    <h3 className="text-base font-bold text-[#121212] flex items-center gap-2">
+                      <span>{selectedMonth}월 학생별 나이스(NEIS) 출결 마감 장부</span>
+                      <span className="badge-pill badge-sky text-[10px] font-bold">공식 4종류×4구분</span>
+                    </h3>
+                    <p className="text-xs text-[#7e7e7d] mt-0.5">
+                      결석(일수), 지각·조퇴·결과(회수)를 나이스(NEIS) 법정 4구분(질병·미인정·기타·인정)으로 분류하고, 특기사항 일자·사유를 자동 산출합니다.
+                    </p>
+                  </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                  {/* 빠른 필터 토글: 전체 vs 출결 변동 학생 */}
+                  <div className="flex items-center gap-1.5 p-1 bg-[#f1f5f9] rounded-xl self-start sm:self-auto border border-[#cbd5e1]">
+                    <button
+                      onClick={() => setOnlyShowChangedStudents(false)}
+                      className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
+                        !onlyShowChangedStudents
+                          ? 'bg-white text-[#121212] shadow-xs font-bold'
+                          : 'text-[#64748b] hover:text-[#121212]'
+                      }`}
+                    >
+                      전체 학생 ({monthlyStudentMap.length}명)
+                    </button>
+                    <button
+                      onClick={() => setOnlyShowChangedStudents(true)}
+                      className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                        onlyShowChangedStudents
+                          ? 'bg-[#121212] text-white shadow-xs font-bold'
+                          : 'text-[#64748b] hover:text-[#121212]'
+                      }`}
+                    >
+                      <span>출결 변동 학생만 ({monthlyStudentMap.filter(m => m.totalCount > 0).length}명)</span>
+                      {monthlyStudentMap.filter(m => m.totalCount > 0).length > 0 && (
+                        <span className={`w-2 h-2 rounded-full ${onlyShowChangedStudents ? 'bg-[#ff9500]' : 'bg-[#0086fc]'}`} />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto border border-[#cbd5e1] rounded-[8px]">
+                  <table className="w-full text-center text-xs border-collapse">
                     <thead>
-                      <tr className="border-b border-[#f2f0ed] text-[#7e7e7d] font-semibold bg-[#fcfbf9]">
-                        <th className="py-3 px-3">번호</th>
-                        <th className="py-3 px-3">이름</th>
-                        <th className="py-3 px-3 text-center">결석</th>
-                        <th className="py-3 px-3 text-center">지각</th>
-                        <th className="py-3 px-3 text-center">조퇴</th>
-                        <th className="py-3 px-3 text-center">결과</th>
-                        <th className="py-3 px-3">당월 생리결석</th>
-                        <th className="py-3 px-3">생리 1회준수</th>
-                        <th className="py-3 px-3">질병결석 일수</th>
-                        <th className="py-3 px-3">체험학습 (9.5일한도)</th>
-                        <th className="py-3 px-3">서류 미제출</th>
-                        <th className="py-3 px-3">연락처</th>
+                      {/* Tier 1 Header */}
+                      <tr className="bg-[#f8fafc] text-[#334155] font-bold border-b border-[#cbd5e1]">
+                        <th rowSpan={2} className="py-2.5 px-2 border-r border-[#cbd5e1] w-12 bg-[#f1f5f9]">번호</th>
+                        <th rowSpan={2} className="py-2.5 px-3 border-r border-[#cbd5e1] min-w-[72px] text-left bg-[#f1f5f9]">이름</th>
+                        <th colSpan={4} className="py-2 px-2 border-r border-[#cbd5e1] bg-orange-50 text-orange-950 font-bold border-b">
+                          결석 <span className="text-[10px] font-normal text-orange-700">(일수)</span>
+                        </th>
+                        <th colSpan={4} className="py-2 px-2 border-r border-[#cbd5e1] bg-amber-50 text-amber-950 font-bold border-b">
+                          지각 <span className="text-[10px] font-normal text-amber-700">(회수)</span>
+                        </th>
+                        <th colSpan={4} className="py-2 px-2 border-r border-[#cbd5e1] bg-blue-50 text-blue-950 font-bold border-b">
+                          조퇴 <span className="text-[10px] font-normal text-blue-700">(회수)</span>
+                        </th>
+                        <th colSpan={4} className="py-2 px-2 border-r border-[#cbd5e1] bg-purple-50 text-purple-950 font-bold border-b">
+                          결과 <span className="text-[10px] font-normal text-purple-700">(회수)</span>
+                        </th>
+                        <th rowSpan={2} className="py-2.5 px-2 border-r border-[#cbd5e1] min-w-[80px] bg-[#f8fafc]">
+                          당월 생리결석
+                          <div className="text-[10px] font-normal text-[#7e7e7d]">(1회한도)</div>
+                        </th>
+                        <th rowSpan={2} className="py-2.5 px-2 border-r border-[#cbd5e1] min-w-[84px] bg-[#f8fafc]">
+                          체험학습 누적
+                          <div className="text-[10px] font-normal text-[#7e7e7d]">(9.5일한도)</div>
+                        </th>
+                        <th rowSpan={2} className="py-2.5 px-2 border-r border-[#cbd5e1] min-w-[76px] bg-[#f8fafc]">
+                          서류 현황
+                        </th>
+                        <th rowSpan={2} className="py-2.5 px-3 min-w-[280px] text-left bg-[#f8fafc]">
+                          나이스(NEIS) 출결 특기사항 (일자 및 사유)
+                        </th>
+                      </tr>
+                      {/* Tier 2 Header */}
+                      <tr className="bg-[#f1f5f9] text-[#475569] text-[11px] font-semibold border-b border-[#cbd5e1]">
+                        {/* 결석 4구분 */}
+                        <th className="py-1.5 px-1.5 border-r border-[#cbd5e1] text-blue-700 bg-blue-50/40">질병</th>
+                        <th className="py-1.5 px-1.5 border-r border-[#cbd5e1] text-red-700 bg-red-50/40">미인정</th>
+                        <th className="py-1.5 px-1.5 border-r border-[#cbd5e1] text-gray-700">기타</th>
+                        <th className="py-1.5 px-1.5 border-r border-[#cbd5e1] text-emerald-700 bg-emerald-50/40">인정</th>
+
+                        {/* 지각 4구분 */}
+                        <th className="py-1.5 px-1.5 border-r border-[#cbd5e1] text-blue-700 bg-blue-50/40">질병</th>
+                        <th className="py-1.5 px-1.5 border-r border-[#cbd5e1] text-red-700 bg-red-50/40">미인정</th>
+                        <th className="py-1.5 px-1.5 border-r border-[#cbd5e1] text-gray-700">기타</th>
+                        <th className="py-1.5 px-1.5 border-r border-[#cbd5e1] text-emerald-700 bg-emerald-50/40">인정</th>
+
+                        {/* 조퇴 4구분 */}
+                        <th className="py-1.5 px-1.5 border-r border-[#cbd5e1] text-blue-700 bg-blue-50/40">질병</th>
+                        <th className="py-1.5 px-1.5 border-r border-[#cbd5e1] text-red-700 bg-red-50/40">미인정</th>
+                        <th className="py-1.5 px-1.5 border-r border-[#cbd5e1] text-gray-700">기타</th>
+                        <th className="py-1.5 px-1.5 border-r border-[#cbd5e1] text-emerald-700 bg-emerald-50/40">인정</th>
+
+                        {/* 결과 4구분 */}
+                        <th className="py-1.5 px-1.5 border-r border-[#cbd5e1] text-blue-700 bg-blue-50/40">질병</th>
+                        <th className="py-1.5 px-1.5 border-r border-[#cbd5e1] text-red-700 bg-red-50/40">미인정</th>
+                        <th className="py-1.5 px-1.5 border-r border-[#cbd5e1] text-gray-700">기타</th>
+                        <th className="py-1.5 px-1.5 border-r border-[#cbd5e1] text-emerald-700 bg-emerald-50/40">인정</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#f2f0ed]">
-                      {monthlyStudentMap.map((item) => (
-                        <tr key={item.student.id} className="hover:bg-[#fcfbf9] transition-colors">
-                          <td className="py-3 px-3 font-semibold text-[#7e7e7d]">{item.student.studentNum}번</td>
-                          <td className="py-3 px-3 font-bold text-[#121212]">{item.student.name}</td>
-                          <td className="py-3 px-3 text-center">
-                            {item.absenceCount > 0 ? (
-                              <span className="badge-pill badge-orange text-[10px] font-bold">{item.absenceCount}건</span>
-                            ) : '-'}
-                          </td>
-                          <td className="py-3 px-3 text-center">
-                            {item.lateCount > 0 ? (
-                              <span className="badge-pill badge-honey text-[10px] font-bold">{item.lateCount}건</span>
-                            ) : '-'}
-                          </td>
-                          <td className="py-3 px-3 text-center">
-                            {item.earlyCount > 0 ? (
-                              <span className="badge-pill badge-sky text-[10px] font-bold">{item.earlyCount}건</span>
-                            ) : '-'}
-                          </td>
-                          <td className="py-3 px-3 text-center">
-                            {item.skipCount > 0 ? (
-                              <span className="badge-pill badge-stone text-[10px] font-bold">{item.skipCount}건</span>
-                            ) : '-'}
-                          </td>
-                          <td className="py-3 px-3">
-                            <span className="badge-pill badge-honey text-[10px]">
-                              {item.menstrualCount}회
-                            </span>
-                          </td>
-                          <td className="py-3 px-3">
-                            {item.menstrualExceeded ? (
-                              <span className="badge-pill badge-orange text-[10px] font-bold">
-                                ⚠️ 초과
-                              </span>
-                            ) : (
-                              <span className="badge-pill badge-stone text-[10px]">
-                                정상 (1회)
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3 px-3 font-medium text-[#0086fc]">
-                            {item.illnessDays > 0 ? `${item.illnessDays}일` : '-'}
-                          </td>
-                          <td className="py-3 px-3">
-                            {item.fieldTripDays > 0 ? (
-                              <span className={`badge-pill text-[10px] ${item.fieldTripExceeded ? 'badge-orange' : 'badge-mint'}`}>
-                                {item.fieldTripDays}일 {item.fieldTripExceeded ? '(⚠️한도초과)' : ''}
-                              </span>
-                            ) : (
-                              <span className="text-[#7e7e7d]">-</span>
-                            )}
-                          </td>
-                          <td className="py-3 px-3">
-                            {item.pendingCount > 0 ? (
-                              <span className="text-[#ff3e00] font-bold text-[11px]">⚠️ {item.pendingCount}건 진행중</span>
-                            ) : (
-                              <span className="text-[#00ca48] font-medium text-[11px]">✓ 마감 완료</span>
-                            )}
-                          </td>
-                          <td className="py-3 px-3 text-[#7e7e7d]">{item.student.phone || '-'}</td>
-                        </tr>
-                      ))}
+                    <tbody className="divide-y divide-[#cbd5e1]">
+                      {(() => {
+                        const displayList = onlyShowChangedStudents
+                          ? monthlyStudentMap.filter(m => m.totalCount > 0)
+                          : monthlyStudentMap;
+
+                        if (displayList.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan={22} className="py-10 text-center text-[#7e7e7d] bg-white">
+                                <div className="flex flex-col items-center justify-center space-y-2">
+                                  <CheckCircle2 className="w-7 h-7 text-[#00ca48]" />
+                                  <p className="text-xs font-semibold text-[#121212]">
+                                    {selectedMonth}월 출결 변동(결석·지각·조퇴·결과)이 있는 학생이 없습니다.
+                                  </p>
+                                  <button
+                                    onClick={() => setOnlyShowChangedStudents(false)}
+                                    className="text-xs text-[#0086fc] underline hover:text-[#006bd1] mt-1 font-medium"
+                                  >
+                                    전체 학생 명단 보기
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        return displayList.map((item) => (
+                          <tr key={item.student.id} className="hover:bg-[#fcfbf9] transition-colors">
+                            {/* 번호 / 이름 */}
+                            <td className="py-2.5 px-2 font-semibold text-[#7e7e7d] border-r border-[#cbd5e1] bg-[#f8fafc]/50">
+                              {item.student.studentNum}번
+                            </td>
+                            <td className="py-2.5 px-3 font-bold text-[#121212] border-r border-[#cbd5e1] text-left whitespace-nowrap">
+                              {item.student.name}
+                            </td>
+
+                            {/* 결석 4구분 (일수) */}
+                            <td className="py-2 px-1.5 border-r border-[#cbd5e1]">
+                              {item.absenceIllnessDays > 0 ? (
+                                <span className="font-bold text-blue-700">{item.absenceIllnessDays}</span>
+                              ) : <span className="text-[#cbd5e1]">-</span>}
+                            </td>
+                            <td className="py-2 px-1.5 border-r border-[#cbd5e1]">
+                              {item.absenceUnexcusedDays > 0 ? (
+                                <span className="font-bold text-red-700">{item.absenceUnexcusedDays}</span>
+                              ) : <span className="text-[#cbd5e1]">-</span>}
+                            </td>
+                            <td className="py-2 px-1.5 border-r border-[#cbd5e1]">
+                              {item.absenceOtherDays > 0 ? (
+                                <span className="font-bold text-gray-700">{item.absenceOtherDays}</span>
+                              ) : <span className="text-[#cbd5e1]">-</span>}
+                            </td>
+                            <td className="py-2 px-1.5 border-r border-[#cbd5e1]">
+                              {item.absenceApprovedDays > 0 ? (
+                                <span className="font-bold text-emerald-700">{item.absenceApprovedDays}</span>
+                              ) : <span className="text-[#cbd5e1]">-</span>}
+                            </td>
+
+                            {/* 지각 4구분 (회수) */}
+                            <td className="py-2 px-1.5 border-r border-[#cbd5e1]">
+                              {item.lateIllnessCount > 0 ? (
+                                <span className="font-bold text-blue-700">{item.lateIllnessCount}</span>
+                              ) : <span className="text-[#cbd5e1]">-</span>}
+                            </td>
+                            <td className="py-2 px-1.5 border-r border-[#cbd5e1]">
+                              {item.lateUnexcusedCount > 0 ? (
+                                <span className="font-bold text-red-700">{item.lateUnexcusedCount}</span>
+                              ) : <span className="text-[#cbd5e1]">-</span>}
+                            </td>
+                            <td className="py-2 px-1.5 border-r border-[#cbd5e1]">
+                              {item.lateOtherCount > 0 ? (
+                                <span className="font-bold text-gray-700">{item.lateOtherCount}</span>
+                              ) : <span className="text-[#cbd5e1]">-</span>}
+                            </td>
+                            <td className="py-2 px-1.5 border-r border-[#cbd5e1]">
+                              {item.lateApprovedCount > 0 ? (
+                                <span className="font-bold text-emerald-700">{item.lateApprovedCount}</span>
+                              ) : <span className="text-[#cbd5e1]">-</span>}
+                            </td>
+
+                            {/* 조퇴 4구분 (회수) */}
+                            <td className="py-2 px-1.5 border-r border-[#cbd5e1]">
+                              {item.earlyIllnessCount > 0 ? (
+                                <span className="font-bold text-blue-700">{item.earlyIllnessCount}</span>
+                              ) : <span className="text-[#cbd5e1]">-</span>}
+                            </td>
+                            <td className="py-2 px-1.5 border-r border-[#cbd5e1]">
+                              {item.earlyUnexcusedCount > 0 ? (
+                                <span className="font-bold text-red-700">{item.earlyUnexcusedCount}</span>
+                              ) : <span className="text-[#cbd5e1]">-</span>}
+                            </td>
+                            <td className="py-2 px-1.5 border-r border-[#cbd5e1]">
+                              {item.earlyOtherCount > 0 ? (
+                                <span className="font-bold text-gray-700">{item.earlyOtherCount}</span>
+                              ) : <span className="text-[#cbd5e1]">-</span>}
+                            </td>
+                            <td className="py-2 px-1.5 border-r border-[#cbd5e1]">
+                              {item.earlyApprovedCount > 0 ? (
+                                <span className="font-bold text-emerald-700">{item.earlyApprovedCount}</span>
+                              ) : <span className="text-[#cbd5e1]">-</span>}
+                            </td>
+
+                            {/* 결과 4구분 (회수) */}
+                            <td className="py-2 px-1.5 border-r border-[#cbd5e1]">
+                              {item.skipIllnessCount > 0 ? (
+                                <span className="font-bold text-blue-700">{item.skipIllnessCount}</span>
+                              ) : <span className="text-[#cbd5e1]">-</span>}
+                            </td>
+                            <td className="py-2 px-1.5 border-r border-[#cbd5e1]">
+                              {item.skipUnexcusedCount > 0 ? (
+                                <span className="font-bold text-red-700">{item.skipUnexcusedCount}</span>
+                              ) : <span className="text-[#cbd5e1]">-</span>}
+                            </td>
+                            <td className="py-2 px-1.5 border-r border-[#cbd5e1]">
+                              {item.skipOtherCount > 0 ? (
+                                <span className="font-bold text-gray-700">{item.skipOtherCount}</span>
+                              ) : <span className="text-[#cbd5e1]">-</span>}
+                            </td>
+                            <td className="py-2 px-1.5 border-r border-[#cbd5e1]">
+                              {item.skipApprovedCount > 0 ? (
+                                <span className="font-bold text-emerald-700">{item.skipApprovedCount}</span>
+                              ) : <span className="text-[#cbd5e1]">-</span>}
+                            </td>
+
+                            {/* 당월 생리결석 */}
+                            <td className="py-2 px-2 border-r border-[#cbd5e1]">
+                              {item.menstrualCount > 0 ? (
+                                item.menstrualExceeded ? (
+                                  <span className="badge-pill badge-orange text-[10px] font-bold">
+                                    ⚠️ {item.menstrualCount}회 (초과)
+                                  </span>
+                                ) : (
+                                  <span className="badge-pill badge-honey text-[10px] font-bold">
+                                    {item.menstrualCount}회
+                                  </span>
+                                )
+                              ) : (
+                                <span className="text-[#cbd5e1]">-</span>
+                              )}
+                            </td>
+
+                            {/* 체험학습 누적 */}
+                            <td className="py-2 px-2 border-r border-[#cbd5e1]">
+                              {item.fieldTripDays > 0 ? (
+                                <span className={`badge-pill text-[10px] font-medium ${item.fieldTripExceeded ? 'badge-orange font-bold' : 'badge-mint'}`}>
+                                  {item.fieldTripDays}일 {item.fieldTripExceeded ? '(초과)' : ''}
+                                </span>
+                              ) : (
+                                <span className="text-[#cbd5e1]">-</span>
+                              )}
+                            </td>
+
+                            {/* 서류 현황 */}
+                            <td className="py-2 px-2 border-r border-[#cbd5e1]">
+                              {item.totalCount === 0 ? (
+                                <span className="text-[#94a3b8] text-[11px]">-</span>
+                              ) : item.pendingCount > 0 ? (
+                                <span className="text-[#ff3e00] font-bold text-[11px] whitespace-nowrap">
+                                  ⚠️ {item.pendingCount}건 진행
+                                </span>
+                              ) : (
+                                <span className="text-[#00ca48] font-medium text-[11px] whitespace-nowrap">
+                                  ✓ 마감완료
+                                </span>
+                              )}
+                            </td>
+
+                            {/* 나이스 출결 특기사항 (일자 및 사유) */}
+                            <td className="py-2 px-3 text-left">
+                              {item.remarkLines.length === 0 ? (
+                                <span className="text-[#cbd5e1]">-</span>
+                              ) : (
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="space-y-1">
+                                    {item.remarkLines.map((line, lIdx) => (
+                                      <div
+                                        key={lIdx}
+                                        className="text-[11px] font-mono text-[#1e293b] font-medium bg-[#f8fafc] px-2 py-0.5 rounded border border-[#e2e8f0]"
+                                      >
+                                        {line}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <button
+                                    onClick={() => handleCopyRemarks(item.student.id, item.remarksString)}
+                                    title="나이스 입력용 특기사항 복사"
+                                    className="btn-light text-[10px] py-1 px-2 shrink-0 flex items-center gap-1 border border-[#cbd5e1] hover:bg-stone-100 rounded transition-colors"
+                                  >
+                                    {copiedStudentId === item.student.id ? (
+                                      <>
+                                        <Check className="w-3 h-3 text-[#00ca48]" />
+                                        <span className="text-[#00ca48] font-bold">복사됨</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Copy className="w-3 h-3 text-[#64748b]" />
+                                        <span>복사</span>
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        ));
+                      })()}
+
+                      {/* 학급 종합 합계 행 (Total Summary Row) */}
+                      <tr className="bg-[#f1f5f9] font-black border-t-2 border-[#cbd5e1] text-xs">
+                        <td colSpan={2} className="py-2.5 px-3 text-center border-r border-[#cbd5e1] bg-[#e2e8f0]">
+                          합계 (총 {monthlyStudentMap.length}명)
+                        </td>
+
+                        {/* 결석 4구분 합계 */}
+                        <td className="py-2.5 px-1.5 border-r border-[#cbd5e1] text-blue-700">
+                          {monthlyTotals.absenceIllness > 0 ? `${monthlyTotals.absenceIllness}일` : '-'}
+                        </td>
+                        <td className="py-2.5 px-1.5 border-r border-[#cbd5e1] text-red-700">
+                          {monthlyTotals.absenceUnexcused > 0 ? `${monthlyTotals.absenceUnexcused}일` : '-'}
+                        </td>
+                        <td className="py-2.5 px-1.5 border-r border-[#cbd5e1] text-gray-700">
+                          {monthlyTotals.absenceOther > 0 ? `${monthlyTotals.absenceOther}일` : '-'}
+                        </td>
+                        <td className="py-2.5 px-1.5 border-r border-[#cbd5e1] text-emerald-700">
+                          {monthlyTotals.absenceApproved > 0 ? `${monthlyTotals.absenceApproved}일` : '-'}
+                        </td>
+
+                        {/* 지각 4구분 합계 */}
+                        <td className="py-2.5 px-1.5 border-r border-[#cbd5e1] text-blue-700">
+                          {monthlyTotals.lateIllness > 0 ? `${monthlyTotals.lateIllness}회` : '-'}
+                        </td>
+                        <td className="py-2.5 px-1.5 border-r border-[#cbd5e1] text-red-700">
+                          {monthlyTotals.lateUnexcused > 0 ? `${monthlyTotals.lateUnexcused}회` : '-'}
+                        </td>
+                        <td className="py-2.5 px-1.5 border-r border-[#cbd5e1] text-gray-700">
+                          {monthlyTotals.lateOther > 0 ? `${monthlyTotals.lateOther}회` : '-'}
+                        </td>
+                        <td className="py-2.5 px-1.5 border-r border-[#cbd5e1] text-emerald-700">
+                          {monthlyTotals.lateApproved > 0 ? `${monthlyTotals.lateApproved}회` : '-'}
+                        </td>
+
+                        {/* 조퇴 4구분 합계 */}
+                        <td className="py-2.5 px-1.5 border-r border-[#cbd5e1] text-blue-700">
+                          {monthlyTotals.earlyIllness > 0 ? `${monthlyTotals.earlyIllness}회` : '-'}
+                        </td>
+                        <td className="py-2.5 px-1.5 border-r border-[#cbd5e1] text-red-700">
+                          {monthlyTotals.earlyUnexcused > 0 ? `${monthlyTotals.earlyUnexcused}회` : '-'}
+                        </td>
+                        <td className="py-2.5 px-1.5 border-r border-[#cbd5e1] text-gray-700">
+                          {monthlyTotals.earlyOther > 0 ? `${monthlyTotals.earlyOther}회` : '-'}
+                        </td>
+                        <td className="py-2.5 px-1.5 border-r border-[#cbd5e1] text-emerald-700">
+                          {monthlyTotals.earlyApproved > 0 ? `${monthlyTotals.earlyApproved}회` : '-'}
+                        </td>
+
+                        {/* 결과 4구분 합계 */}
+                        <td className="py-2.5 px-1.5 border-r border-[#cbd5e1] text-blue-700">
+                          {monthlyTotals.skipIllness > 0 ? `${monthlyTotals.skipIllness}회` : '-'}
+                        </td>
+                        <td className="py-2.5 px-1.5 border-r border-[#cbd5e1] text-red-700">
+                          {monthlyTotals.skipUnexcused > 0 ? `${monthlyTotals.skipUnexcused}회` : '-'}
+                        </td>
+                        <td className="py-2.5 px-1.5 border-r border-[#cbd5e1] text-gray-700">
+                          {monthlyTotals.skipOther > 0 ? `${monthlyTotals.skipOther}회` : '-'}
+                        </td>
+                        <td className="py-2.5 px-1.5 border-r border-[#cbd5e1] text-emerald-700">
+                          {monthlyTotals.skipApproved > 0 ? `${monthlyTotals.skipApproved}회` : '-'}
+                        </td>
+
+                        {/* 당월 생리결석 합계 */}
+                        <td className="py-2.5 px-2 border-r border-[#cbd5e1] text-[#b35300]">
+                          {monthlyTotals.menstrual > 0 ? `${monthlyTotals.menstrual}회` : '-'}
+                        </td>
+
+                        {/* 체험학습 (학급 합계는 -) */}
+                        <td className="py-2.5 px-2 border-r border-[#cbd5e1] text-[#7e7e7d]">
+                          -
+                        </td>
+
+                        {/* 서류 현황 */}
+                        <td className="py-2.5 px-2 border-r border-[#cbd5e1]">
+                          {monthlyTotals.pending > 0 ? (
+                            <span className="text-[#ff3e00] font-bold">⚠️ {monthlyTotals.pending}건</span>
+                          ) : (
+                            <span className="text-[#00ca48] font-medium">전체완료</span>
+                          )}
+                        </td>
+
+                        {/* 특기사항 요약 */}
+                        <td className="py-2.5 px-3 text-left text-[11px] text-[#64748b]">
+                          변동 학생 {monthlyStudentMap.filter(m => m.totalCount > 0).length}명 / 총 {currentMonthRecords.length}건 등록
+                        </td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
