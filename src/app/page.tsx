@@ -32,9 +32,14 @@ import {
   getStudentConsecutiveIllnessDays,
   recordStudentLogin
 } from '@/lib/storage';
-import { Student, AbsenceRecord, AttachmentProof } from '@/types';
+import { Student, AbsenceRecord, AttachmentProof, ReminderSettings, DailyReminderLog } from '@/types';
 import { Lock, LogOut, UserCheck, ShieldCheck, KeyRound } from 'lucide-react';
-import { getCurrentTimeString, requestBrowserNotificationPermission } from '@/lib/reminders';
+import { 
+  getCurrentTimeString, 
+  requestBrowserNotificationPermission,
+  getReminderSettings,
+  getTodayReminderLog
+} from '@/lib/reminders';
 import Link from 'next/link';
 
 export default function StudentMobilePage() {
@@ -833,6 +838,87 @@ function StudentActionCard({
   const [studentMemo, setStudentMemo] = useState(record.studentMemo || record.memo || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [reminderSettings, setReminderSettings] = useState<ReminderSettings>(() => getReminderSettings());
+  const [reminderLog, setReminderLog] = useState<DailyReminderLog>(() => getTodayReminderLog());
+
+  useEffect(() => {
+    const handleRemindSync = () => {
+      setReminderSettings(getReminderSettings());
+      setReminderLog(getTodayReminderLog());
+    };
+    const unsub = subscribeToSyncEvents((type) => {
+      if (type === 'REMINDER_SETTINGS_UPDATED' || type === 'REMINDER_LOG_UPDATED' || type === 'SERVER_SYNC_COMPLETE' || type === 'NOTIFICATIONS_UPDATED') {
+        handleRemindSync();
+      }
+    });
+    window.addEventListener('hoengseong_reminder_settings_updated', handleRemindSync);
+    window.addEventListener('hoengseong_reminder_log_updated', handleRemindSync);
+    return () => {
+      unsub();
+      window.removeEventListener('hoengseong_reminder_settings_updated', handleRemindSync);
+      window.removeEventListener('hoengseong_reminder_log_updated', handleRemindSync);
+    };
+  }, []);
+
+  const activeReminderSlots = reminderSettings.slots.filter(s => s.enabled !== false);
+  const timeSlotDescription = activeReminderSlots.map(s => s.periodName || s.time).join(' · ');
+
+  const renderReminderBox = (isPickedUpStage: boolean) => {
+    if (!reminderSettings.enabled) {
+      return (
+        <div className="mt-3.5 p-2.5 bg-[#f8f9fa] rounded-[10px] border border-[#e9ecef] text-[11px] text-[#6c757d] flex items-center justify-between">
+          <span className="flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5 text-[#adb5bd]" />
+            <span>정기 알림 일시 정지 (선생님이 필요 시 직접 알림)</span>
+          </span>
+          <span className="badge-pill bg-[#e9ecef] text-[#6c757d] text-[9px]">OFF</span>
+        </div>
+      );
+    }
+    if (activeReminderSlots.length === 0) return null;
+
+    return (
+      <div className="mt-3.5 p-3 bg-[#fff8e8] rounded-[10px] border border-[#ffcd6c]/60 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold text-[#d48f00] flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5" />
+            <span>3차례 정기 알림 연동 중</span>
+          </span>
+          <span className="badge-pill badge-orange text-[9px] font-semibold">
+            {isPickedUpStage ? '미제출 알림' : '미이행 알림'}
+          </span>
+        </div>
+        <p className="text-[11px] text-[#474645] leading-snug">
+          {record.type === 'FIELD_EXPERIENCE'
+            ? `보고서를 7일이내 NEIS로 제출할 때까지 ${timeSlotDescription}에 정기 독려 핑이 울립니다.`
+            : isPickedUpStage
+            ? `서류 작성 후 제출함에 넣기 전까지 ${timeSlotDescription}에 독려 핑이 울립니다.`
+            : `서류를 챙겨 제출할 때까지 ${timeSlotDescription}에 3차례 독려 핑이 울립니다.`}
+        </p>
+        <div className={`grid grid-cols-${Math.min(activeReminderSlots.length, 3)} gap-1.5 text-center text-[10px] font-semibold pt-0.5`}>
+          {activeReminderSlots.map((s, idx) => {
+            const isExecuted = Boolean(reminderLog.slots[s.id]?.dispatchedAt || reminderLog.slots[s.time]?.dispatchedAt);
+            const icon = idx === 0 ? '🌅 ' : idx === 1 ? '🍱 ' : '🌇 ';
+            return (
+              <div
+                key={s.id}
+                className={`p-1.5 rounded-[6px] border transition-all ${
+                  isExecuted
+                    ? 'bg-[#e6fbf1] text-[#00ca48] border-[#a3f3ca]'
+                    : currentTime >= s.time
+                    ? 'bg-[#ffcd6c]/30 text-[#d48f00] border-[#ffcd6c]'
+                    : 'bg-[#ffffff] text-[#7e7e7d] border-[#f2f0ed]'
+                }`}
+              >
+                {icon}{s.periodName || `${idx + 1}차 ${s.time}`} {isExecuted ? '✓ 완료' : ''}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   useEffect(() => {
     if (record.attachments && record.attachments.length > 0) {
       setCheckedAttachments(record.attachments);
@@ -1032,34 +1118,8 @@ function StudentActionCard({
             )}
           </div>
 
-          {/* ⏰ 3차례 정기 독려 알림 작동 안내 (아침 09:30, 정오 12:30, 오후 14:30) */}
-          <div className="mt-3.5 p-3 bg-[#fff8e8] rounded-[10px] border border-[#ffcd6c]/60 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-[#d48f00] flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5" />
-                <span>3차례 정기 알림 작동 중</span>
-              </span>
-              <span className="badge-pill badge-orange text-[9px] font-semibold">
-                미이행 알림
-              </span>
-            </div>
-            <p className="text-[11px] text-[#474645] leading-snug">
-              {record.type === 'FIELD_EXPERIENCE'
-                ? '보고서를 7일이내 NEIS로 제출할 때까지 아침 09:30 · 정오 12:30 · 오후 14:30에 독려 핑이 울립니다.'
-                : '서류를 챙겨 제출할 때까지 아침 09:30 · 정오 12:30 · 오후 14:30에 3차례 독려 핑이 울립니다.'}
-            </p>
-            <div className="grid grid-cols-3 gap-1.5 text-center text-[10px] font-semibold pt-0.5">
-              <div className={`p-1.5 rounded-[6px] border ${currentTime >= '09:30' ? 'bg-[#ffcd6c]/30 text-[#d48f00] border-[#ffcd6c]' : 'bg-[#ffffff] text-[#7e7e7d] border-[#f2f0ed]'}`}>
-                🌅 1차 09:30
-              </div>
-              <div className={`p-1.5 rounded-[6px] border ${currentTime >= '12:30' ? 'bg-[#ffcd6c]/30 text-[#d48f00] border-[#ffcd6c]' : 'bg-[#ffffff] text-[#7e7e7d] border-[#f2f0ed]'}`}>
-                🍱 2차 12:30
-              </div>
-              <div className={`p-1.5 rounded-[6px] border ${currentTime >= '14:30' ? 'bg-[#ffcd6c]/30 text-[#d48f00] border-[#ffcd6c]' : 'bg-[#ffffff] text-[#7e7e7d] border-[#f2f0ed]'}`}>
-                🌇 3차 14:30
-              </div>
-            </div>
-          </div>
+          {/* ⏰ 3차례 정기 독려 알림 작동 안내 (교사 대시보드와 실시간 연동) */}
+          {renderReminderBox(false)}
 
           {/* Primary Action Dark Pill */}
           <button
@@ -1204,32 +1264,8 @@ function StudentActionCard({
             )}
           </div>
 
-          {/* ⏰ 3차례 정기 독려 알림 작동 안내 */}
-          <div className="mt-3.5 p-3 bg-[#fff8e8] rounded-[10px] border border-[#ffcd6c]/60 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-[#d48f00] flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5" />
-                <span>2단계 미제출 알림 작동 중</span>
-              </span>
-              <span className="badge-pill badge-orange text-[9px] font-semibold">
-                미제출 시 알림
-              </span>
-            </div>
-            <p className="text-[11px] text-[#474645] leading-snug">
-              서류 작성 후 제출함에 넣기 전까지 <strong>아침 09:30 · 정오 12:30 · 오후 14:30</strong>에 독려 핑이 울립니다.
-            </p>
-            <div className="grid grid-cols-3 gap-1.5 text-center text-[10px] font-semibold pt-0.5">
-              <div className={`p-1.5 rounded-[6px] border ${currentTime >= '09:30' ? 'bg-[#ffcd6c]/30 text-[#d48f00] border-[#ffcd6c]' : 'bg-[#ffffff] text-[#7e7e7d] border-[#f2f0ed]'}`}>
-                🌅 1차 09:30
-              </div>
-              <div className={`p-1.5 rounded-[6px] border ${currentTime >= '12:30' ? 'bg-[#ffcd6c]/30 text-[#d48f00] border-[#ffcd6c]' : 'bg-[#ffffff] text-[#7e7e7d] border-[#f2f0ed]'}`}>
-                🍱 2차 12:30
-              </div>
-              <div className={`p-1.5 rounded-[6px] border ${currentTime >= '14:30' ? 'bg-[#ffcd6c]/30 text-[#d48f00] border-[#ffcd6c]' : 'bg-[#ffffff] text-[#7e7e7d] border-[#f2f0ed]'}`}>
-                🌇 3차 14:30
-              </div>
-            </div>
-          </div>
+          {/* ⏰ 3차례 정기 독려 알림 작동 안내 (교사 대시보드와 실시간 연동) */}
+          {renderReminderBox(true)}
 
           {/* Student optional message/memo to teacher */}
           <div className="mt-3.5 bg-[#fcfbf9] rounded-[10px] p-3 border border-[#f2f0ed] text-xs">

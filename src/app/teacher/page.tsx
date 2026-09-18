@@ -135,9 +135,20 @@ export default function TeacherDashboard() {
     };
     window.addEventListener('hoengseong_reminder_settings_updated', handleReminderSettingsEvent);
 
+    const handleReminderLogEvent = (e: Event) => {
+      const custom = e as CustomEvent<DailyReminderLog>;
+      if (custom.detail) {
+        setReminderLog(custom.detail);
+      } else {
+        setReminderLog(getTodayReminderLog());
+      }
+    };
+    window.addEventListener('hoengseong_reminder_log_updated', handleReminderLogEvent);
+
     return () => {
       unsubscribe();
       window.removeEventListener('hoengseong_reminder_settings_updated', handleReminderSettingsEvent);
+      window.removeEventListener('hoengseong_reminder_log_updated', handleReminderLogEvent);
     };
   }, []);
 

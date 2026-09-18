@@ -132,11 +132,16 @@ export function getTodayReminderLog(): DailyReminderLog {
 export function saveReminderLog(log: DailyReminderLog) {
   if (typeof window === 'undefined') return;
   localStorage.setItem(REMINDER_LOG_KEY, JSON.stringify(log));
+  window.dispatchEvent(new CustomEvent('hoengseong_reminder_log_updated', { detail: log }));
+  postServerSync('SAVE_REMINDER_LOG', { reminderLog: log });
 }
 
 export function clearReminderLog() {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(REMINDER_LOG_KEY);
+  const emptyLog = { date: getTodayDateString(), slots: {} };
+  window.dispatchEvent(new CustomEvent('hoengseong_reminder_log_updated', { detail: emptyLog }));
+  postServerSync('SAVE_REMINDER_LOG', { reminderLog: emptyLog });
 }
 
 // 미이행 학생 레코드 목록 (누적 관리)
@@ -248,31 +253,60 @@ export function dispatchScheduledReminder(
     const is3DaysIllness = rec.type === 'ILLNESS_OVER_3' || (rec.category === '질병' && ((rec.daysCount || 1) >= 3 || consecutiveIllnessDays >= 3));
     const docNotice = is3DaysIllness ? ' (※ 3일 이상 연속 질병결석: 의사 진단서 또는 의사 소견서 필수 지참)' : '';
 
-    const slotLabel = `[${slot.title} (${slot.time})]`;
-    let messageBody = '';
+    const slotLabel = slot.periodName || slot.title;
+    let teacherTitle = '';
+    let teacherMessage = '';
+    let studentTitle = '';
+    let studentMessage = '';
 
     if (rec.type === 'FIELD_EXPERIENCE') {
-      messageBody = `🎒 ${slotLabel} ${rec.studentName} 학생! 현장체험학습은 결석계가 아니며, '보고서를 7일이내 NEIS로 제출'해야 합니다!`;
+      teacherTitle = `⏰ [${slot.title} (${slot.time})] [${rec.studentNum}번 ${rec.studentName}] 체험학습 독려 발송`;
+      teacherMessage = `${rec.studentNum}번 ${rec.studentName} 학생에게 7일 이내 NEIS 보고서 제출 독려 핑을 전송했습니다.`;
+      studentTitle = `🎒 [${slotLabel} 알림] 현장체험학습 보고서를 NEIS로 제출해주세요!`;
+      studentMessage = `${rec.studentName} 학생! 현장체험학습은 종이 결석계가 아니에요. 복귀 후 7일 이내에 NEIS로 보고서를 제출해야 출석 인정이 됩니다. (일자별 사진 + 동행 보호자 사진 필수!)`;
     } else if (rec.status === 'ATTENDED_NOTIFIED') {
       // 1단계 미이행: 서류 미수령
-      messageBody = `🔔 ${slotLabel} ${rec.studentName} 학생! 교실 앞 서류함에서 [${rec.typeName}] 결석신고서를 아직 챙기지 않았습니다. 지금 서류를 챙겨주세요!${docNotice}`;
+      teacherTitle = `⏰ [${slot.title} (${slot.time})] [${rec.studentNum}번 ${rec.studentName}] 서류 양식 수령 독려`;
+      teacherMessage = `${rec.studentNum}번 ${rec.studentName} 학생에게 교실 서류함에서 [${rec.typeName}] 결석신고서를 챙기라는 ${slot.title} 안내 핑을 전송했습니다.`;
+      if (slot.time <= '10:00') {
+        studentTitle = `🌅 [${slotLabel} 알림] 교실 서류함에서 결석신고서를 챙겨주세요!`;
+        studentMessage = `${rec.studentName} 학생, 아침 조회가 끝났어요! 교실 앞 서류함에서 [${rec.typeName}] 양식을 1장 챙겨서 가방에 넣어두세요. (집에서 부모님 서명 필요)${docNotice}`;
+      } else if (slot.time <= '13:30') {
+        studentTitle = `🍱 [${slotLabel} 알림] 점심시간에 결석신고서 양식을 챙겨가세요!`;
+        studentMessage = `${rec.studentName} 학생, 맛있는 점심 먹고 교실 서류함에서 [${rec.typeName}] 양식을 꼭 챙겨두세요! (오늘 챙겨가야 집에서 작성할 수 있어요)${docNotice}`;
+      } else {
+        studentTitle = `🌇 [${slotLabel} 알림] 오늘 하교 전 결석신고서 양식을 꼭 챙겨가세요!`;
+        studentMessage = `${rec.studentName} 학생, 곧 종례 및 하교 시간이에요! 교실 서류함에서 [${rec.typeName}] 양식을 챙겨서 가방에 넣었는지 확인해주세요.${docNotice}`;
+      }
     } else if (rec.status === 'FORM_PICKED_UP') {
       // 2단계 미이행: 서류 작성 및 제출함 투입 대기
-      messageBody = `📝 ${slotLabel} ${rec.studentName} 학생! [${rec.typeName}] 결석계를 작성하여 교실 제출함에 넣고 앱에서 [제출 완료]를 꼭 눌러주세요!${docNotice}`;
+      teacherTitle = `⏰ [${slot.title} (${slot.time})] [${rec.studentNum}번 ${rec.studentName}] 제출함 투입 독려`;
+      teacherMessage = `${rec.studentNum}번 ${rec.studentName} 학생에게 작성 중인 [${rec.typeName}] 결석계를 교실 제출함에 넣고 [제출 완료]를 누르라는 ${slot.title} 독려 핑을 전송했습니다.`;
+      if (slot.time <= '10:00') {
+        studentTitle = `🌅 [${slotLabel} 알림] 작성해 온 결석계를 교실 제출함에 넣어주세요!`;
+        studentMessage = `${rec.studentName} 학생! 집에서 부모님 서명을 받아 온 [${rec.typeName}] 서류가 있다면 지금 교실 제출함에 넣고 아래 [제출 완료] 버튼을 눌러주세요!${docNotice}`;
+      } else if (slot.time <= '13:30') {
+        studentTitle = `🍱 [${slotLabel} 알림] 점심시간에 결석계를 제출함에 쏙 넣어주세요!`;
+        studentMessage = `${rec.studentName} 학생! 작성을 마친 [${rec.typeName}] 서류를 점심시간을 이용해 교실 제출함에 넣고 아래 [제출 완료] 버튼을 꼭 눌러주세요!${docNotice}`;
+      } else {
+        studentTitle = `🌇 [${slotLabel} 알림] 오늘 하교 전 결석계를 제출함에 꼭 넣어주세요!`;
+        studentMessage = `${rec.studentName} 학생! 오늘 하교하기 전에 작성한 [${rec.typeName}] 서류를 교실 제출함에 넣고 아래 [제출 완료] 버튼을 눌러주세요.${docNotice}`;
+      }
     } else {
       // PENDING_ATTENDANCE
-      messageBody = `🏫 ${slotLabel} ${rec.studentName} 학생! 오늘 등교 후 담임선생님께 등교 확인을 받고 [${rec.typeName}] 결석계를 챙겨주세요.${docNotice}`;
+      teacherTitle = `⏰ [${slot.title} (${slot.time})] [${rec.studentNum}번 ${rec.studentName}] 등교 확인 대기 안내`;
+      teacherMessage = `${rec.studentNum}번 ${rec.studentName} 학생에게 등교 확인 및 서류 수령 안내 ${slot.title} 핑을 전송했습니다.`;
+      studentTitle = `🏫 [${slotLabel} 알림] 등교 후 담임선생님께 확인받아주세요!`;
+      studentMessage = `${rec.studentName} 학생, 학교에 도착하면 담임선생님께 등교 확인을 받고 [${rec.typeName}] 서류 양식을 챙겨주세요.${docNotice}`;
     }
-
-    const notifTitle = rec.type === 'FIELD_EXPERIENCE'
-      ? `⏰ [${slot.title}] 현장체험학습: 보고서를 7일이내 NEIS로 제출 알림`
-      : `⏰ [${slot.title}] 결석계 단계 미이행 알림`;
 
     newNotifications.push({
       id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       type: 'SCHEDULED_REMIND',
-      title: notifTitle,
-      message: messageBody,
+      title: teacherTitle,
+      message: teacherMessage,
+      studentTitle,
+      studentMessage,
       studentName: rec.studentName,
       grade: rec.grade,
       classNum: rec.classNum,
@@ -284,14 +318,15 @@ export function dispatchScheduledReminder(
     });
 
     triggerBrowserPush(
-      rec.type === 'FIELD_EXPERIENCE' ? `⏰ [${slot.title}] 현장체험학습 NEIS 보고서 제출 알림` : `⏰ [${slot.title}] 결석신고서 제출 알림`,
-      rec.type === 'FIELD_EXPERIENCE' ? `${rec.studentName} 학생! 보고서를 7일이내 NEIS로 제출해주세요.` : `${rec.studentName} 학생! ${slot.targetAction || '서류 제출'}을(를) 진행해주세요.`
+      studentTitle,
+      studentMessage
     );
 
     return {
       ...rec,
       remindCount: (rec.remindCount || 0) + 1,
       lastRemindedAt: nowIso,
+      updatedAt: nowIso,
     };
   });
 
@@ -314,6 +349,13 @@ export function dispatchScheduledReminder(
   currentLog.slots[slot.id] = logData;
   currentLog.slots[slot.time] = logData;
   saveReminderLog(currentLog);
+
+  // 서버에 레코드, 알림, 그리고 리마인드 로그까지 일괄 원자적 동기화
+  postServerSync('BATCH_SYNC', { 
+    records: updatedRecords, 
+    notifications: mergedNotifs, 
+    reminderLog: currentLog 
+  });
 
   return {
     dispatchedCount: unfulfilled.length,

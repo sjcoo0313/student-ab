@@ -9,6 +9,7 @@ const STORAGE_KEYS = {
   CURRENT_STUDENT: 'hoengseong_current_student_id',
   TEACHER_PIN: 'hoengseong_teacher_pin_v1',
   REMINDER_SETTINGS: 'hoengseong_reminder_settings_v1',
+  REMINDER_LOG: 'hoengseong_daily_reminders_log_v1',
 };
 
 export function getDeletedRecordIds(): Set<string> {
@@ -717,6 +718,19 @@ export async function fetchServerSync(): Promise<boolean> {
     }
     if (data.reminderSettings) {
       localStorage.setItem(STORAGE_KEYS.REMINDER_SETTINGS, JSON.stringify(data.reminderSettings));
+      broadcastUpdate('REMINDER_SETTINGS_UPDATED', data.reminderSettings);
+    }
+    if (data.reminderLog && typeof data.reminderLog === 'object') {
+      const today = new Date().toISOString().split('T')[0];
+      if (data.reminderLog.date === today) {
+        const localLogStr = localStorage.getItem(STORAGE_KEYS.REMINDER_LOG);
+        let localLog = { date: today, slots: {} as Record<string, unknown> };
+        try { if (localLogStr) localLog = JSON.parse(localLogStr); } catch {}
+        const mergedSlots = { ...(localLog.slots || {}), ...(data.reminderLog.slots || {}) };
+        const mergedLog = { date: today, slots: mergedSlots };
+        localStorage.setItem(STORAGE_KEYS.REMINDER_LOG, JSON.stringify(mergedLog));
+        broadcastUpdate('REMINDER_LOG_UPDATED', mergedLog);
+      }
     }
     localStorage.setItem('hoengseong_app_has_run_v1', 'true');
 
@@ -1452,6 +1466,8 @@ export function updateAbsenceRecordStatus(
       type: 'STATUS_REVERTED',
       title: '↩ 출결 진행 단계 되돌림',
       message: `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생의 출결 상태가 [${stageNames[targetStatus] || targetStatus}] 단계로 되돌려졌습니다.${note ? ` (${note})` : ''}`,
+      studentTitle: '⚠️ [서류 재확인] 결석계 서류 보완 안내',
+      studentMessage: `${rec.studentName} 학생, 제출한 출결 서류에 확인 또는 보완이 필요해요: ${note || '담임선생님께 확인 후 다시 제출해주세요.'}`,
       studentName: rec.studentName,
       grade: rec.grade,
       classNum: rec.classNum,
@@ -1493,6 +1509,12 @@ export function markAttended(recordId: string): AbsenceRecord | null {
       message: isFieldTrip
         ? `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생의 등교가 확인되어 '보고서를 7일이내 NEIS로 제출' 알림이 발송되었습니다.`
         : `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생의 등교가 확인되어 결석계 챙기기 알림이 발송되었습니다.`,
+      studentTitle: isFieldTrip 
+        ? '🎒 [등교 확인] 현장체험학습 보고서를 NEIS로 제출해주세요!' 
+        : '🏫 [등교 확인] 교실 서류함에서 결석신고서를 챙겨주세요!',
+      studentMessage: isFieldTrip
+        ? `${rec.studentName} 학생, 등교를 환영해요! 현장체험학습은 종이 결석계가 아니에요. 7일 이내에 NEIS로 보고서를 제출해주세요. (일자별 사진 + 동행 보호자 사진 필수!)`
+        : `${rec.studentName} 학생, 등교를 환영해요! 교실 앞 서류함에서 [${rec.typeName}] 결석신고서를 1장 챙겨서 가방에 넣어두세요. (집에서 부모님 서명 필요)`,
       studentName: rec.studentName,
       grade: rec.grade,
       classNum: rec.classNum,
@@ -1703,18 +1725,29 @@ export function triggerRemind(recordId: string): AbsenceRecord | null {
     const rec = updatedRecord as AbsenceRecord;
     const isFieldTrip = rec.type === 'FIELD_EXPERIENCE';
     const isPickedUp = rec.status === 'FORM_PICKED_UP';
+    const isAttendedNotified = rec.status === 'ATTENDED_NOTIFIED';
     addNotification({
       type: 'REMIND_ALERT',
       title: isFieldTrip 
-        ? '🔔 현장체험학습 NEIS 보고서 제출 리마인드' 
+        ? `🔔 [${rec.studentNum}번 ${rec.studentName}] 체험학습 리마인드 전송 완료` 
         : isPickedUp
-        ? '🔔 작성 중인 결석계 제출함 투입 독려 알림'
-        : '🔔 결석신고서 수령/제출 리마인드 발송',
+        ? `🔔 [${rec.studentNum}번 ${rec.studentName}] 제출함 투입 독려 전송 완료`
+        : `🔔 [${rec.studentNum}번 ${rec.studentName}] 서류 양식 수령 안내 전송 완료`,
       message: isFieldTrip
         ? `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생에게 '보고서를 7일이내 NEIS로 제출' 리마인드를 전송했습니다.`
         : isPickedUp
         ? `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생에게 작성 중인 [${rec.typeName}] 서류를 완성하여 교실 제출함에 넣어달라는 제출 독려 알림을 전송했습니다.`
-        : `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생에게 결석신고서 수령 및 제출 리마인드를 전송했습니다.`,
+        : `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생에게 교실 서류함에서 [${rec.typeName}] 양식을 챙기라는 안내 알림을 전송했습니다.`,
+      studentTitle: isFieldTrip
+        ? '🎒 [담임선생님 알림] 현장체험학습 보고서를 NEIS로 제출해주세요!'
+        : isPickedUp
+        ? '✍️ [담임선생님 알림] 작성한 결석계를 교실 제출함에 넣어주세요!'
+        : '📄 [담임선생님 알림] 결석신고서 서류 양식을 챙겨주세요!',
+      studentMessage: isFieldTrip
+        ? `${rec.studentName} 학생! 현장체험학습은 종이 결석계가 아니에요. 복귀 후 7일 이내에 NEIS로 보고서를 제출해야 출석 인정이 됩니다. (일자별 사진 + 보호자 동반 사진 필수!)`
+        : isPickedUp
+        ? `${rec.studentName} 학생! 결석신고서에 부모님 서명과 증빙서류를 챙기셨나요? 작성을 마쳤다면 교실 제출함에 넣고, 화면 아래 [제출 완료] 버튼을 눌러주세요!`
+        : `${rec.studentName} 학생! 아직 교실 앞 서류함에서 [${rec.typeName}] 서류 양식을 챙기지 않았어요. 쉬는 시간이나 점심시간에 서류함에서 양식을 1장 챙겨 가방에 넣어두세요! (집에서 부모님 서명 필요)`,
       studentName: rec.studentName,
       grade: rec.grade,
       classNum: rec.classNum,

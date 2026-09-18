@@ -342,7 +342,29 @@
         "timeDescription": "1교시 시작 전후 (아침 조회 후)",
         "targetAction": "교실 서류함에서 양식 챙기기",
         "enabled": true
+      },
+      {
+        "id": "slot-2",
+        "time": "12:30",
+        "title": "2차 정오 알림",
+        "periodName": "정오 12:30",
+        "timeDescription": "점심시간 시작",
+        "targetAction": "서류 자필 작성 및 증빙서류 준비",
+        "enabled": true
+      },
+      {
+        "id": "slot-3",
+        "time": "14:30",
+        "title": "3차 오후 알림",
+        "periodName": "오후 14:30",
+        "timeDescription": "종례 및 하교 전",
+        "targetAction": "교실 제출함 투입 및 [제출 완료] 전송",
+        "enabled": true
       }
     ]
+  },
+  "reminderLog": {
+    "date": "2026-09-18",
+    "slots": {}
   }
 }

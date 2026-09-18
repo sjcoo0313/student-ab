@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { Student, AbsenceRecord, SystemNotification, ReminderSettings } from '@/types';
+import { Student, AbsenceRecord, SystemNotification, ReminderSettings, DailyReminderLog } from '@/types';
 import { INITIAL_STUDENTS, INITIAL_RECORDS } from '@/lib/storage';
 
 export interface ServerDatabase {
@@ -10,6 +10,7 @@ export interface ServerDatabase {
   notifications: SystemNotification[];
   teacherPin: string;
   reminderSettings?: ReminderSettings;
+  reminderLog?: DailyReminderLog;
   lastUpdated: number;
 }
 

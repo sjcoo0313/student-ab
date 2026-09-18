@@ -18,7 +18,8 @@ import {
   Sparkles,
   Trash2,
   Lock,
-  LogOut
+  LogOut,
+  X
 } from 'lucide-react';
 import { 
   getNotifications, 
@@ -210,57 +211,62 @@ export default function Navbar() {
   return (
     <>
       {/* Realtime Toast Banner - Storybook Spread Style */}
-      {toastMessage && (
-        <div className={`fixed top-5 right-5 z-50 max-w-sm w-full bg-[#ffffff] text-[#343433] p-4 rounded-[10px] border shadow-lg animate-in fade-in slide-in-from-top-3 flex items-start space-x-3 ${
-          toastMessage.type === 'SCHEDULED_REMIND' ? 'border-[#ff3e00]/50 ring-2 ring-[#ff3e00]/10' : 'border-[#e5d5c3]'
-        }`}>
-          <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
-            toastMessage.type === 'SCHEDULED_REMIND' 
-              ? 'bg-[#fff0eb] text-[#ff3e00]' 
-              : toastMessage.type === 'REMIND_ALERT'
-              ? 'bg-[#fff8e8] text-[#d48f00]'
-              : 'bg-[#e6fbf1] text-[#00ca48]'
+      {toastMessage && (() => {
+        const isStudentView = pathname === '/';
+        const displayTitle = (isStudentView && toastMessage.studentTitle) ? toastMessage.studentTitle : toastMessage.title;
+        const displayBody = (isStudentView && toastMessage.studentMessage) ? toastMessage.studentMessage : toastMessage.message;
+        return (
+          <div className={`fixed top-5 right-5 z-50 max-w-sm w-full bg-[#ffffff] text-[#343433] p-4 rounded-[10px] border shadow-lg animate-in fade-in slide-in-from-top-3 flex items-start space-x-3 ${
+            toastMessage.type === 'SCHEDULED_REMIND' ? 'border-[#ff3e00]/50 ring-2 ring-[#ff3e00]/10' : 'border-[#e5d5c3]'
           }`}>
-            {toastMessage.type === 'SCHEDULED_REMIND' ? (
-              <Clock className="w-5 h-5 animate-pulse" />
-            ) : toastMessage.type === 'REMIND_ALERT' ? (
-              <Bell className="w-5 h-5" />
-            ) : (
-              <Sparkles className="w-5 h-5" />
-            )}
-          </div>
-          <div className="flex-1">
-            <div className="flex items-center justify-between">
-              <span className={`badge-pill text-[11px] font-semibold ${
-                toastMessage.type === 'SCHEDULED_REMIND' 
-                  ? 'badge-orange' 
-                  : toastMessage.type === 'REMIND_ALERT'
-                  ? 'badge-honey'
-                  : 'badge-mint'
-              }`}>
-                {toastMessage.title}
-              </span>
-              <span className="text-[11px] text-[#7e7e7d]">방금 전</span>
+            <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+              toastMessage.type === 'SCHEDULED_REMIND' 
+                ? 'bg-[#fff0eb] text-[#ff3e00]' 
+                : toastMessage.type === 'REMIND_ALERT'
+                ? 'bg-[#fff8e8] text-[#d48f00]'
+                : 'bg-[#e6fbf1] text-[#00ca48]'
+            }`}>
+              {toastMessage.type === 'SCHEDULED_REMIND' ? (
+                <Clock className="w-5 h-5 animate-pulse" />
+              ) : toastMessage.type === 'REMIND_ALERT' ? (
+                <Bell className="w-5 h-5" />
+              ) : (
+                <Sparkles className="w-5 h-5" />
+              )}
             </div>
-            <p className="text-xs text-[#343433] font-medium mt-1.5 leading-snug">{toastMessage.message}</p>
-            {toastMessage.attachments && toastMessage.attachments.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1">
-                {toastMessage.attachments.map((att, i) => (
-                  <span key={i} className="text-[11px] bg-[#f2f0ed] text-[#474645] px-2 py-0.5 rounded-[6px] font-medium">
-                    📎 {att}
-                  </span>
-                ))}
+            <div className="flex-1">
+              <div className="flex items-center justify-between">
+                <span className={`badge-pill text-[11px] font-semibold ${
+                  toastMessage.type === 'SCHEDULED_REMIND' 
+                    ? 'badge-orange' 
+                    : toastMessage.type === 'REMIND_ALERT'
+                    ? 'badge-honey'
+                    : 'badge-mint'
+                }`}>
+                  {displayTitle}
+                </span>
+                <span className="text-[11px] text-[#7e7e7d]">방금 전</span>
               </div>
-            )}
+              <p className="text-xs text-[#343433] font-medium mt-1.5 leading-snug">{displayBody}</p>
+              {toastMessage.attachments && toastMessage.attachments.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {toastMessage.attachments.map((att, i) => (
+                    <span key={i} className="text-[11px] bg-[#f2f0ed] text-[#474645] px-2 py-0.5 rounded-[6px] font-medium">
+                      📎 {att}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => setToastMessage(null)}
+              className="text-[#7e7e7d] hover:text-[#121212] -mr-1 p-0.5 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
-          <button 
-            onClick={() => setToastMessage(null)}
-            className="text-[#7e7e7d] hover:text-[#121212] text-xs p-1"
-          >
-            ✕
-          </button>
-        </div>
-      )}
+        );
+      })()}
 
       <header className="sticky top-0 z-40 bg-[#fbfaf9] border-b border-[#f2f0ed]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -381,15 +387,19 @@ export default function Navbar() {
                           {isStudentRoute ? '나에게 도착한 새로운 알림이 없습니다.' : '새로운 알림이 없습니다.'}
                         </div>
                       ) : (
-                        visibleNotifications.map((n) => (
-                          <div key={n.id} className="py-2.5 px-1 hover:bg-[#fbfaf9] transition-colors">
-                            <p className="text-xs font-semibold text-[#121212]">{n.title}</p>
-                            <p className="text-xs text-[#474645] mt-0.5 leading-snug">{n.message}</p>
-                            <span className="text-[10px] text-[#7e7e7d] mt-1 block">
-                              {new Date(n.timestamp).toLocaleTimeString('ko-KR')}
-                            </span>
-                          </div>
-                        ))
+                        visibleNotifications.map((n) => {
+                          const displayTitle = (isStudentRoute && n.studentTitle) ? n.studentTitle : n.title;
+                          const displayMessage = (isStudentRoute && n.studentMessage) ? n.studentMessage : n.message;
+                          return (
+                            <div key={n.id} className="py-2.5 px-1 hover:bg-[#fbfaf9] transition-colors">
+                              <p className="text-xs font-semibold text-[#121212]">{displayTitle}</p>
+                              <p className="text-xs text-[#474645] mt-0.5 leading-snug">{displayMessage}</p>
+                              <span className="text-[10px] text-[#7e7e7d] mt-1 block">
+                                {new Date(n.timestamp).toLocaleTimeString('ko-KR')}
+                              </span>
+                            </div>
+                          );
+                        })
                       )}
                     </div>
                   </div>

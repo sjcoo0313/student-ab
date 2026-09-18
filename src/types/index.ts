@@ -101,6 +101,8 @@ export interface SystemNotification {
   type: 'SUBMIT_PING' | 'REMIND_ALERT' | 'ATTENDANCE_CHECKED' | 'SCHEDULED_REMIND' | 'STATUS_REVERTED';
   title: string;
   message: string;
+  studentTitle?: string; // 학생 화면에서 표시할 친절한 맞춤 제목
+  studentMessage?: string; // 학생 화면에서 표시할 상황별 구체적 행동 요령 문구
   studentName: string;
   grade: number;
   classNum: number;
@@ -126,4 +128,16 @@ export interface ReminderSlotInfo {
 export interface ReminderSettings {
   enabled: boolean; // 자동 알림 전체 ON / OFF 토글
   slots: ReminderSlotInfo[]; // 교사가 직접 설정한 알림 시간 목록
+}
+
+export interface DailyReminderLog {
+  date: string; // YYYY-MM-DD
+  slots: {
+    [slotKey: string]: {
+      dispatchedAt: string;
+      studentCount: number;
+      studentNames: string[];
+      isManual?: boolean;
+    };
+  };
 }

@@ -60,6 +60,13 @@ export async function POST(req: NextRequest) {
         break;
       }
 
+      case 'SAVE_REMINDER_LOG': {
+        if (body.reminderLog && typeof body.reminderLog === 'object') {
+          updated = await writeServerDb({ reminderLog: body.reminderLog });
+        }
+        break;
+      }
+
       case 'BATCH_SYNC': {
         const patch: Record<string, unknown> = {};
         if (Array.isArray(body.records)) patch.records = body.records;
@@ -67,6 +74,7 @@ export async function POST(req: NextRequest) {
         if (Array.isArray(body.notifications)) patch.notifications = body.notifications;
         if (typeof body.teacherPin === 'string') patch.teacherPin = body.teacherPin;
         if (body.reminderSettings && typeof body.reminderSettings === 'object') patch.reminderSettings = body.reminderSettings;
+        if (body.reminderLog && typeof body.reminderLog === 'object') patch.reminderLog = body.reminderLog;
         updated = await writeServerDb(patch);
         break;
       }
@@ -150,11 +158,22 @@ export async function POST(req: NextRequest) {
 
         const newNotifs = [...current.notifications];
         if (foundRec) {
+          const isFieldTrip = foundRec.type === 'FIELD_EXPERIENCE';
           newNotifs.unshift({
             id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
             type: 'REMIND_ALERT',
-            title: `🔔 [등교 확인] ${foundRec.studentName} 학생!`,
-            message: `교실 앞 서류함에서 [${foundRec.typeName}] 결석신고서를 챙겨주세요!`,
+            title: isFieldTrip 
+              ? `🎒 [등교 확인] ${foundRec.studentNum}번 ${foundRec.studentName} 학생`
+              : `🔔 [등교 확인] ${foundRec.studentNum}번 ${foundRec.studentName} 학생`,
+            message: isFieldTrip
+              ? `${foundRec.studentName} 학생의 등교가 확인되어 '보고서를 7일이내 NEIS로 제출' 알림을 전송했습니다.`
+              : `${foundRec.studentName} 학생에게 교실 서류함에서 [${foundRec.typeName}] 결석신고서를 챙기라는 알림을 전송했습니다.`,
+            studentTitle: isFieldTrip
+              ? `🎒 [등교 확인] 현장체험학습 보고서를 NEIS로 제출해주세요!`
+              : `🏫 [등교 확인] 결석신고서 서류 양식을 챙겨주세요!`,
+            studentMessage: isFieldTrip
+              ? `${foundRec.studentName} 학생, 등교를 환영해요! 현장체험학습은 종이 결석계가 아니에요. 7일 이내에 NEIS로 보고서를 제출해주세요. (일자별 사진 + 동행 보호자 사진 필수!)`
+              : `${foundRec.studentName} 학생, 등교를 환영해요! 교실 앞 서류함에서 [${foundRec.typeName}] 양식을 1장 챙겨서 가방에 넣어두세요. (집에서 부모님 서명 필요)`,
             studentName: foundRec.studentName,
             grade: foundRec.grade,
             classNum: foundRec.classNum,
