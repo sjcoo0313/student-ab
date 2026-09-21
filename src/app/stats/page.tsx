@@ -39,7 +39,7 @@ export default function StatisticsPage() {
     const parts = getTodayString().split('-').map(Number);
     return parts[1] || (new Date().getMonth() + 1);
   });
-  const [dailyFilterKind, setDailyFilterKind] = useState<'ALL' | AttendanceKind | 'PENDING_DOC'>('ALL');
+  const [dailyFilterKind, setDailyFilterKind] = useState<'ALL' | AttendanceKind | 'PENDING_DOC' | 'UNRESOLVED_ALL'>('ALL');
   const [onlyShowChangedStudents, setOnlyShowChangedStudents] = useState(false);
   const [copiedStudentId, setCopiedStudentId] = useState<string | null>(null);
 
@@ -115,16 +115,43 @@ export default function StatisticsPage() {
   // 단순 기록 완료 건 (지각, 조퇴, 결과 등 서류 불필요)
   const dailySimpleRecorded = dailyRecords.filter(r => r.requiresDocument === false || r.status === 'RECORDED').length;
 
+  // 💡 전체 미회수 결석계 (이전 날짜 포함하여 아직 서류 제출/승인이 완료되지 않은 전체 건)
+  const allUnresolvedRecords = records
+    .filter(r => r.requiresDocument !== false && r.status !== 'APPROVED')
+    .sort((a, b) => {
+      const dateA = a.startDate || '';
+      const dateB = b.startDate || '';
+      if (dateA !== dateB) return dateB.localeCompare(dateA);
+      return (Number(a.studentNum) || 0) - (Number(b.studentNum) || 0);
+    });
+
+  // 오늘/선택일 이전의 과거 미회수 결석계 건
+  const pastUnresolvedRecords = allUnresolvedRecords.filter(r => (r.startDate || '') < selectedDate);
+
+  // 당월 결석계 전체 회수율 (이번 달 전체 서류 대상 중 승인 완료 비율)
+  const selectedYearMonth = selectedDate.substring(0, 7); // e.g. "2026-09"
+  const monthlyDocRequiredRecords = records.filter(r => 
+    r.requiresDocument !== false && 
+    (r.startDate || '').startsWith(selectedYearMonth)
+  );
+  const monthlyDocApprovedCount = monthlyDocRequiredRecords.filter(r => r.status === 'APPROVED').length;
+  const monthlyDocRecoveryRate = monthlyDocRequiredRecords.length > 0
+    ? Math.round((monthlyDocApprovedCount / monthlyDocRequiredRecords.length) * 100)
+    : null;
+
+  // 💡 해당일 서류 회수율: 서류 제출 대상이 있는 경우에만 % 계산, 서류 대상이 0건이면 null (해당 없음)
   const dailyCompletionRate = dailyDocRequired.length > 0 
     ? Math.round(((dailyDocCompleted + dailyDocSubmitted) / dailyDocRequired.length) * 100) 
-    : (dailyTotal > 0 ? 100 : 0);
+    : null;
 
   // 일일 테이블 필터링
-  const filteredDailyRecords = dailyRecords.filter(r => {
-    if (dailyFilterKind === 'ALL') return true;
-    if (dailyFilterKind === 'PENDING_DOC') return r.requiresDocument !== false && r.status !== 'APPROVED';
-    return (r.kind || '결석') === dailyFilterKind;
-  });
+  const filteredDailyRecords = dailyFilterKind === 'UNRESOLVED_ALL'
+    ? allUnresolvedRecords
+    : dailyRecords.filter(r => {
+        if (dailyFilterKind === 'ALL') return true;
+        if (dailyFilterKind === 'PENDING_DOC') return r.requiresDocument !== false && r.status !== 'APPROVED';
+        return (r.kind || '결석') === dailyFilterKind;
+      });
 
   // 2. 주간 통계 데이터 (선택된 날짜가 속한 주의 월~금)
   const getWeekDates = (dateStr: string) => {
@@ -524,44 +551,70 @@ export default function StatisticsPage() {
                 <div className="family-card p-4">
                   <div className="flex items-center justify-between">
                     <span className={`badge-pill text-[11px] ${dailyDocRequired.length > 0 && dailyCompletionRate === 100 ? 'badge-mint' : 'badge-stone'}`}>
-                      결석계 서류 회수율
+                      {dailyDocRequired.length > 0 ? '해당일 서류 회수율' : '결석계 서류 회수율'}
                     </span>
                     <span className="text-[11px] text-[#7e7e7d]">
                       {dailyDocRequired.length > 0 ? `${dailyDocCompleted + dailyDocSubmitted}/${dailyDocRequired.length}건` : '서류대상 없음'}
                     </span>
                   </div>
-                  <h3 className={`text-2xl font-black mt-2 ${dailyDocRequired.length > 0 && dailyCompletionRate === 100 ? 'text-[#00ca48]' : 'text-[#121212]'}`}>
-                    {dailyDocRequired.length > 0 ? `${dailyCompletionRate}%` : (dailyTotal > 0 ? '100%' : '0%')}
+                  <h3 className={`text-2xl font-black mt-2 ${dailyDocRequired.length > 0 && dailyCompletionRate === 100 ? 'text-[#00ca48]' : dailyDocRequired.length > 0 ? 'text-[#121212]' : 'text-[#7e7e7d]'}`}>
+                    {dailyDocRequired.length > 0 && dailyCompletionRate !== null ? `${dailyCompletionRate}%` : '-'}
+                    {dailyDocRequired.length === 0 && (
+                      <span className="text-xs font-normal text-[#7e7e7d] ml-1.5">(해당 없음)</span>
+                    )}
                   </h3>
                   <div className="w-full bg-[#f2f0ed] h-2 rounded-full mt-2.5 overflow-hidden">
                     <div 
                       className={`h-full rounded-full transition-all ${dailyDocRequired.length > 0 && dailyCompletionRate === 100 ? 'bg-[#00ca48]' : 'bg-[#0086fc]'}`} 
-                      style={{ width: `${dailyDocRequired.length > 0 ? dailyCompletionRate : (dailyTotal > 0 ? 100 : 0)}%` }}
+                      style={{ width: `${dailyDocRequired.length > 0 && dailyCompletionRate !== null ? dailyCompletionRate : 0}%` }}
                     ></div>
                   </div>
-                  <p className="text-[11px] text-[#7e7e7d] mt-2 pt-2 border-t border-[#f2f0ed]">
-                    {dailyDocRequired.length > 0 
-                      ? `제출·승인 ${dailyDocCompleted + dailyDocSubmitted}건 / 서류대상 ${dailyDocRequired.length}건`
-                      : dailyTotal > 0
-                      ? `지각·조퇴·결과 등 단순 기록 ${dailySimpleRecorded}건 (서류 불필요)`
-                      : '해당 일자 등록된 출결 변동 없음'}
-                  </p>
+                  <div className="text-[11px] text-[#7e7e7d] mt-2 pt-2 border-t border-[#f2f0ed] space-y-1">
+                    <div>
+                      {dailyDocRequired.length > 0 
+                        ? `해당일 제출·승인 ${dailyDocCompleted + dailyDocSubmitted}건 / 서류대상 ${dailyDocRequired.length}건`
+                        : dailyTotal > 0
+                        ? `지각·조퇴·결과 등 단순 기록 ${dailySimpleRecorded}건 (서류 불필요)`
+                        : '해당 일자 등록된 출결 변동 없음'}
+                    </div>
+                    {monthlyDocRecoveryRate !== null && (
+                      <div className="text-[10px] text-[#474645] font-medium flex items-center justify-between">
+                        <span>📊 {selectedMonth}월 누적 회수율:</span>
+                        <strong className="text-[#0086fc]">{monthlyDocRecoveryRate}% ({monthlyDocApprovedCount}/{monthlyDocRequiredRecords.length}건 승인)</strong>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {/* Card 3: Pending Check */}
-                <div className="family-card p-4">
+                {/* Card 3: Unresolved Records (누적 미회수 결석계) */}
+                <div className={`family-card p-4 ${allUnresolvedRecords.length > 0 ? 'border-t-2 border-t-[#ff3e00]' : ''}`}>
                   <div className="flex items-center justify-between">
-                    <span className="badge-pill badge-sky text-[11px]">확인 대기 서류</span>
-                    <span className="text-[11px] text-[#0086fc] font-semibold">대조 대기</span>
+                    <span className={`badge-pill text-[11px] font-bold ${allUnresolvedRecords.length > 0 ? 'badge-orange' : 'badge-mint'}`}>
+                      {allUnresolvedRecords.length > 0 ? '누적 미회수 결석계' : '미회수 결석계'}
+                    </span>
+                    <span className={`text-[11px] font-semibold ${allUnresolvedRecords.length > 0 ? 'text-[#ff3e00]' : 'text-[#00ca48]'}`}>
+                      {pastUnresolvedRecords.length > 0 ? `이전 일자 ${pastUnresolvedRecords.length}건` : allUnresolvedRecords.length > 0 ? '오늘 미회수' : '모두 해결'}
+                    </span>
                   </div>
-                  <h3 className="text-2xl font-black text-[#0086fc] mt-2">
-                    {dailyDocSubmitted}건
+                  <h3 className={`text-2xl font-black mt-2 ${allUnresolvedRecords.length > 0 ? 'text-[#ff3e00]' : 'text-[#00ca48]'}`}>
+                    {allUnresolvedRecords.length}건
+                    {allUnresolvedRecords.length === 0 && (
+                      <span className="text-xs font-normal text-[#00ca48] ml-1.5">(미완료 없음)</span>
+                    )}
                   </h3>
                   <p className="text-xs text-[#7e7e7d] mt-2.5">
-                    학생이 제출함 투입 후 교사 실물 대조 대기
+                    {allUnresolvedRecords.length > 0 
+                      ? '이전 일자 포함 서류 미제출·미승인 누적' 
+                      : '현재 처리되지 않은 결석계가 없습니다.'}
                   </p>
                   <p className="text-[11px] text-[#7e7e7d] mt-2 pt-2 border-t border-[#f2f0ed]">
-                    서류 미수령/작성중: {dailyDocPending - dailyDocSubmitted}건
+                    {allUnresolvedRecords.length > 0 ? (
+                      <span>
+                        실물 대조 대기 {allUnresolvedRecords.filter(r => r.status === 'SUBMITTED').length}건 · 작성/미수령 {allUnresolvedRecords.filter(r => r.status !== 'SUBMITTED').length}건
+                      </span>
+                    ) : (
+                      '모든 결석 서류 승인 및 마감 완료'
+                    )}
                   </p>
                 </div>
 
@@ -569,7 +622,7 @@ export default function StatisticsPage() {
                 <div className="family-card p-4">
                   <div className="flex items-center justify-between">
                     <span className="badge-pill badge-mint text-[11px]">출결 마감 완료</span>
-                    <span className="text-[11px] text-[#00ca48] font-semibold">마감 완료</span>
+                    <span className="text-[11px] text-[#00ca48] font-semibold">선택일 기준</span>
                   </div>
                   <h3 className="text-2xl font-black text-[#121212] mt-2">
                     {dailyDocCompleted + dailySimpleRecorded}건
@@ -583,18 +636,103 @@ export default function StatisticsPage() {
                 </div>
               </div>
 
+              {/* 🚨 아직 회수(해결)되지 않은 이전 일자 결석계 직관적 안내 섹션 */}
+              {allUnresolvedRecords.length > 0 && (
+                <div className="family-card p-4.5 bg-[#fffaf5] border border-[#f97316]/40 rounded-[12px] space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-[#ffe4dc] pb-2.5">
+                    <div className="flex items-center space-x-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#ff3e00] animate-pulse"></span>
+                      <h4 className="text-sm font-bold text-[#b43403] flex items-center gap-1.5">
+                        <AlertTriangle className="w-4 h-4 text-[#ff3e00]" />
+                        <span>아직 해결되지 않은 결석계 목록</span>
+                        <span className="bg-[#ff3e00] text-white text-[11px] px-2 py-0.5 rounded-full font-extrabold">
+                          총 {allUnresolvedRecords.length}건
+                        </span>
+                      </h4>
+                    </div>
+                    <span className="text-xs text-[#9a3412]">
+                      결석일이 지났어도 서류가 승인될 때까지 교사가 챙겨야 하는 미완료 건입니다.
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {allUnresolvedRecords.map(rec => {
+                      const isToday = rec.startDate === getTodayString();
+                      const daysPassed = Math.floor((new Date().getTime() - new Date(rec.startDate).getTime()) / (1000 * 60 * 60 * 24));
+                      return (
+                        <div 
+                          key={rec.id} 
+                          className="bg-white p-3.5 rounded-[8px] border border-[#ffcd6c]/60 shadow-xs space-y-2 hover:border-[#ff3e00] transition-all"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-xs text-[#121212]">
+                              {rec.studentNum}번 {rec.studentName}
+                            </span>
+                            <span className={`badge-pill text-[9px] font-bold ${
+                              rec.status === 'SUBMITTED' ? 'badge-sky' :
+                              rec.status === 'FORM_PICKED_UP' ? 'badge-honey' :
+                              rec.status === 'ATTENDED_NOTIFIED' ? 'badge-orange' :
+                              'badge-stone'
+                            }`}>
+                              {rec.status === 'SUBMITTED' ? '4단계: 실물 대조 대기' :
+                               rec.status === 'FORM_PICKED_UP' ? '3단계: 작성 중' :
+                               rec.status === 'ATTENDED_NOTIFIED' ? '2단계: 서류 미수령' :
+                               '1단계: 등교 확인 대기'}
+                            </span>
+                          </div>
+                          
+                          <p className="text-[11px] text-[#474645] line-clamp-1 font-medium">
+                            {rec.reason}
+                          </p>
+
+                          <div className="flex items-center justify-between text-[10px]">
+                            <span className="text-[#e11d48] font-bold">
+                              📅 결석일: {rec.startDate} {isToday ? '(오늘)' : daysPassed > 0 ? `(${daysPassed}일 전)` : ''}
+                            </span>
+                            <span className="badge-pill badge-stone text-[9px]">{rec.typeName}</span>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-1.5 border-t border-[#f2f0ed] text-[10px]">
+                            <span className="text-[#7e7e7d]">
+                              {(rec.remindCount || 0) > 0 ? `알림 ${rec.remindCount}회` : '알림 0회'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedDate(rec.startDate);
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                              }}
+                              className="text-[#0086fc] hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+                              title="해당 일자의 출결 상세 장부로 이동합니다."
+                            >
+                              <span>{rec.startDate} 장부 보기 ➔</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Daily Attendance Records Table Card */}
               <div className="family-card p-5">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 pb-3 border-b border-[#f2f0ed]">
                   <div>
                     <h3 className="text-base font-bold text-[#121212] flex items-center gap-2">
-                      <span>해당 일자 전체 출결 변동 및 서류 처리 상태</span>
-                      <span className="badge-pill badge-stone text-xs font-semibold">
-                        {dailyTotal}건
+                      <span>
+                        {dailyFilterKind === 'UNRESOLVED_ALL' 
+                          ? '아직 회수(해결)되지 않은 전체 결석계 목록' 
+                          : '해당 일자 전체 출결 변동 및 서류 처리 상태'}
+                      </span>
+                      <span className={`badge-pill text-xs font-semibold ${dailyFilterKind === 'UNRESOLVED_ALL' ? 'badge-orange' : 'badge-stone'}`}>
+                        {filteredDailyRecords.length}건
                       </span>
                     </h3>
                     <p className="text-xs text-[#7e7e7d] mt-0.5">
-                      {formatKoreanDate(selectedDate)}의 결석, 지각, 조퇴, 결과 기록부입니다.
+                      {dailyFilterKind === 'UNRESOLVED_ALL'
+                        ? '결석 발생 일자와 관계없이 현재까지 서류 제출 및 승인이 완료되지 않은 전체 누적 목록입니다.'
+                        : `${formatKoreanDate(selectedDate)}의 결석, 지각, 조퇴, 결과 기록부입니다.`}
                     </p>
                   </div>
 
@@ -668,12 +806,28 @@ export default function StatisticsPage() {
                         ⚠️ 서류미완료 ({dailyDocPending})
                       </button>
                     )}
+                    {allUnresolvedRecords.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setDailyFilterKind('UNRESOLVED_ALL')}
+                        className={`px-2.5 py-1 rounded-[6px] text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                          dailyFilterKind === 'UNRESOLVED_ALL'
+                            ? 'bg-[#ff3e00] text-white shadow-xs'
+                            : 'bg-[#fff1ed] text-[#ff3e00] border border-[#ff6b4a]/40 hover:bg-[#ffe4dc]'
+                        }`}
+                      >
+                        <AlertTriangle className="w-3 h-3" />
+                        <span>⚠️ 누적 미회수 결석계 ({allUnresolvedRecords.length})</span>
+                      </button>
+                    )}
                   </div>
                 </div>
 
                 {filteredDailyRecords.length === 0 ? (
                   <div className="py-12 text-center text-xs text-[#7e7e7d]">
-                    {dailyTotal === 0 
+                    {dailyFilterKind === 'UNRESOLVED_ALL'
+                      ? '현재 미회수된 결석계가 전혀 없습니다. (모두 회수·승인 완료)'
+                      : dailyTotal === 0 
                       ? `${formatKoreanDate(selectedDate)}에 등록된 출결 변동 내역이 없습니다.`
                       : '선택하신 필터 조건에 해당하는 출결 내역이 없습니다.'}
                   </div>
@@ -726,7 +880,12 @@ export default function StatisticsPage() {
                                 </div>
                               </td>
                               <td className="py-3 px-3 text-[#474645] whitespace-nowrap">
-                                {r.periodText || (r.daysCount > 1 ? `${r.daysCount}일간` : '전일')}
+                                {dailyFilterKind === 'UNRESOLVED_ALL' && (
+                                  <div className="text-[10px] text-[#e11d48] font-bold">
+                                    📅 {r.startDate}
+                                  </div>
+                                )}
+                                <div>{r.periodText || (r.daysCount > 1 ? `${r.daysCount}일간` : '전일')}</div>
                               </td>
                               <td className="py-3 px-3 text-[#474645]">
                                 <div>{r.reason}</div>
