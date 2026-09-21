@@ -128,6 +128,7 @@ export interface ReminderSlotInfo {
 export interface ReminderSettings {
   enabled: boolean; // 자동 알림 전체 ON / OFF 토글
   slots: ReminderSlotInfo[]; // 교사가 직접 설정한 알림 시간 목록
+  updatedAt?: string; // 최종 설정 변경 일시 (ISO 형식)
 }
 
 export interface DailyReminderLog {

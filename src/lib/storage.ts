@@ -1,4 +1,4 @@
-import { Student, AbsenceRecord, AbsenceStatus, SystemNotification, AttachmentProof, VerificationMethod, AttendanceKind } from '@/types';
+import { Student, AbsenceRecord, AbsenceStatus, SystemNotification, AttachmentProof, VerificationMethod, AttendanceKind, ReminderSettings } from '@/types';
 
 const STORAGE_KEYS = {
   STUDENTS: 'hoengseong_students_v1',
@@ -717,14 +717,26 @@ export async function fetchServerSync(): Promise<boolean> {
         return (b.createdAt || '').localeCompare(a.createdAt || '');
       });
 
-      // Save merged truth locally, into emergency vault, and into daily snapshot
-      localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(mergedRecords));
-      localStorage.setItem('hoengseong_records_vault_v1', JSON.stringify(mergedRecords));
-      saveDailySnapshot(mergedRecords);
+      // 💡 허위 누적 알림 카운트 정화: 교사가 실제로 수동 알림(REMIND_ALERT)을 발송한 내역을 초과하는 카운트는 즉시 0(또는 실제 수동 발송수)으로 정상화
+      const notifsForSanitize = Array.isArray(data.notifications) ? data.notifications : getNotifications();
+      let hasRemindCountFixed = false;
+      const sanitizedRecords = mergedRecords.map(r => {
+        const manualRemindCount = notifsForSanitize.filter((n: any) => n.type === 'REMIND_ALERT' && n.recordId === r.id).length;
+        if ((r.remindCount || 0) > manualRemindCount) {
+          hasRemindCountFixed = true;
+          return { ...r, remindCount: manualRemindCount };
+        }
+        return r;
+      });
 
-      // If local had records the server didn't have (or was newer), heal the server immediately!
-      if (hasLocalExclusiveOrNewer || mergedRecords.length > serverRecords.length) {
-        postServerSync('SAVE_RECORDS', { records: mergedRecords });
+      // Save merged truth locally, into emergency vault, and into daily snapshot
+      localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(sanitizedRecords));
+      localStorage.setItem('hoengseong_records_vault_v1', JSON.stringify(sanitizedRecords));
+      saveDailySnapshot(sanitizedRecords);
+
+      // If local had records the server didn't have (or was newer or had counts fixed), heal the server immediately!
+      if (hasLocalExclusiveOrNewer || hasRemindCountFixed || sanitizedRecords.length > serverRecords.length) {
+        postServerSync('SAVE_RECORDS', { records: sanitizedRecords });
       }
     }
 
@@ -755,9 +767,33 @@ export async function fetchServerSync(): Promise<boolean> {
     if (data.teacherPin) {
       localStorage.setItem(STORAGE_KEYS.TEACHER_PIN, data.teacherPin);
     }
-    if (data.reminderSettings) {
-      localStorage.setItem(STORAGE_KEYS.REMINDER_SETTINGS, JSON.stringify(data.reminderSettings));
-      broadcastUpdate('REMINDER_SETTINGS_UPDATED', data.reminderSettings);
+    if (data.reminderSettings && typeof data.reminderSettings === 'object') {
+      const localSettingsStr = localStorage.getItem(STORAGE_KEYS.REMINDER_SETTINGS);
+      let localSettings: ReminderSettings | null = null;
+      try {
+        if (localSettingsStr) localSettings = JSON.parse(localSettingsStr);
+      } catch {}
+
+      const localUpdated = localSettings?.updatedAt ? new Date(localSettings.updatedAt).getTime() : 0;
+      const serverUpdated = data.reminderSettings?.updatedAt ? new Date(data.reminderSettings.updatedAt).getTime() : 0;
+
+      if (localSettings && localUpdated > serverUpdated) {
+        // 로컬 브라우저의 설정(예: 교사가 방금 OFF로 끈 설정)이 서버의 구버전 데이터보다 최신인 경우
+        // 로컬 설정을 절대 덮어쓰지 않고 보존하며, 서버를 최신 설정으로 즉시 치유(Heal)합니다.
+        postServerSync('SAVE_REMINDER_SETTINGS', { reminderSettings: localSettings });
+      } else {
+        // 서버의 설정이 더 최신이거나 로컬에 타임스탬프가 없는 경우 서버 값 반영
+        localStorage.setItem(STORAGE_KEYS.REMINDER_SETTINGS, JSON.stringify(data.reminderSettings));
+        broadcastUpdate('REMINDER_SETTINGS_UPDATED', data.reminderSettings);
+      }
+    } else {
+      const localSettingsStr = localStorage.getItem(STORAGE_KEYS.REMINDER_SETTINGS);
+      if (localSettingsStr) {
+        try {
+          const parsed = JSON.parse(localSettingsStr);
+          postServerSync('SAVE_REMINDER_SETTINGS', { reminderSettings: parsed });
+        } catch {}
+      }
     }
     if (data.reminderLog && typeof data.reminderLog === 'object') {
       const today = new Date().toISOString().split('T')[0];
@@ -1008,11 +1044,24 @@ export function getAbsenceRecords(): AbsenceRecord[] {
         changed = true;
         updated.memo = updated.memo.replace('일자별 사진(2장)', '날짜마다 1장씩 사진').replace('사진(2장)', '날짜마다 1장씩 사진');
       }
+
+      // 교사가 수동으로 [다시 알림]을 보낸 적이 없는 건인데, 타이머나 구버전 등교 확인에 의해 허위로 카운트된 경우 0으로 자동 정화
+      // 4번 박서은, 8번 이소민 등 알림을 한 적이 없는데 4회, 13회 등이 찍힌 현상 즉시 해소
+      const rawNotifsStr = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
+      let notifsList: any[] = [];
+      try { if (rawNotifsStr) notifsList = JSON.parse(rawNotifsStr); } catch {}
+      const manualRemindCount = notifsList.filter((n: any) => n.type === 'REMIND_ALERT' && n.recordId === updated.id).length;
+      if ((updated.remindCount || 0) > manualRemindCount) {
+        changed = true;
+        updated.remindCount = manualRemindCount;
+      }
+
       return updated;
     });
 
     if (changed) {
       localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(migrated));
+      postServerSync('SAVE_RECORDS', { records: migrated });
     }
     return migrated;
   } catch {
@@ -1539,8 +1588,8 @@ export function markAttended(recordId: string): AbsenceRecord | null {
         ...r,
         status: 'ATTENDED_NOTIFIED',
         attendedAt: nowIso,
-        remindCount: r.remindCount + 1,
-        lastRemindedAt: nowIso,
+        remindCount: r.remindCount || 0,
+        lastRemindedAt: r.lastRemindedAt,
         updatedAt: nowIso,
       };
       return updatedRecord;

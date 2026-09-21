@@ -7,7 +7,8 @@ import {
   getStudents,
   addNotification,
   getStudentConsecutiveIllnessDays,
-  postServerSync
+  postServerSync,
+  isTeacherLoggedIn
 } from '@/lib/storage';
 import { playRemindSound } from '@/lib/sound';
 
@@ -101,9 +102,13 @@ export function getReminderSettings(): ReminderSettings {
 // 💡 교사 커스텀 알림 설정 저장 & 서버 동기화
 export function saveReminderSettings(settings: ReminderSettings): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(REMINDER_SETTINGS_KEY, JSON.stringify(settings));
-  window.dispatchEvent(new CustomEvent('hoengseong_reminder_settings_updated', { detail: settings }));
-  postServerSync('SAVE_REMINDER_SETTINGS', { reminderSettings: settings });
+  const settingsWithTimestamp: ReminderSettings = {
+    ...settings,
+    updatedAt: new Date().toISOString(),
+  };
+  localStorage.setItem(REMINDER_SETTINGS_KEY, JSON.stringify(settingsWithTimestamp));
+  window.dispatchEvent(new CustomEvent('hoengseong_reminder_settings_updated', { detail: settingsWithTimestamp }));
+  postServerSync('SAVE_REMINDER_SETTINGS', { reminderSettings: settingsWithTimestamp });
 }
 
 export function getTodayReminderLog(): DailyReminderLog {
@@ -324,7 +329,7 @@ export function dispatchScheduledReminder(
 
     return {
       ...rec,
-      remindCount: (rec.remindCount || 0) + 1,
+      remindCount: isManual ? (rec.remindCount || 0) + 1 : (rec.remindCount || 0),
       lastRemindedAt: nowIso,
       updatedAt: nowIso,
     };
@@ -388,6 +393,16 @@ export function checkAndRunAutomatedReminders(): {
   slot?: ReminderSlotInfo;
   dispatchedCount?: number;
 } {
+  if (typeof window === 'undefined') {
+    return { triggered: false };
+  }
+
+  // 🔒 보안 및 혼선 방지: 교사가 로그인한 화면에서만 자동 스케줄러를 가동
+  // 학생들의 스마트폰 접속 시에는 절대 자동 발송 스케줄러가 동작하지 않도록 차단
+  if (!isTeacherLoggedIn()) {
+    return { triggered: false };
+  }
+
   const settings = getReminderSettings();
 
   // 💡 교사가 자동 알림 기능을 끈 경우 (OFF) 자동 발송 즉시 중단

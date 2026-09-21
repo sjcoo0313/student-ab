@@ -336,7 +336,8 @@
   "teacherPin": "1125",
   "lastUpdated": 1789698999000,
   "reminderSettings": {
-    "enabled": true,
+    "enabled": false,
+    "updatedAt": "2026-09-21T09:00:00.000Z",
     "slots": [
       {
         "id": "slot-1",

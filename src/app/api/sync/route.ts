@@ -56,7 +56,11 @@ export async function POST(req: NextRequest) {
 
       case 'SAVE_REMINDER_SETTINGS': {
         if (body.reminderSettings && typeof body.reminderSettings === 'object') {
-          updated = await writeServerDb({ reminderSettings: body.reminderSettings });
+          const settingsToSave = {
+            ...body.reminderSettings,
+            updatedAt: body.reminderSettings.updatedAt || new Date().toISOString(),
+          };
+          updated = await writeServerDb({ reminderSettings: settingsToSave });
         }
         break;
       }
@@ -156,8 +160,8 @@ export async function POST(req: NextRequest) {
               ...r,
               status: 'ATTENDED_NOTIFIED' as const,
               attendedAt: nowIso,
-              remindCount: (r.remindCount || 0) + 1,
-              lastRemindedAt: nowIso,
+              remindCount: r.remindCount || 0,
+              lastRemindedAt: r.lastRemindedAt,
               updatedAt: nowIso,
             };
           }

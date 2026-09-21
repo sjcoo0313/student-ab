@@ -100,10 +100,14 @@ export default function Navbar() {
     setNotifications(getNotifications());
     setIsTeacher(isTeacherLoggedIn());
 
-    // ⏰ 3차례 정기 자동 리마인드 (09:30, 12:30, 14:30) 20초 주기 자동 검사
-    checkAndRunAutomatedReminders();
-    const reminderInterval = setInterval(() => {
+    // ⏰ 3차례 정기 자동 리마인드는 교사 화면(isTeacherLoggedIn)에서만 검사 및 발송 (학생 기기 실행 원천 차단)
+    if (isTeacherLoggedIn()) {
       checkAndRunAutomatedReminders();
+    }
+    const reminderInterval = setInterval(() => {
+      if (isTeacherLoggedIn()) {
+        checkAndRunAutomatedReminders();
+      }
     }, 20000);
 
     const unsubscribe = subscribeToSyncEvents((type, payload) => {

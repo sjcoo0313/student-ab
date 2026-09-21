@@ -873,7 +873,9 @@ export default function TeacherDashboard() {
                           <div className="flex items-center justify-between">
                             <span className="font-bold text-xs text-[#121212]">{rec.studentNum}번 {rec.studentName}</span>
                             <div className="flex items-center space-x-1">
-                              <span className="badge-pill badge-orange text-[9px]">알림 {rec.remindCount}회</span>
+                              {(rec.remindCount || 0) > 0 && (
+                                <span className="badge-pill badge-orange text-[9px]">알림 {rec.remindCount}회</span>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => handleOpenEditModal(rec)}
