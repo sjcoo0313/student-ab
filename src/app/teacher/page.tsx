@@ -184,19 +184,31 @@ export default function TeacherDashboard() {
       setNewPeriodText('전일');
     } else if (kind === '지각') {
       setNewRequiresDocument(false);
-      setNewPeriodText('1교시');
+      if (newPeriodText.includes('이후')) {
+        setNewPeriodText(newPeriodText.replace(/\s*~?이후$/, ''));
+      } else if (newPeriodText === '전일' || !newPeriodText) {
+        setNewPeriodText('1교시');
+      }
       if (newCategory === '질병') setNewReason('병원 진료 후 등교');
       else if (newCategory === '미인정') setNewReason('늦잠으로 인한 무단 지각');
       else setNewReason('가정 사정 지각');
     } else if (kind === '조퇴') {
       setNewRequiresDocument(false);
-      setNewPeriodText('5교시 이후');
+      if (/^\d교시$/.test(newPeriodText)) {
+        setNewPeriodText(`${newPeriodText} 이후`);
+      } else if (!newPeriodText.includes('이후')) {
+        setNewPeriodText('1교시 이후');
+      }
       if (newCategory === '질병') setNewReason('두통 및 복통으로 조퇴');
       else if (newCategory === '미인정') setNewReason('무단 조퇴');
       else setNewReason('가정 사정 조퇴');
     } else if (kind === '결과') {
       setNewRequiresDocument(false);
-      setNewPeriodText('6교시');
+      if (newPeriodText.includes('이후')) {
+        setNewPeriodText(newPeriodText.replace(/\s*~?이후$/, ''));
+      } else if (newPeriodText === '전일' || !newPeriodText) {
+        setNewPeriodText('6교시');
+      }
       if (newCategory === '질병') setNewReason('보건실 안정 치료');
       else if (newCategory === '미인정') setNewReason('수업 무단 불참');
       else setNewReason('상담 활동 참여');
@@ -285,6 +297,10 @@ export default function TeacherDashboard() {
       }
     }
 
+    const finalPeriodText = (newKind === '조퇴' && newPeriodText && /^\d교시$/.test(newPeriodText))
+      ? `${newPeriodText} 이후`
+      : newPeriodText;
+
     if (editingRecordId) {
       const res = updateAbsenceRecord(editingRecordId, {
         student: targetStudent,
@@ -295,7 +311,7 @@ export default function TeacherDashboard() {
         startDate: newStartDate,
         endDate: newEndDate,
         daysCount: Number(newDaysCount),
-        periodText: newPeriodText,
+        periodText: finalPeriodText,
         reason: newReason,
         requiresDocument: newRequiresDocument,
         status: newRequiresDocument ? newStatus : 'RECORDED',
@@ -313,7 +329,7 @@ export default function TeacherDashboard() {
         startDate: newStartDate,
         endDate: newEndDate,
         daysCount: Number(newDaysCount),
-        periodText: newPeriodText,
+        periodText: finalPeriodText,
         reason: newReason,
         requiresDocument: newRequiresDocument,
         memo: newMemo,
@@ -433,8 +449,11 @@ export default function TeacherDashboard() {
     setNewSpecialType(rec.type);
     setNewStartDate(rec.startDate);
     setNewEndDate(rec.endDate);
-    setNewDaysCount(rec.daysCount);
-    setNewPeriodText(rec.periodText || '전일');
+    let initialPeriod = rec.periodText || '전일';
+    if ((rec.kind || '결석') === '조퇴' && initialPeriod && !initialPeriod.includes('이후') && !initialPeriod.includes('~') && /^\d교시$/.test(initialPeriod)) {
+      initialPeriod = `${initialPeriod} 이후`;
+    }
+    setNewPeriodText(initialPeriod);
     setNewReason(rec.reason);
     setNewRequiresDocument(rec.requiresDocument !== false);
     setNewStatus(rec.status);
@@ -1336,7 +1355,9 @@ export default function TeacherDashboard() {
                                 </span>
                               </td>
                               <td className="py-2.5 px-3 text-[#64748b] whitespace-nowrap">
-                                {rec.periodText || `${rec.daysCount}일간`}
+                                {rec.periodText
+                                  ? (rec.kind === '조퇴' && /^\d교시$/.test(rec.periodText) ? `${rec.periodText} 이후` : rec.periodText)
+                                  : `${rec.daysCount}일간`}
                               </td>
                               <td className="py-2.5 px-3 text-[#1e293b] max-w-xs" title={rec.reason}>
                                 <div className="truncate">{rec.reason}</div>
@@ -1572,23 +1593,56 @@ export default function TeacherDashboard() {
 
                   {/* Detail options for Period when Kind is 결과/지각/조퇴 */}
                   {(newKind === '결과' || newKind === '지각' || newKind === '조퇴') && (
-                    <div className="bg-[#f8fafc] p-2.5 rounded-[4px] border border-[#cbd5e1] flex items-center justify-between">
-                      <span className="font-bold text-[#334155] text-[11px]">
-                        교시 / 시간 표기:
-                      </span>
-                      <div className="flex items-center gap-1">
-                        {['1교시', '2교시', '3교시', '4교시', '5교시', '6교시', '7교시'].map((p) => (
-                          <button
-                            key={p}
-                            type="button"
-                            onClick={() => setNewPeriodText(p)}
-                            className={`px-2 py-0.5 rounded text-[11px] font-medium border cursor-pointer ${
-                              newPeriodText === p ? 'bg-[#1e293b] text-white border-[#1e293b]' : 'bg-white text-[#475569] border-[#cbd5e1]'
-                            }`}
-                          >
-                            {p}
-                          </button>
-                        ))}
+                    <div className="bg-[#f8fafc] p-2.5 rounded-[4px] border border-[#cbd5e1] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-[#334155] text-[11px]">
+                          교시 / 시간 표기:
+                        </span>
+                        {newKind === '조퇴' && (
+                          <span className="px-2 py-0.5 rounded bg-[#e0f2fe] text-[#0369a1] text-[11px] font-bold border border-[#bae6fd] animate-in fade-in flex items-center gap-1">
+                            <span>{newPeriodText || '교시 선택'}</span>
+                            <span className="text-[10px] text-[#0284c7] font-medium">(~이후 자동 적용)</span>
+                          </span>
+                        )}
+                        {newKind !== '조퇴' && newPeriodText && (
+                          <span className="px-2 py-0.5 rounded bg-[#f1f5f9] text-[#334155] text-[11px] font-bold border border-[#cbd5e1]">
+                            {newPeriodText}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {['1교시', '2교시', '3교시', '4교시', '5교시', '6교시', '7교시'].map((p) => {
+                          const isSelected = newKind === '조퇴'
+                            ? (newPeriodText === `${p} 이후` || newPeriodText === `${p} ~이후` || newPeriodText === `${p}~` || newPeriodText === p || newPeriodText.startsWith(p))
+                            : newPeriodText === p;
+                          
+                          // 조퇴일 때 클릭하는 순간 버튼에 '~이후' 표시가 시각적으로 표시
+                          const displayLabel = newKind === '조퇴'
+                            ? (isSelected ? `${p} 이후` : p)
+                            : p;
+
+                          return (
+                            <button
+                              key={p}
+                              type="button"
+                              onClick={() => {
+                                if (newKind === '조퇴') {
+                                  setNewPeriodText(`${p} 이후`);
+                                } else {
+                                  setNewPeriodText(p);
+                                }
+                              }}
+                              className={`px-2 py-0.5 rounded text-[11px] font-medium border cursor-pointer transition-colors ${
+                                isSelected 
+                                  ? 'bg-[#1e293b] text-white border-[#1e293b] font-bold shadow-xs' 
+                                  : 'bg-white text-[#475569] border-[#cbd5e1] hover:bg-[#f1f5f9]'
+                              }`}
+                              title={newKind === '조퇴' ? `${p} 이후 귀가` : p}
+                            >
+                              {displayLabel}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   )}

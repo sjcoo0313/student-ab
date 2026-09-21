@@ -914,7 +914,11 @@ export default function StatisticsPage() {
                                     📅 {r.startDate}
                                   </div>
                                 )}
-                                <div>{r.periodText || (r.daysCount > 1 ? `${r.daysCount}일간` : '전일')}</div>
+                                <div>
+                                  {r.periodText
+                                    ? (r.kind === '조퇴' && /^\d교시$/.test(r.periodText) ? `${r.periodText} 이후` : r.periodText)
+                                    : (r.daysCount > 1 ? `${r.daysCount}일간` : '전일')}
+                                </div>
                               </td>
                               <td className="py-3 px-3 text-[#474645]">
                                 <div>{r.reason}</div>
