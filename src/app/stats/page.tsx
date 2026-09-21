@@ -186,6 +186,9 @@ export default function StatisticsPage() {
     const skip = dayRecords.filter(r => r.kind === '결과').length;
     const menstrual = dayRecords.filter(r => r.type === 'MENSTRUAL').length;
     const illness = dayRecords.filter(r => r.category === '질병').length;
+    const unexcused = dayRecords.filter(r => r.category === '미인정').length;
+    const approved = dayRecords.filter(r => r.category === '출석인정' || r.category === '출석 인정').length;
+    const other = dayRecords.filter(r => r.category === '기타').length;
     return {
       dayName: weekDays[idx],
       dateStr,
@@ -196,6 +199,9 @@ export default function StatisticsPage() {
       skip,
       menstrual,
       illness,
+      unexcused,
+      approved,
+      other,
       records: dayRecords,
     };
   });
@@ -205,6 +211,10 @@ export default function StatisticsPage() {
   const weeklyLateCount = weeklyDayStats.reduce((sum, d) => sum + d.late, 0);
   const weeklyEarlyCount = weeklyDayStats.reduce((sum, d) => sum + d.early, 0);
   const weeklySkipCount = weeklyDayStats.reduce((sum, d) => sum + d.skip, 0);
+  const weeklyIllnessCount = weeklyDayStats.reduce((sum, d) => sum + d.illness, 0);
+  const weeklyUnexcusedCount = weeklyDayStats.reduce((sum, d) => sum + d.unexcused, 0);
+  const weeklyApprovedCount = weeklyDayStats.reduce((sum, d) => sum + d.approved, 0);
+  const weeklyOtherCount = weeklyDayStats.reduce((sum, d) => sum + d.other, 0);
 
   // 3. 월간 통계 데이터 (선택된 월 기준)
   const currentMonthRecords = records.filter(r => {
@@ -665,9 +675,22 @@ export default function StatisticsPage() {
                           className="bg-white p-3.5 rounded-[8px] border border-[#ffcd6c]/60 shadow-xs space-y-2 hover:border-[#ff3e00] transition-all"
                         >
                           <div className="flex items-center justify-between">
-                            <span className="font-bold text-xs text-[#121212]">
-                              {rec.studentNum}번 {rec.studentName}
-                            </span>
+                            <div className="flex items-center space-x-1.5">
+                              <span className="font-bold text-xs text-[#121212]">
+                                {rec.studentNum}번 {rec.studentName}
+                              </span>
+                              <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
+                                rec.category === '미인정'
+                                  ? 'bg-[#fee2e2] text-[#b91c1c]'
+                                  : rec.category === '질병'
+                                  ? 'bg-[#dbeafe] text-[#1d4ed8]'
+                                  : (rec.category === '출석인정' || rec.category === '출석 인정')
+                                  ? 'bg-[#dcfce7] text-[#15803d]'
+                                  : 'bg-[#f3f4f6] text-[#4b5563]'
+                              }`}>
+                                {rec.category} {rec.kind || '결석'}
+                              </span>
+                            </div>
                             <span className={`badge-pill text-[9px] font-bold ${
                               rec.status === 'SUBMITTED' ? 'badge-sky' :
                               rec.status === 'FORM_PICKED_UP' ? 'badge-honey' :
@@ -989,6 +1012,10 @@ export default function StatisticsPage() {
                       <span className="w-2.5 h-2.5 rounded-full bg-[#9254de] inline-block"></span>
                       <span>결과 ({weeklySkipCount})</span>
                     </span>
+                    <span className="text-[#a8a8a7] text-[11px] hidden lg:inline">|</span>
+                    <span className="text-[11px] text-[#7e7e7d] bg-[#f6f4ef] px-2.5 py-1 rounded-[6px]">
+                      구분: 질병 {weeklyIllnessCount} · 미인정 {weeklyUnexcusedCount} · 인정 {weeklyApprovedCount} · 기타 {weeklyOtherCount}
+                    </span>
                   </div>
                 </div>
 
@@ -999,42 +1026,47 @@ export default function StatisticsPage() {
                     const maxCount = Math.max(1, ...weeklyDayStats.map(d => d.total));
                     const heightPercent = total > 0 ? Math.min(100, Math.max(25, (total / maxCount) * 100)) : 0;
 
+                    // 요일별 세부 내역 툴팁 문자열 생성 (예: "질병 결석 1건, 미인정 조퇴 2건")
+                    const detailSummary = day.records.length > 0
+                      ? day.records.map(r => `${r.category} ${r.kind || '결석'}(${r.studentName})`).join(', ')
+                      : '출결 변동 없음';
+
                     return (
-                      <div key={day.dateStr} className="flex flex-col items-center h-full justify-end group">
+                      <div key={day.dateStr} className="flex flex-col items-center h-full justify-end group" title={`${day.dayName}요일: ${detailSummary}`}>
                         <span className="text-xs font-bold text-[#121212] mb-2">
                           {total > 0 ? `${total}건` : '-'}
                         </span>
                         
                         <div 
-                          className="w-full max-w-[52px] bg-[#f2f0ed] rounded-[8px] overflow-hidden flex flex-col justify-end transition-all group-hover:opacity-90" 
+                          className="w-full max-w-[52px] bg-[#f2f0ed] rounded-[8px] overflow-hidden flex flex-col justify-end transition-all group-hover:opacity-90 cursor-help" 
                           style={{ height: total > 0 ? `${heightPercent}%` : '6px' }}
                         >
                           {day.skip > 0 && (
                             <div
                               className="bg-[#9254de] w-full"
                               style={{ height: `${(day.skip / Math.max(1, total)) * 100}%` }}
-                              title={`결과 ${day.skip}건`}
+                              title={`결과 ${day.skip}건: ${day.records.filter(r => r.kind === '결과').map(r => `${r.category} 결과(${r.studentName})`).join(', ')}`}
                             ></div>
                           )}
                           {day.early > 0 && (
                             <div
                               className="bg-[#4096ff] w-full"
                               style={{ height: `${(day.early / Math.max(1, total)) * 100}%` }}
-                              title={`조퇴 ${day.early}건`}
+                              title={`조퇴 ${day.early}건: ${day.records.filter(r => r.kind === '조퇴').map(r => `${r.category} 조퇴(${r.studentName})`).join(', ')}`}
                             ></div>
                           )}
                           {day.late > 0 && (
                             <div
                               className="bg-[#ffa940] w-full"
                               style={{ height: `${(day.late / Math.max(1, total)) * 100}%` }}
-                              title={`지각 ${day.late}건`}
+                              title={`지각 ${day.late}건: ${day.records.filter(r => r.kind === '지각').map(r => `${r.category} 지각(${r.studentName})`).join(', ')}`}
                             ></div>
                           )}
                           {day.absence > 0 && (
                             <div
                               className="bg-[#ff7875] w-full"
                               style={{ height: `${(day.absence / Math.max(1, total)) * 100}%` }}
-                              title={`결석 ${day.absence}건`}
+                              title={`결석 ${day.absence}건: ${day.records.filter(r => (r.kind || '결석') === '결석').map(r => `${r.category} 결석(${r.studentName})`).join(', ')}`}
                             ></div>
                           )}
                         </div>
@@ -1054,9 +1086,14 @@ export default function StatisticsPage() {
 
                 {/* Weekly Details Table */}
                 <div className="mt-6">
-                  <h4 className="text-xs font-bold text-[#474645] mb-3">
-                    주간 요일별 출결 변동 내역
-                  </h4>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-xs font-bold text-[#474645]">
+                      주간 요일별 출결 변동 내역
+                    </h4>
+                    <span className="text-[11px] text-[#7e7e7d]">
+                      💡 결석·조퇴 등의 사유 구분(질병, 미인정, 인정, 기타)이 명확히 표시됩니다.
+                    </span>
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
                     {weeklyDayStats.map((day) => (
                       <div 
@@ -1065,7 +1102,7 @@ export default function StatisticsPage() {
                           day.total > 0 ? 'bg-[#fcfbf9] border-[#e5d5c3]' : 'bg-[#fafafa] border-[#f2f0ed]'
                         }`}
                       >
-                        <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center justify-between mb-2">
                           <span className="text-xs font-bold text-[#121212]">
                             {day.dayName}요일 ({day.dateStr.substring(5)})
                           </span>
@@ -1076,21 +1113,36 @@ export default function StatisticsPage() {
                         {day.records.length === 0 ? (
                           <p className="text-[11px] text-[#a8a8a7]">출결 변동 없음</p>
                         ) : (
-                          <div className="space-y-1 mt-2">
-                            {day.records.map((r) => (
-                              <div key={r.id} className="text-[11px] flex items-center justify-between">
-                                <span className="text-[#121212] font-medium truncate max-w-[90px]">
-                                  {r.studentNum}번 {r.studentName}
-                                </span>
-                                <span className={`badge-pill text-[9px] ${
-                                  (r.kind || '결석') === '결석' ? 'badge-orange' :
-                                  r.kind === '지각' ? 'badge-honey' :
-                                  r.kind === '조퇴' ? 'badge-sky' : 'badge-stone'
-                                }`}>
-                                  {r.kind || '결석'}
-                                </span>
-                              </div>
-                            ))}
+                          <div className="space-y-1.5 mt-2">
+                            {day.records.map((r) => {
+                              const kind = r.kind || '결석';
+                              const cat = r.category || '기타';
+                              const displayLabel = `${cat} ${kind}`;
+                              
+                              // 카테고리별 직관적인 배지 색상 스타일링
+                              const badgeStyle = 
+                                cat === '미인정'
+                                  ? 'bg-[#fee2e2] text-[#b91c1c] border border-[#fca5a5]'
+                                  : cat === '질병'
+                                  ? 'bg-[#dbeafe] text-[#1d4ed8] border border-[#bfdbfe]'
+                                  : (cat === '출석인정' || cat === '출석 인정')
+                                  ? 'bg-[#dcfce7] text-[#15803d] border border-[#bbf7d0]'
+                                  : 'bg-[#f3f4f6] text-[#4b5563] border border-[#e5e7eb]';
+
+                              return (
+                                <div key={r.id} className="text-[11px] flex items-center justify-between gap-1 py-0.5">
+                                  <span className="text-[#121212] font-medium truncate max-w-[85px]" title={`${r.studentNum}번 ${r.studentName} (${r.reason})`}>
+                                    {r.studentNum}번 {r.studentName}
+                                  </span>
+                                  <span 
+                                    className={`px-1.5 py-0.5 rounded-[4px] text-[10px] font-bold whitespace-nowrap ${badgeStyle}`}
+                                    title={`구분: ${cat} / 종류: ${kind} / 세부: ${r.typeName} (${r.reason})`}
+                                  >
+                                    {displayLabel}
+                                  </span>
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
