@@ -14,7 +14,7 @@ import {
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
-import { getStudents, saveStudents, subscribeToSyncEvents, resetMockData, updateStudentPin, resetStudentPinToDefault } from '@/lib/storage';
+import { getStudents, saveStudents, subscribeToSyncEvents, resetMockData, updateStudentPin, resetStudentPinToDefault, addDeletedStudentId } from '@/lib/storage';
 import { downloadStudentTemplate, parseStudentExcelFile } from '@/lib/exportExcel';
 import { Student } from '@/types';
 import TeacherAuthGuard from '@/components/TeacherAuthGuard';
@@ -140,6 +140,7 @@ export default function ManageStudentsPage() {
 
   const handleDelete = (id: string) => {
     if (confirm('해당 학생을 명단에서 삭제하시겠습니까?')) {
+      addDeletedStudentId(id);
       const updated = students.filter(s => s.id !== id);
       saveStudents(updated);
       loadData();

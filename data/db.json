@@ -189,16 +189,6 @@
       "phone": "01087293117",
       "parentPhone": "01063796667",
       "pin": "1234"
-    },
-    {
-      "id": "std-30221-mu40uo1u",
-      "grade": 3,
-      "classNum": 2,
-      "studentNum": 21,
-      "name": "홍길동",
-      "phone": "",
-      "parentPhone": "",
-      "pin": "1234"
     }
   ],
   "records": [

@@ -10,7 +10,34 @@ const STORAGE_KEYS = {
   TEACHER_PIN: 'hoengseong_teacher_pin_v1',
   REMINDER_SETTINGS: 'hoengseong_reminder_settings_v1',
   REMINDER_LOG: 'hoengseong_daily_reminders_log_v1',
+  DELETED_STUDENT_IDS: 'hoengseong_deleted_student_ids_v1',
 };
+
+export function getDeletedStudentIds(): Set<string> {
+  if (typeof window === 'undefined') return new Set(['std-30221-mu40uo1u']);
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.DELETED_STUDENT_IDS);
+    const arr = raw ? JSON.parse(raw) : [];
+    const set = new Set<string>(Array.isArray(arr) ? arr : []);
+    // 21번 테스트 학생(홍길동) 영구 차단 목록 기본 포함
+    set.add('std-30221-mu40uo1u');
+    return set;
+  } catch {
+    return new Set(['std-30221-mu40uo1u']);
+  }
+}
+
+export function addDeletedStudentId(id: string): void {
+  if (typeof window === 'undefined' || !id) return;
+  const set = getDeletedStudentIds();
+  set.add(id);
+  localStorage.setItem(STORAGE_KEYS.DELETED_STUDENT_IDS, JSON.stringify(Array.from(set)));
+}
+
+export function clearDeletedStudentIds(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(STORAGE_KEYS.DELETED_STUDENT_IDS);
+}
 
 export function getDeletedRecordIds(): Set<string> {
   if (typeof window === 'undefined') return new Set();
@@ -741,24 +768,42 @@ export async function fetchServerSync(): Promise<boolean> {
     }
 
     // Students sync:
+    const deletedStudentIds = getDeletedStudentIds();
     const localStudentsStr = localStorage.getItem(STORAGE_KEYS.STUDENTS);
     let localStudents: Student[] = [];
     if (localStudentsStr !== null) {
       try { localStudents = JSON.parse(localStudentsStr || '[]'); } catch {}
     }
-    const serverStudents: Student[] = Array.isArray(data.students) ? data.students : [];
+    // 로컬 명단에서 삭제된 학생(21번 홍길동 등) 배제
+    const cleanedLocalStudents = localStudents.filter(s => s && s.id && !deletedStudentIds.has(s.id) && s.name !== '홍길동');
 
-    const isLocalCustom = !isSampleStudentRoster(localStudents) && localStudents.length > 0;
-    const isServerSample = isSampleStudentRoster(serverStudents);
+    const rawServerStudents: Student[] = Array.isArray(data.students) ? data.students : [];
+    // 서버 명단에서도 삭제된 학생(21번 홍길동 등) 배제
+    const cleanedServerStudents = rawServerStudents.filter(s => s && s.id && !deletedStudentIds.has(s.id) && s.name !== '홍길동');
+
+    const serverHadDeletedStudents = rawServerStudents.length > cleanedServerStudents.length;
+    const localHadDeletedStudents = localStudents.length > cleanedLocalStudents.length;
+
+    const isLocalCustom = !isSampleStudentRoster(cleanedLocalStudents) && cleanedLocalStudents.length > 0;
+    const isServerSample = isSampleStudentRoster(cleanedServerStudents);
 
     if (isLocalCustom && isServerSample) {
       // Local client has a real custom roster, but server returned default sample data (e.g. from cold start).
       // DO NOT overwrite custom roster! Protect it and heal the server with the real roster!
-      postServerSync('SAVE_STUDENTS', { students: localStudents });
-    } else if (Array.isArray(data.students) && data.students.length > 0) {
-      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(data.students));
-    } else if (localStudents.length === 0 && Array.isArray(data.students)) {
-      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(data.students));
+      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(cleanedLocalStudents));
+      postServerSync('SAVE_STUDENTS', { students: cleanedLocalStudents });
+    } else if (cleanedLocalStudents.length > 0 && (serverHadDeletedStudents || localHadDeletedStudents || cleanedLocalStudents.length <= cleanedServerStudents.length)) {
+      // 삭제된 학생이 포함되어 있던 경우 또는 로컬 명단이 정리된 경우, 정화된 명단으로 로컬/서버를 완벽 동기화
+      const finalRoster = cleanedLocalStudents.length > 0 ? cleanedLocalStudents : cleanedServerStudents;
+      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(finalRoster));
+      if (serverHadDeletedStudents || localHadDeletedStudents) {
+        postServerSync('SAVE_STUDENTS', { students: finalRoster });
+      }
+    } else if (cleanedServerStudents.length > 0) {
+      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(cleanedServerStudents));
+      if (serverHadDeletedStudents) {
+        postServerSync('SAVE_STUDENTS', { students: cleanedServerStudents });
+      }
     }
 
     if (Array.isArray(data.notifications)) {
@@ -969,11 +1014,15 @@ export function getStudents(): Student[] {
       }
       return { ...s, pin: s.pin || '1234' };
     });
-    if (hasGrade2Class3) {
-      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(migrated));
-      return migrated;
+    const deletedStudentIds = getDeletedStudentIds();
+    const cleaned = migrated.filter(s => s && s.id && !deletedStudentIds.has(s.id) && s.name !== '홍길동');
+
+    if (hasGrade2Class3 || cleaned.length !== list.length) {
+      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(cleaned));
+      postServerSync('SAVE_STUDENTS', { students: cleaned });
+      return cleaned;
     }
-    return list.map(s => ({ ...s, pin: s.pin || '1234' }));
+    return cleaned.map(s => ({ ...s, pin: s.pin || '1234' }));
   } catch {
     return INITIAL_STUDENTS;
   }
