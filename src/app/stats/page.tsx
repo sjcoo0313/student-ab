@@ -175,6 +175,12 @@ export default function StatisticsPage() {
 
   const weekDays = ['월', '화', '수', '목', '금'];
   const currentWeekDates = getWeekDates(selectedDate);
+  const isThisWeek = currentWeekDates.includes(getTodayString());
+  const [wStartY, wStartM, wStartD] = currentWeekDates[0].split('-').map(Number);
+  const [wEndY, wEndM, wEndD] = currentWeekDates[4].split('-').map(Number);
+  const weeklyRangeFormatted = wStartY === wEndY
+    ? `${wStartY}년 ${wStartM}월 ${wStartD}일 ~ ${wEndM !== wStartM ? `${wEndM}월 ` : ''}${wEndD}일`
+    : `${wStartY}년 ${wStartM}월 ${wStartD}일 ~ ${wEndY}년 ${wEndM}월 ${wEndD}일`;
 
   const weeklyDayStats = currentWeekDates.map((dateStr, idx) => {
     const dayRecords = records
@@ -982,12 +988,80 @@ export default function StatisticsPage() {
           {/* TAB 2: WEEKLY */}
           {activeTab === 'WEEKLY' && (
             <div className="space-y-6 animate-in fade-in">
+              {/* Weekly Selection Banner */}
+              <div className="family-card p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex items-center space-x-3">
+                  <Calendar className="w-5 h-5 text-[#0086fc]" />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-base font-bold text-[#121212]">
+                        {weeklyRangeFormatted} 주간 출결 현황
+                      </h2>
+                      {isThisWeek ? (
+                        <span className="badge-pill badge-mint text-[10px]">
+                          이번 주
+                        </span>
+                      ) : (
+                        <span className="badge-pill badge-stone text-[10px]">
+                          과거 주간 탐색
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-[#7e7e7d] mt-0.5">
+                      기준 주간 ({currentWeekDates[0]} ~ {currentWeekDates[4]}): 총 <strong className="text-[#121212] font-semibold">{weeklyTotalCount}건</strong> 변동
+                      {weeklyTotalCount > 0 && ` (결석 ${weeklyAbsenceCount}, 지각 ${weeklyLateCount}, 조퇴 ${weeklyEarlyCount}, 결과 ${weeklySkipCount})`}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => shiftSelectedDate(-7)}
+                    className="px-3 py-1.5 rounded-[8px] bg-[#fcfbf9] border border-[#f2f0ed] text-xs font-semibold text-[#474645] hover:bg-[#f2f0ed] transition-colors cursor-pointer flex items-center gap-1"
+                    title="1주 전으로 이동"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    <span>지난 주</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDate(getTodayString())}
+                    className={`px-3 py-1.5 rounded-[8px] text-xs font-bold border transition-colors cursor-pointer ${
+                      isThisWeek
+                        ? 'bg-[#121212] text-white border-[#121212]'
+                        : 'bg-[#fff8e8] text-[#d48f00] border-[#ffcd6c] hover:bg-[#ffeec2]'
+                    }`}
+                  >
+                    이번 주로 이동
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => shiftSelectedDate(7)}
+                    className="px-3 py-1.5 rounded-[8px] bg-[#fcfbf9] border border-[#f2f0ed] text-xs font-semibold text-[#474645] hover:bg-[#f2f0ed] transition-colors cursor-pointer flex items-center gap-1"
+                    title="1주 후로 이동"
+                  >
+                    <span>다음 주</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                  <div className="relative">
+                    <input
+                      type="date"
+                      value={selectedDate}
+                      onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
+                      className="px-2.5 py-1.5 rounded-[8px] bg-[#fcfbf9] border border-[#e5d5c3] text-xs font-medium text-[#474645] cursor-pointer"
+                      title="조회 주간 직접 선택 (해당 일자가 포함된 주간으로 이동)"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="family-card p-5">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6 pb-3 border-b border-[#f2f0ed]">
                   <div>
                     <h3 className="text-base font-bold text-[#121212] flex items-center gap-2">
                       <TrendingUp className="w-4 h-4 text-[#0086fc]" />
-                      <span>이번 주 요일별 출결 변동 추이 (월 ~ 금)</span>
+                      <span>{isThisWeek ? '이번 주' : weeklyRangeFormatted} 요일별 출결 변동 추이 (월 ~ 금)</span>
                     </h3>
                     <p className="text-xs text-[#7e7e7d] mt-0.5">
                       기준 주간 ({currentWeekDates[0]} ~ {currentWeekDates[4]}): 총 <strong className="text-[#121212] font-semibold">{weeklyTotalCount}건</strong>의 출결 변동이 발생했습니다.
