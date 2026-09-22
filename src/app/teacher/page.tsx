@@ -24,7 +24,11 @@ import {
   Undo2,
   MessageSquare,
   Settings,
-  Archive
+  Archive,
+  ChevronDown,
+  ChevronUp,
+  FolderCheck,
+  Paperclip
 } from 'lucide-react';
 import { 
   getStudents, 
@@ -61,6 +65,157 @@ import {
   ReminderSettings,
   ReminderSlotInfo
 } from '@/lib/reminders';
+
+export type RequiredDocCategoryKey = 
+  | 'MEDICAL'             // 🩺 병원 진료확인서 / 처방전 / 약봉투
+  | 'FIELD_EXPERIENCE'    // 🎒 현장체험학습 신청서 및 보고서
+  | 'MENSTRUAL'           // 🌸 생리인정 결석 학부모확인서
+  | 'OFFICIAL_FAMILY'     // 🕊️ 경조사 증빙서류
+  | 'OFFICIAL_INFECTIOUS' // 🏥 법정감염병 격리확인서 / 진단서
+  | 'TEACHER_OPINION'     // 📝 담임의견서 / 학부모확인서
+  | 'NO_DOC';             // 💡 단순 기록 (서류 불필요)
+
+export const DOC_CATEGORIES_CONFIG: {
+  key: RequiredDocCategoryKey;
+  title: string;
+  badgeTitle: string;
+  icon: string;
+  colorTheme: {
+    bg: string;
+    border: string;
+    badge: string;
+    text: string;
+    headerBg: string;
+  };
+  desc: string;
+  requiredPapers: string;
+}[] = [
+  {
+    key: 'MEDICAL',
+    title: '병원 진료확인서 / 처방전 / 약봉투',
+    badgeTitle: '진료·처방 증빙',
+    icon: '🩺',
+    colorTheme: {
+      bg: 'bg-[#f0f9ff]',
+      border: 'border-[#bae6fd]',
+      badge: 'bg-[#e0f2fe] text-[#0369a1] border-[#bae6fd]',
+      text: 'text-[#0369a1]',
+      headerBg: 'bg-[#e0f2fe]/60',
+    },
+    desc: '질병 결석 및 진료 관련 출결 변동',
+    requiredPapers: '병·의원 진료확인서, 처방전, 진단서, 약제비 영수증(약봉투) 중 1부',
+  },
+  {
+    key: 'FIELD_EXPERIENCE',
+    title: '현장체험학습 신청서 및 보고서',
+    badgeTitle: '체험학습 서류',
+    icon: '🎒',
+    colorTheme: {
+      bg: 'bg-[#f0fdf4]',
+      border: 'border-[#bbf7d0]',
+      badge: 'bg-[#dcfce7] text-[#15803d] border-[#bbf7d0]',
+      text: 'text-[#15803d]',
+      headerBg: 'bg-[#dcfce7]/60',
+    },
+    desc: '가족동반 현장체험학습 등 학교장 사전승인 출결',
+    requiredPapers: '학교장 사전허가 신청서 + 등교 후 7일 이내 제출 보고서',
+  },
+  {
+    key: 'MENSTRUAL',
+    title: '생리인정 결석 학부모확인서',
+    badgeTitle: '생리인정 서류',
+    icon: '🌸',
+    colorTheme: {
+      bg: 'bg-[#fdf2f8]',
+      border: 'border-[#fbcfe8]',
+      badge: 'bg-[#fce7f3] text-[#be185d] border-[#fbcfe8]',
+      text: 'text-[#be185d]',
+      headerBg: 'bg-[#fce7f3]/60',
+    },
+    desc: '생리통으로 인한 출석인정 결석 (월 1회 엄수)',
+    requiredPapers: '학부모 확인서 (추가 진단서 제출 불필요, 월 1회 한도)',
+  },
+  {
+    key: 'OFFICIAL_FAMILY',
+    title: '경조사 증빙서류',
+    badgeTitle: '경조사 증빙',
+    icon: '🕊️',
+    colorTheme: {
+      bg: 'bg-[#faf5ff]',
+      border: 'border-[#e9d5ff]',
+      badge: 'bg-[#f3e8ff] text-[#7e22ce] border-[#e9d5ff]',
+      text: 'text-[#7e22ce]',
+      headerBg: 'bg-[#f3e8ff]/60',
+    },
+    desc: '경조사 참석(결혼, 사망 등) 인정결석',
+    requiredPapers: '가족관계증명서 + 청첩장/부고장/사망진단서 중 1부',
+  },
+  {
+    key: 'OFFICIAL_INFECTIOUS',
+    title: '법정감염병 격리·치료 확인서',
+    badgeTitle: '감염병 증빙',
+    icon: '🏥',
+    colorTheme: {
+      bg: 'bg-[#fef2f2]',
+      border: 'border-[#fecaca]',
+      badge: 'bg-[#fee2e2] text-[#b91c1c] border-[#fecaca]',
+      text: 'text-[#b91c1c]',
+      headerBg: 'bg-[#fee2e2]/60',
+    },
+    desc: '독감, 코로나 등 법정감염병 격리 출결',
+    requiredPapers: '보건소 격리통지서 또는 의사 소견서/진단서 (격리기간 명시)',
+  },
+  {
+    key: 'TEACHER_OPINION',
+    title: '담임의견서 / 사유 확인서',
+    badgeTitle: '담임·사유 확인서',
+    icon: '📝',
+    colorTheme: {
+      bg: 'bg-[#fffbeb]',
+      border: 'border-[#fde68a]',
+      badge: 'bg-[#fef3c7] text-[#b45309] border-[#fde68a]',
+      text: 'text-[#b45309]',
+      headerBg: 'bg-[#fef3c7]/60',
+    },
+    desc: '단순 질병(처방전 미발급) 또는 기타 사전결재 결석',
+    requiredPapers: '담임교사 확인 의견서 또는 학부모 사유 확인서',
+  },
+  {
+    key: 'NO_DOC',
+    title: '단순 기록 (서류 불필요)',
+    badgeTitle: '서류 비해당',
+    icon: '💡',
+    colorTheme: {
+      bg: 'bg-[#f8fafc]',
+      border: 'border-[#e2e8f0]',
+      badge: 'bg-[#f1f5f9] text-[#475569] border-[#cbd5e1]',
+      text: 'text-[#475569]',
+      headerBg: 'bg-[#f1f5f9]/70',
+    },
+    desc: '무단(미인정) 결석 또는 단순 지각·조퇴·결과 (기록 보관용)',
+    requiredPapers: '서류 제출 불필요 (나이스 표준 출결 일지 기록만 유지)',
+  },
+];
+
+export const getDocCategory = (r: AbsenceRecord): RequiredDocCategoryKey => {
+  if (r.requiresDocument === false || r.status === 'RECORDED' || r.category === '미인정') {
+    return 'NO_DOC';
+  }
+  if (r.type === 'FIELD_EXPERIENCE') return 'FIELD_EXPERIENCE';
+  if (r.type === 'MENSTRUAL') return 'MENSTRUAL';
+  if (r.type === 'OFFICIAL_FAMILY') return 'OFFICIAL_FAMILY';
+  if (r.type === 'OFFICIAL_INFECTIOUS') return 'OFFICIAL_INFECTIOUS';
+  if (r.category === '질병') return 'MEDICAL';
+  if (r.category === '출석인정' || r.category === '출석 인정') {
+    const reasonText = (r.reason || '') + (r.typeName || '');
+    if (reasonText.includes('체험학습') || reasonText.includes('체험')) return 'FIELD_EXPERIENCE';
+    if (reasonText.includes('생리')) return 'MENSTRUAL';
+    if (reasonText.includes('경조사') || reasonText.includes('결혼') || reasonText.includes('사망') || reasonText.includes('장례')) return 'OFFICIAL_FAMILY';
+    if (reasonText.includes('감염병') || reasonText.includes('코로나') || reasonText.includes('독감') || reasonText.includes('격리')) return 'OFFICIAL_INFECTIOUS';
+    return 'TEACHER_OPINION';
+  }
+  return 'TEACHER_OPINION';
+};
 
 export default function TeacherDashboard() {
   const [students, setStudents] = useState<Student[]>([]);
@@ -106,6 +261,11 @@ export default function TeacherDashboard() {
   const [storageInfo, setStorageInfo] = useState(getServerStorageInfo());
   const [isStorageModalOpen, setIsStorageModalOpen] = useState(false);
   const [isArchivedApprovedModalOpen, setIsArchivedApprovedModalOpen] = useState(false);
+
+  // Document Ledger (서류 편철 및 증빙 확인 대장) State
+  const [docLedgerExpanded, setDocLedgerExpanded] = useState(true);
+  const [docLedgerFilter, setDocLedgerFilter] = useState<'ALL' | 'PENDING' | 'APPROVED'>('ALL');
+  const [docLedgerScope, setDocLedgerScope] = useState<'MONTH' | 'DATE'>('MONTH');
 
   const loadData = () => {
     const stds = getStudents();
@@ -517,6 +677,38 @@ export default function TeacherDashboard() {
   const totalSkipCount = records.filter(r => r.kind === '결과').length;
 
   const todayCount = records.filter(r => isDateInRange(selectedDashboardDate, r.startDate, r.endDate)).length;
+
+  // 4) 서류 편철 및 증빙 확인 대장 데이터 계산
+  const [lYear, lMonth] = selectedDashboardDate.split('-').map(Number);
+  const ledgerMonthLabel = `${lYear}년 ${lMonth}월`;
+  const ledgerBaseRecords = records.filter(r => {
+    if (docLedgerScope === 'MONTH') {
+      const monthPrefix = selectedDashboardDate.substring(0, 7);
+      return (r.startDate || '').startsWith(monthPrefix);
+    } else {
+      return isDateInRange(selectedDashboardDate, r.startDate, r.endDate);
+    }
+  });
+
+  const ledgerDocRequiredRecords = ledgerBaseRecords.filter(r => r.requiresDocument !== false && r.category !== '미인정');
+  const ledgerPendingCount = ledgerDocRequiredRecords.filter(r => r.status !== 'APPROVED').length;
+  const ledgerApprovedCount = ledgerDocRequiredRecords.filter(r => r.status === 'APPROVED').length;
+  const ledgerNoDocCount = ledgerBaseRecords.filter(r => r.requiresDocument === false || r.category === '미인정' || r.status === 'RECORDED').length;
+
+  const ledgerFilteredRecords = ledgerBaseRecords.filter(r => {
+    if (docLedgerFilter === 'PENDING') {
+      return r.requiresDocument !== false && r.status !== 'APPROVED' && r.category !== '미인정';
+    }
+    if (docLedgerFilter === 'APPROVED') {
+      return r.status === 'APPROVED' && r.requiresDocument !== false;
+    }
+    return true; // 'ALL'
+  }).sort((a, b) => {
+    const dateA = a.startDate || '';
+    const dateB = b.startDate || '';
+    if (dateA !== dateB) return dateB.localeCompare(dateA);
+    return (Number(a.studentNum) || 0) - (Number(b.studentNum) || 0);
+  });
 
   // 3) 모달 내 생리 인정결석 월 1회 초과 실시간 검증
   const isMenstrualAttempt = newKind === '결석' && newCategory === '출석인정' && newSpecialType === 'MENSTRUAL';
@@ -1245,6 +1437,277 @@ export default function TeacherDashboard() {
                   <div className="text-[11px] text-[#7e7e7d] font-semibold">결과 합계</div>
                   <div className="text-xl font-bold text-[#7c3aed] mt-1">{totalSkipCount}건</div>
                 </div>
+              </div>
+
+              {/* ========================================================================= */}
+              {/* 결석계 증빙서류 편철 및 확인 대장 (Accordion) */}
+              {/* ========================================================================= */}
+              <div className="family-card p-4 border-[#cbd5e1] shadow-2xs space-y-3 bg-white">
+                {/* Header with toggle, counts, and filters */}
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 pb-3 border-b border-[#f2f0ed]">
+                  <div className="flex items-center space-x-2.5">
+                    <div className="w-8 h-8 rounded-[8px] bg-[#e0f2fe] text-[#0284c7] flex items-center justify-center shrink-0">
+                      <FolderCheck className="w-4.5 h-4.5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-bold text-sm text-[#121212] flex items-center gap-1.5">
+                          <span>📁 결석계 증빙서류 편철 및 확인 대장</span>
+                        </h3>
+                        <span className="badge-pill bg-[#f1f5f9] text-[#334155] border border-[#cbd5e1] text-[10px] font-semibold">
+                          {docLedgerScope === 'MONTH' ? `${ledgerMonthLabel} 전체` : `${selectedDashboardDate} 당일`}
+                        </span>
+                        <span className={`badge-pill text-[10px] font-bold ${ledgerPendingCount > 0 ? 'bg-[#fee2e2] text-[#dc2626] border border-[#fca5a5]' : 'bg-[#ecfdf5] text-[#059669] border border-[#a7f3d0]'}`}>
+                          {ledgerPendingCount > 0 ? `⚠️ 미비 서류 ${ledgerPendingCount}건` : '✓ 서류 전원 완료'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#7e7e7d] mt-0.5">
+                        서류 편철 대상 총 <strong className="text-[#121212] font-semibold">{ledgerDocRequiredRecords.length}건</strong> 중 <span className="text-[#16a34a] font-semibold">승인 완료 {ledgerApprovedCount}건</span> · <span className="text-[#dc2626] font-semibold">추적·대조 필요 {ledgerPendingCount}건</span>
+                        {ledgerNoDocCount > 0 && ` (서류 불필요/단순 기록 ${ledgerNoDocCount}건)`}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Period Scope Toggle */}
+                    <div className="inline-flex rounded-[6px] p-0.5 bg-[#f1f5f9] border border-[#e2e8f0] text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setDocLedgerScope('MONTH')}
+                        className={`px-2.5 py-1 rounded-[5px] text-[11px] font-semibold transition-colors cursor-pointer ${
+                          docLedgerScope === 'MONTH'
+                            ? 'bg-white text-[#0f172a] shadow-2xs'
+                            : 'text-[#64748b] hover:text-[#0f172a]'
+                        }`}
+                      >
+                        {lMonth}월 전체
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDocLedgerScope('DATE')}
+                        className={`px-2.5 py-1 rounded-[5px] text-[11px] font-semibold transition-colors cursor-pointer ${
+                          docLedgerScope === 'DATE'
+                            ? 'bg-white text-[#0f172a] shadow-2xs'
+                            : 'text-[#64748b] hover:text-[#0f172a]'
+                        }`}
+                      >
+                        선택일 기준
+                      </button>
+                    </div>
+
+                    {/* Filter Buttons */}
+                    <div className="inline-flex rounded-[6px] p-0.5 bg-[#f1f5f9] border border-[#e2e8f0] text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setDocLedgerFilter('ALL')}
+                        className={`px-2.5 py-1 rounded-[5px] text-[11px] font-semibold transition-colors cursor-pointer ${
+                          docLedgerFilter === 'ALL'
+                            ? 'bg-[#1e293b] text-white shadow-2xs'
+                            : 'text-[#64748b] hover:text-[#0f172a]'
+                        }`}
+                      >
+                        전체 ({ledgerBaseRecords.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDocLedgerFilter('PENDING')}
+                        className={`px-2.5 py-1 rounded-[5px] text-[11px] font-semibold transition-colors cursor-pointer ${
+                          docLedgerFilter === 'PENDING'
+                            ? 'bg-[#e11d48] text-white shadow-2xs'
+                            : 'text-[#64748b] hover:text-[#e11d48]'
+                        }`}
+                      >
+                        미비 서류 ({ledgerPendingCount})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDocLedgerFilter('APPROVED')}
+                        className={`px-2.5 py-1 rounded-[5px] text-[11px] font-semibold transition-colors cursor-pointer ${
+                          docLedgerFilter === 'APPROVED'
+                            ? 'bg-[#16a34a] text-white shadow-2xs'
+                            : 'text-[#64748b] hover:text-[#16a34a]'
+                        }`}
+                      >
+                        편철 완료 ({ledgerApprovedCount})
+                      </button>
+                    </div>
+
+                    {/* Accordion Expand / Collapse Button */}
+                    <button
+                      type="button"
+                      onClick={() => setDocLedgerExpanded(!docLedgerExpanded)}
+                      className="px-2.5 py-1 rounded-[6px] bg-[#fcfbf9] border border-[#cbd5e1] text-xs font-semibold text-[#475569] hover:bg-[#f1f5f9] transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <span>{docLedgerExpanded ? '접기' : '상세 대장 펼치기'}</span>
+                      {docLedgerExpanded ? (
+                        <ChevronUp className="w-3.5 h-3.5" />
+                      ) : (
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Accordion Content */}
+                {docLedgerExpanded && (
+                  <div className="space-y-4 pt-1 animate-in fade-in">
+                    {/* Guidance callout */}
+                    <div className="bg-[#f8fafc] p-2.5 rounded-[6px] border border-[#e2e8f0] text-[11px] text-[#64748b] flex items-center justify-between flex-wrap gap-2">
+                      <div>
+                        💡 <strong>서류 편철 안내:</strong> 각 학생 항목을 클릭하면 [출결 수정 및 서류 대조창]이 열려 서류 확인·첨부·승인 상태를 즉시 변경할 수 있습니다.
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px]">
+                        <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#f59e0b]"></span> 등교 대기</span>
+                        <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#ef4444]"></span> 서류 미수령</span>
+                        <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#3b82f6]"></span> 서류 작성중</span>
+                        <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#a855f7]"></span> 승인 대기</span>
+                        <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#10b981]"></span> 승인/편철완료</span>
+                      </div>
+                    </div>
+
+                    {/* Category Cards Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                      {DOC_CATEGORIES_CONFIG.map((catConfig) => {
+                        const catRecords = ledgerFilteredRecords.filter(r => getDocCategory(r) === catConfig.key);
+                        const catPending = catRecords.filter(r => r.requiresDocument !== false && r.status !== 'APPROVED').length;
+
+                        // 서류 불필요 카테고리는 미비 서류 필터 시 건수가 0이면 숨김
+                        if (docLedgerFilter === 'PENDING' && catRecords.length === 0) {
+                          return null;
+                        }
+
+                        return (
+                          <div
+                            key={catConfig.key}
+                            className={`rounded-[10px] border ${catConfig.colorTheme.border} ${catConfig.colorTheme.bg} overflow-hidden flex flex-col shadow-2xs`}
+                          >
+                            {/* Card Header */}
+                            <div className={`p-3 border-b ${catConfig.colorTheme.border} ${catConfig.colorTheme.headerBg} flex items-center justify-between gap-2`}>
+                              <div className="flex items-center space-x-2">
+                                <span className="text-base">{catConfig.icon}</span>
+                                <div>
+                                  <h4 className="font-bold text-xs text-[#1e293b] flex items-center gap-1.5">
+                                    <span>{catConfig.title}</span>
+                                  </h4>
+                                  <p className="text-[10px] text-[#64748b]">
+                                    {catConfig.requiredPapers}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                {catConfig.key !== 'NO_DOC' && catPending > 0 && (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#fee2e2] text-[#b91c1c] border border-[#fca5a5]">
+                                    미비 {catPending}
+                                  </span>
+                                )}
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${catConfig.colorTheme.badge}`}>
+                                  총 {catRecords.length}건
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Card Body - Students List */}
+                            <div className="p-2.5 flex-1 space-y-2">
+                              {catRecords.length === 0 ? (
+                                <div className="py-4 text-center text-xs text-[#94a3b8]">
+                                  해당 서류 대상 학생이 없습니다.
+                                </div>
+                              ) : (
+                                catRecords.map((r) => {
+                                  const kind = r.kind || '결석';
+                                  const cat = r.category || '기타';
+                                  const periodDisplay = r.periodText ? (r.kind === '조퇴' && /^\d교시$/.test(r.periodText) ? `${r.periodText} 이후` : r.periodText) : `${r.daysCount}일간`;
+                                  
+                                  const getStatusPill = () => {
+                                    if (r.requiresDocument === false || r.status === 'RECORDED') {
+                                      return <span className="px-1.5 py-0.5 rounded text-[10px] bg-[#f1f5f9] text-[#64748b] border border-[#cbd5e1]">단순 기록</span>;
+                                    }
+                                    switch (r.status) {
+                                      case 'PENDING_ATTENDANCE':
+                                        return <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#fff8e8] text-[#d97706] border border-[#fde68a]">1단계: 등교대기</span>;
+                                      case 'ATTENDED_NOTIFIED':
+                                        return <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#fee2e2] text-[#dc2626] border border-[#fca5a5]">2단계: 서류미수령</span>;
+                                      case 'FORM_PICKED_UP':
+                                        return <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#eff6ff] text-[#2563eb] border border-[#bfdbfe]">3단계: 작성중</span>;
+                                      case 'SUBMITTED':
+                                        return <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#faf5ff] text-[#9333ea] border border-[#e9d5ff]">4단계: 승인대기</span>;
+                                      case 'APPROVED':
+                                        return <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#ecfdf5] text-[#059669] border border-[#a7f3d0]">✓ 5단계: 승인완료</span>;
+                                      default:
+                                        return <span className="px-1.5 py-0.5 rounded text-[10px] bg-[#f1f5f9] text-[#64748b]">기록완료</span>;
+                                    }
+                                  };
+
+                                  return (
+                                    <div
+                                      key={r.id}
+                                      onClick={() => handleOpenEditModal(r)}
+                                      className="p-2 rounded-[6px] bg-white border border-[#cbd5e1] hover:border-[#0086fc] hover:shadow-xs transition-all cursor-pointer space-y-1.5 group"
+                                      title="클릭하여 출결 수정 및 서류 대조창 열기"
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-1.5">
+                                          <span className="font-black text-xs text-[#0f172a] group-hover:text-[#0086fc] transition-colors">
+                                            {r.studentNum}번 {r.studentName}
+                                          </span>
+                                          <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                                            kind === '결석' ? 'bg-[#fee2e2] text-[#b91c1c]' :
+                                            kind === '지각' ? 'bg-[#fef3c7] text-[#b45309]' :
+                                            kind === '조퇴' ? 'bg-[#e0f2fe] text-[#0284c7]' :
+                                            'bg-[#f3e8ff] text-[#7c3aed]'
+                                          }`}>
+                                            {cat} {kind}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center space-x-1">
+                                          {getStatusPill()}
+                                          <button
+                                            type="button"
+                                            className="text-[#94a3b8] group-hover:text-[#0086fc] p-0.5 rounded"
+                                          >
+                                            <Edit2 className="w-3 h-3" />
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center justify-between text-[11px] text-[#475569]">
+                                        <span className="truncate max-w-[210px] font-medium" title={r.reason}>
+                                          {r.reason}
+                                        </span>
+                                        <span className="text-[10px] text-[#64748b] shrink-0 font-mono">
+                                          {r.startDate}{r.endDate && r.endDate !== r.startDate ? ` ~ ${r.endDate}` : ''} ({periodDisplay})
+                                        </span>
+                                      </div>
+
+                                      {/* Attachment or Approved date */}
+                                      <div className="flex items-center justify-between text-[10px] text-[#64748b] pt-1 border-t border-[#f1f5f9]">
+                                        <span className="truncate flex items-center gap-1">
+                                          <Paperclip className="w-2.5 h-2.5 text-[#0284c7] shrink-0" />
+                                          {r.attachments && r.attachments.length > 0 ? (
+                                            <span className="text-[#0284c7] font-semibold truncate max-w-[180px]">
+                                              {r.attachments.join(', ')}
+                                            </span>
+                                          ) : (
+                                            <span className="text-[#94a3b8]">제출 증빙서류 없음</span>
+                                          )}
+                                        </span>
+                                        {r.approvedAt && (
+                                          <span className="text-[9px] text-[#059669] font-medium shrink-0">
+                                            승인: {new Date(r.approvedAt).toLocaleDateString('ko-KR')}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Filter and Search Bar */}
