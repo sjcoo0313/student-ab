@@ -1082,9 +1082,15 @@ function StudentActionCard({
           <div className="p-3.5 bg-[#fff8e8] rounded-[10px] border border-[#e5d5c3] text-[#343433] text-xs leading-relaxed">
             <p className="font-semibold text-[#d48f00] flex items-center gap-1.5 mb-1">
               <AlertCircle className="w-4 h-4" />
-              등교 시 결석계 알림이 울립니다
+              {record.type === 'OFFICIAL_OTHER'
+                ? '등교 시 공결 증빙서류 제출 안내가 표시됩니다'
+                : '등교 시 결석계 알림이 울립니다'}
             </p>
-            다음 날 등교하여 선생님이 <strong>[등교 확인]</strong>을 누르시면, 교실 서류함에서 양식을 챙기라는 안내 카드가 활성화됩니다.
+            {record.type === 'OFFICIAL_OTHER' ? (
+              <>다음 날 등교하여 선생님이 <strong>[등교 확인]</strong>을 누르시면, 공결 증빙서류(대회 참가확인서, 수험표 등) 제출 안내 카드가 활성화됩니다.</>
+            ) : (
+              <>다음 날 등교하여 선생님이 <strong>[등교 확인]</strong>을 누르시면, 교실 서류함에서 양식을 챙기라는 안내 카드가 활성화됩니다.</>
+            )}
           </div>
 
           {/* 학생 직접 등교 확인 & 서류 챙기기 시작 버튼 */}
@@ -1094,7 +1100,11 @@ function StudentActionCard({
             className="btn-dark-pill w-full mt-3 py-2.5 text-xs flex items-center justify-center space-x-1.5 shadow-xs cursor-pointer"
           >
             <FileText className="w-4 h-4 text-[#ffcd6c]" />
-            <span>선생님, 오늘 등교했어요! (서류 챙기기 시작) 🏫</span>
+            <span>
+              {record.type === 'OFFICIAL_OTHER'
+                ? '선생님, 오늘 등교했어요! (공결 증빙서류 제출) 🏫'
+                : '선생님, 오늘 등교했어요! (서류 챙기기 시작) 🏫'}
+            </span>
           </button>
         </div>
       ) : record.status === 'ATTENDED_NOTIFIED' ? (
@@ -1105,7 +1115,9 @@ function StudentActionCard({
             <div className="flex items-center space-x-2">
               <Bell className="w-5 h-5 text-[#ff3e00] animate-bounce" />
               <span className="badge-pill badge-orange font-semibold">
-                등교 확인 완료 · 서류 챙기기
+                {record.type === 'OFFICIAL_OTHER'
+                  ? '등교 확인 완료 · 증빙서류 제출'
+                  : '등교 확인 완료 · 서류 챙기기'}
               </span>
             </div>
             <span className="text-[11px] text-[#7e7e7d]">
@@ -1122,6 +1134,13 @@ function StudentActionCard({
                     [보고서를 7일이내 NEIS로 제출]
                   </span> 해야 합니다!
                 </>
+              ) : record.type === 'OFFICIAL_OTHER' ? (
+                <>
+                  대회·면접·시험 등<br />
+                  <span className="text-[#2563eb] underline underline-offset-4 decoration-[#2563eb]/30">
+                    [{record.typeName}] 증빙서류
+                  </span>를 준비해주세요!
+                </>
               ) : (
                 <>
                   교실 서류함에서<br />
@@ -1135,6 +1154,10 @@ function StudentActionCard({
               {record.type === 'FIELD_EXPERIENCE' ? (
                 <>
                   {student?.name} 학생! 현장체험학습은 결석계가 아니며, <strong>보고서를 7일이내 NEIS로 제출</strong>해야 합니다.
+                </>
+              ) : record.type === 'OFFICIAL_OTHER' ? (
+                <>
+                  {student?.name} 학생! 공결 인정에 필요한 <strong>증빙서류(대회 참가확인서, 수험표, 면접확인서 등)</strong>를 준비하여 교실 제출함에 넣어주세요.
                 </>
               ) : (
                 <>
@@ -1187,6 +1210,8 @@ function StudentActionCard({
             <span>
               {record.type === 'FIELD_EXPERIENCE' 
                 ? '1단계: 보고서를 7일이내 NEIS로 제출 확인 🎒' 
+                : record.type === 'OFFICIAL_OTHER'
+                ? '1단계: 공결 증빙서류 준비 완료 🏆'
                 : '1단계: 결석신고서 챙겼어요 📄'}
             </span>
           </button>
@@ -1199,7 +1224,11 @@ function StudentActionCard({
             <div className="flex items-center space-x-2">
               <FileText className="w-4 h-4 text-[#0086fc]" />
               <span className="badge-pill badge-sky">
-                {record.type === 'FIELD_EXPERIENCE' ? '2단계: 보고서를 7일이내 NEIS로 제출' : '2단계: 서류 작성 및 제출'}
+                {record.type === 'FIELD_EXPERIENCE' 
+                  ? '2단계: 보고서를 7일이내 NEIS로 제출' 
+                  : record.type === 'OFFICIAL_OTHER'
+                  ? '2단계: 증빙서류 제출'
+                  : '2단계: 서류 작성 및 제출'}
               </span>
             </div>
             <span className="text-[11px] text-[#7e7e7d]">작성 중</span>
@@ -1209,11 +1238,15 @@ function StudentActionCard({
             <h3 className="text-base font-bold text-[#121212]">
               {record.type === 'FIELD_EXPERIENCE' 
                 ? '보고서를 7일이내 NEIS로 제출 & 사진 첨부' 
+                : record.type === 'OFFICIAL_OTHER'
+                ? '공결 증빙서류 교실 제출함에 넣기'
                 : '종이 서류 작성 후 제출함에 넣기'}
             </h3>
             <p className="text-xs text-[#474645] mt-1 leading-relaxed">
               {record.type === 'FIELD_EXPERIENCE' 
                 ? '보고서를 7일이내 NEIS로 제출하고, 동행 보호자 사진(일자당 1장)을 점검한 뒤 제출 완료 핑을 보내세요.' 
+                : record.type === 'OFFICIAL_OTHER'
+                ? '대회 참가확인서, 수험표, 면접확인서 등 증빙서류를 교실 제출함에 넣은 뒤 버튼을 누르세요.'
                 : '작성 후 동봉할 증빙서류를 아래에서 체크하고 교실 제출함에 넣은 뒤 버튼을 누르세요.'}
             </p>
           </div>
@@ -1350,6 +1383,8 @@ function StudentActionCard({
                 ? '전송 중...'
                 : record.type === 'FIELD_EXPERIENCE'
                 ? '보고서를 7일이내 NEIS로 제출 완료했어요! 📨'
+                : record.type === 'OFFICIAL_OTHER'
+                ? '증빙서류를 제출함에 넣었어요! (선생님께 핑) 📨'
                 : '제출함에 넣었어요! (선생님께 핑) 📨'}
             </span>
           </button>
@@ -1384,11 +1419,15 @@ function StudentActionCard({
           <h3 className="text-base font-bold text-[#121212] mt-1">
             {record.type === 'FIELD_EXPERIENCE'
               ? '선생님이 NEIS 보고서 및 사진을 확인 중입니다'
+              : record.type === 'OFFICIAL_OTHER'
+              ? '선생님이 공결 증빙서류를 확인 중입니다'
               : '선생님이 실물 서류를 확인 중입니다'}
           </h3>
           <p className="text-xs text-[#474645] mt-1.5 leading-relaxed">
             {record.type === 'FIELD_EXPERIENCE'
               ? '현장체험학습 보고서를 7일이내 NEIS로 제출 완료했습니다. 담임선생님이 NEIS 대조 후 최종 승인 처리하실 예정입니다.'
+              : record.type === 'OFFICIAL_OTHER'
+              ? '공결 증빙서류를 교실 제출함에 넣었습니다. 담임선생님이 서류를 확인하신 후 최종 승인 처리하실 예정입니다.'
               : '종이 결석신고서를 교실 제출함에 넣었습니다. 담임선생님이 서류를 확인하신 후 최종 승인 처리하실 예정입니다.'}
           </p>
 
@@ -1431,9 +1470,11 @@ function StudentActionCard({
           <div className="w-12 h-12 bg-[#e6fbf1] text-[#00ca48] rounded-full flex items-center justify-center mx-auto mb-3">
             <CheckCircle2 className="w-6 h-6" />
           </div>
-          <h3 className="text-base font-bold text-[#121212]">결석신고서 승인 완료!</h3>
+          <h3 className="text-base font-bold text-[#121212]">
+            {record.type === 'OFFICIAL_OTHER' ? '공결 증빙서류 승인 완료!' : '결석신고서 승인 완료!'}
+          </h3>
           <p className="text-xs text-[#7e7e7d] mt-1">
-            {record.startDate} ({record.typeName}) 결석신고서가 정상 처리되었습니다.
+            {record.startDate} ({record.typeName}) {record.type === 'OFFICIAL_OTHER' ? '증빙서류가 정상 승인되었습니다.' : '결석신고서가 정상 처리되었습니다.'}
           </p>
         </div>
       )}

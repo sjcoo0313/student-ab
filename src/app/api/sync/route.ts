@@ -171,20 +171,29 @@ export async function POST(req: NextRequest) {
         const newNotifs = [...current.notifications];
         if (foundRec) {
           const isFieldTrip = foundRec.type === 'FIELD_EXPERIENCE';
+          const isOfficialOther = foundRec.type === 'OFFICIAL_OTHER';
           newNotifs.unshift({
             id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
             type: 'REMIND_ALERT',
             title: isFieldTrip 
               ? `🎒 [등교 확인] ${foundRec.studentNum}번 ${foundRec.studentName} 학생`
+              : isOfficialOther
+              ? `🏆 [등교 확인] ${foundRec.studentNum}번 ${foundRec.studentName} 학생`
               : `🔔 [등교 확인] ${foundRec.studentNum}번 ${foundRec.studentName} 학생`,
             message: isFieldTrip
               ? `${foundRec.studentName} 학생의 등교가 확인되어 '보고서를 7일이내 NEIS로 제출' 알림을 전송했습니다.`
+              : isOfficialOther
+              ? `${foundRec.studentName} 학생에게 [${foundRec.typeName}] 공결 증빙서류를 제출하라는 알림을 전송했습니다.`
               : `${foundRec.studentName} 학생에게 교실 서류함에서 [${foundRec.typeName}] 결석신고서를 챙기라는 알림을 전송했습니다.`,
             studentTitle: isFieldTrip
               ? `🎒 [등교 확인] 현장체험학습 보고서를 NEIS로 제출해주세요!`
+              : isOfficialOther
+              ? `🏆 [등교 확인] 공결 증빙서류를 준비해주세요!`
               : `🏫 [등교 확인] 결석신고서 서류 양식을 챙겨주세요!`,
             studentMessage: isFieldTrip
               ? `${foundRec.studentName} 학생, 등교를 환영해요! 현장체험학습은 종이 결석계가 아니에요. 7일 이내에 NEIS로 보고서를 제출해주세요. (일자별 사진 + 동행 보호자 사진 필수!)`
+              : isOfficialOther
+              ? `${foundRec.studentName} 학생, 등교를 환영해요! [${foundRec.typeName}] 관련 공결 증빙서류(대회 참가확인서, 수험표, 면접확인서 등)를 준비하여 교실 제출함에 넣어주세요.`
               : `${foundRec.studentName} 학생, 등교를 환영해요! 교실 앞 서류함에서 [${foundRec.typeName}] 양식을 1장 챙겨서 가방에 넣어두세요. (집에서 부모님 서명 필요)`,
             studentName: foundRec.studentName,
             grade: foundRec.grade,
@@ -199,9 +208,13 @@ export async function POST(req: NextRequest) {
           sendPushToStudent(foundRec.studentId, {
             title: isFieldTrip
               ? '🎒 [등교 확인] 현장체험학습 보고서를 NEIS로 제출해주세요!'
+              : isOfficialOther
+              ? '🏆 [등교 확인] 공결 증빙서류를 준비해주세요!'
               : '🏫 [등교 확인] 결석신고서 서류 양식을 챙겨주세요!',
             body: isFieldTrip
               ? `${foundRec.studentName} 학생, 등교를 환영해요! 현장체험학습은 7일 이내에 NEIS로 보고서를 제출해주세요.`
+              : isOfficialOther
+              ? `${foundRec.studentName} 학생, 등교를 환영해요! [${foundRec.typeName}] 관련 공결 증빙서류를 준비하여 교실 제출함에 넣어주세요.`
               : `${foundRec.studentName} 학생, 등교를 환영해요! 교실 앞 서류함에서 [${foundRec.typeName}] 양식을 1장 챙겨서 가방에 넣어두세요.`,
             url: '/',
           }).catch(() => {});
@@ -232,7 +245,9 @@ export async function POST(req: NextRequest) {
         // 📲 학생 스마트폰으로 최종 승인 완료 축하 푸시 발송
         if (foundRec) {
           sendPushToStudent(foundRec.studentId, {
-            title: '🎉 [최종 승인 완료] 결석신고서가 승인되었습니다!',
+            title: foundRec.type === 'OFFICIAL_OTHER'
+              ? '🎉 [최종 승인 완료] 공결 증빙서류가 승인되었습니다!'
+              : '🎉 [최종 승인 완료] 결석신고서가 승인되었습니다!',
             body: `${foundRec.studentName} 학생의 [${foundRec.typeName}] 출결 서류가 담임선생님께 최종 승인 처리되었습니다.`,
             url: '/',
           }).catch(() => {});

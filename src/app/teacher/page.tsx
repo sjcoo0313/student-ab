@@ -518,7 +518,11 @@ export default function TeacherDashboard() {
   const handleRemind = (rec: AbsenceRecord) => {
     triggerRemind(rec.id);
     loadData();
-    const actionText = rec.status === 'FORM_PICKED_UP' ? '서류 작성 및 제출함 투입 독려' : '결석계 수령 및 제출';
+    const actionText = rec.status === 'FORM_PICKED_UP' 
+      ? '서류 작성 및 제출함 투입 독려' 
+      : rec.type === 'OFFICIAL_OTHER'
+      ? '공결 증빙서류 제출 안내'
+      : '결석계 수령 및 제출';
     alert(`[${rec.studentNum}번 ${rec.studentName}] 학생에게 ${actionText} 알림 핑을 전송했습니다. (누적 ${(rec.remindCount || 0) + 1}회)`);
   };
 
@@ -1062,7 +1066,7 @@ export default function TeacherDashboard() {
                             onClick={() => handleMarkAttended(rec)}
                             className="w-full mt-1 bg-[#121212] hover:bg-[#2c2c2b] text-white text-[11px] py-1.5 rounded-[4px] font-semibold transition-colors cursor-pointer"
                           >
-                            {rec.type === 'FIELD_EXPERIENCE' ? '🏫 등교 확인 (7일내 NEIS 보고서 알림)' : '🏫 등교 확인 (알림 전송)'}
+                            {rec.type === 'FIELD_EXPERIENCE' ? '🏫 등교 확인 (7일내 NEIS 보고서 알림)' : rec.type === 'OFFICIAL_OTHER' ? '🏫 등교 확인 (증빙서류 제출 알림)' : '🏫 등교 확인 (알림 전송)'}
                           </button>
                         </div>
                       ))
@@ -1117,7 +1121,7 @@ export default function TeacherDashboard() {
                           </div>
                           <div className="flex items-center justify-between text-[10px]">
                             <span className="text-[#ff3e00] font-medium">
-                              {rec.type === 'FIELD_EXPERIENCE' ? '⚠️ 보고서 7일이내 NEIS 제출' : '⚠️ 미수령'}
+                              {rec.type === 'FIELD_EXPERIENCE' ? '⚠️ 보고서 7일이내 NEIS 제출' : rec.type === 'OFFICIAL_OTHER' ? '⚠️ 증빙서류 미제출' : '⚠️ 미수령'}
                             </span>
                           </div>
                           {(rec.studentMemo || rec.memo) && (
@@ -1199,7 +1203,7 @@ export default function TeacherDashboard() {
                             )}
                           </div>
                           <div className="text-[10px] text-[#0086fc] font-medium">
-                            {rec.type === 'FIELD_EXPERIENCE' ? '💻 보고서를 7일이내 NEIS로 제출 작성 중' : '✍️ 자필 작성 및 증빙 동봉 중'}
+                            {rec.type === 'FIELD_EXPERIENCE' ? '💻 보고서를 7일이내 NEIS로 제출 작성 중' : rec.type === 'OFFICIAL_OTHER' ? '🏆 공결 증빙서류 준비 중' : '✍️ 자필 작성 및 증빙 동봉 중'}
                           </div>
                           {(rec.studentMemo || rec.memo) && (
                             <div className="bg-[#fffbeb] border border-[#fef3c7] text-[#92400e] px-2 py-1 rounded text-[10px] leading-tight flex items-start gap-1">
@@ -1303,7 +1307,7 @@ export default function TeacherDashboard() {
                               onClick={() => handleOpenApprove(rec)}
                               className="flex-1 bg-[#00ca48] hover:bg-[#00b03f] text-white text-[11px] py-1.5 px-2 rounded-[4px] font-semibold transition-colors cursor-pointer truncate text-center"
                             >
-                              {rec.type === 'FIELD_EXPERIENCE' ? '✓ NEIS 승인' : '✓ 종이 서류 대조·승인'}
+                              {rec.type === 'FIELD_EXPERIENCE' ? '✓ NEIS 승인' : rec.type === 'OFFICIAL_OTHER' ? '✓ 공결 증빙 대조·승인' : '✓ 종이 서류 대조·승인'}
                             </button>
                           </div>
                         </div>
@@ -2287,12 +2291,16 @@ export default function TeacherDashboard() {
                         className="w-4 h-4 text-[#16a34a] accent-[#16a34a] rounded"
                       />
                       <span className="font-bold text-xs text-[#166534]">
-                        📢 학생에게 결석계·증빙서류 제출 알림 발송
+                        {newSpecialType === 'OFFICIAL_OTHER'
+                          ? '📢 학생에게 증빙서류 제출 알림 발송'
+                          : '📢 학생에게 결석계·증빙서류 제출 알림 발송'}
                       </span>
                     </label>
                     <p className="text-[11px] text-[#15803d] pl-6">
                       {newRequiresDocument
-                        ? '✓ 체크됨: 학생 스마트폰으로 양식 챙기기 알림이 발송되고, 제출함 투입을 추적합니다.'
+                        ? (newSpecialType === 'OFFICIAL_OTHER'
+                            ? '✓ 체크됨: 학생 스마트폰으로 증빙서류 제출 알림이 발송되고, 제출함 투입을 추적합니다.'
+                            : '✓ 체크됨: 학생 스마트폰으로 양식 챙기기 알림이 발송되고, 제출함 투입을 추적합니다.')
                         : '✗ 미체크: 학생에게 서류 제출을 요구하지 않고, 출결 마감 기록부에만 기록합니다.'}
                     </p>
                   </div>
@@ -2420,7 +2428,13 @@ export default function TeacherDashboard() {
                     <span className="w-6 h-6 rounded-full bg-[#e6fbf1] text-[#00ca48] flex items-center justify-center text-xs font-bold">✓</span>
                     <div>
                       <h3 className="font-bold text-base text-[#121212]">담임교사 확인 및 최종 승인</h3>
-                      <p className="text-[11px] text-[#7e7e7d]">종이 결석신고서 실물 대조</p>
+                      <p className="text-[11px] text-[#7e7e7d]">
+                        {selectedRecordToApprove.type === 'OFFICIAL_OTHER'
+                          ? '공결 증빙서류 실물 대조'
+                          : selectedRecordToApprove.type === 'FIELD_EXPERIENCE'
+                          ? 'NEIS 보고서 및 증빙 사진 대조'
+                          : '종이 결석신고서 실물 대조'}
+                      </p>
                     </div>
                   </div>
                   <button onClick={() => setIsApproveModalOpen(false)} className="text-[#7e7e7d] hover:text-[#121212] font-semibold text-sm p-1 cursor-pointer">

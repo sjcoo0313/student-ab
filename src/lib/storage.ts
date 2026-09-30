@@ -1611,11 +1611,12 @@ export function updateAbsenceRecordStatus(
       RECORDED: '일반 출결 기록',
     };
 
+    const isOfficialOther = rec.type === 'OFFICIAL_OTHER';
     addNotification({
       type: 'STATUS_REVERTED',
       title: '↩ 출결 진행 단계 되돌림',
       message: `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생의 출결 상태가 [${stageNames[targetStatus] || targetStatus}] 단계로 되돌려졌습니다.${note ? ` (${note})` : ''}`,
-      studentTitle: '⚠️ [서류 재확인] 결석계 서류 보완 안내',
+      studentTitle: isOfficialOther ? '⚠️ [서류 재확인] 공결 증빙서류 보완 안내' : '⚠️ [서류 재확인] 결석계 서류 보완 안내',
       studentMessage: `${rec.studentName} 학생, 제출한 출결 서류에 확인 또는 보완이 필요해요: ${note || '담임선생님께 확인 후 다시 제출해주세요.'}`,
       studentName: rec.studentName,
       grade: rec.grade,
@@ -1652,17 +1653,28 @@ export function markAttended(recordId: string): AbsenceRecord | null {
     saveAbsenceRecords(updated);
     const rec = updatedRecord as AbsenceRecord;
     const isFieldTrip = rec.type === 'FIELD_EXPERIENCE';
+    const isOfficialOther = rec.type === 'OFFICIAL_OTHER';
     addNotification({
       type: 'ATTENDANCE_CHECKED',
-      title: isFieldTrip ? '등교 확인 및 NEIS 보고서 제출 알림' : '등교 확인 및 결석계 작성 알림 발송',
+      title: isFieldTrip
+        ? '등교 확인 및 NEIS 보고서 제출 알림'
+        : isOfficialOther
+        ? '등교 확인 및 공결 증빙서류 제출 알림 발송'
+        : '등교 확인 및 결석계 작성 알림 발송',
       message: isFieldTrip
         ? `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생의 등교가 확인되어 '보고서를 7일이내 NEIS로 제출' 알림이 발송되었습니다.`
+        : isOfficialOther
+        ? `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생의 등교가 확인되어 공결 증빙서류 제출 안내 알림이 발송되었습니다.`
         : `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생의 등교가 확인되어 결석계 챙기기 알림이 발송되었습니다.`,
       studentTitle: isFieldTrip 
         ? '🎒 [등교 확인] 현장체험학습 보고서를 NEIS로 제출해주세요!' 
+        : isOfficialOther
+        ? '🏆 [등교 확인] 공결 증빙서류(대회/면접/시험 등)를 준비해주세요!'
         : '🏫 [등교 확인] 교실 서류함에서 결석신고서를 챙겨주세요!',
       studentMessage: isFieldTrip
         ? `${rec.studentName} 학생, 등교를 환영해요! 현장체험학습은 종이 결석계가 아니에요. 7일 이내에 NEIS로 보고서를 제출해주세요. (일자별 사진 + 동행 보호자 사진 필수!)`
+        : isOfficialOther
+        ? `${rec.studentName} 학생, 등교를 환영해요! [${rec.typeName}] 관련 공결 증빙서류(대회 참가확인서, 수험표, 면접확인서 등)를 준비하여 교실 제출함에 넣어주세요.`
         : `${rec.studentName} 학생, 등교를 환영해요! 교실 앞 서류함에서 [${rec.typeName}] 결석신고서를 1장 챙겨서 가방에 넣어두세요. (집에서 부모님 서명 필요)`,
       studentName: rec.studentName,
       grade: rec.grade,
@@ -1733,11 +1745,18 @@ export function markSubmitted(
     const memoSnippet = rec.studentMemo ? ` [학생 메모: "${rec.studentMemo}"]` : '';
 
     const isFieldTrip = rec.type === 'FIELD_EXPERIENCE';
+    const isOfficialOther = rec.type === 'OFFICIAL_OTHER';
     addNotification({
       type: 'SUBMIT_PING',
-      title: isFieldTrip ? '📢 현장체험학습 보고서(NEIS) 제출 확인' : '📢 결석신고서 제출 알림 (핑)',
+      title: isFieldTrip
+        ? '📢 현장체험학습 보고서(NEIS) 제출 확인'
+        : isOfficialOther
+        ? '📢 공결 증빙서류 제출 알림 (핑)'
+        : '📢 결석신고서 제출 알림 (핑)',
       message: isFieldTrip
         ? `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생이 '보고서를 7일이내 NEIS로 제출' 및 증빙 사진 준비를 완료했습니다!${attachSummary}${memoSnippet}`
+        : isOfficialOther
+        ? `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생이 [${rec.typeName}] 증빙서류를 제출함에 넣었습니다!${attachSummary}${memoSnippet}`
         : `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생이 [${rec.typeName}] 결석신고서를 제출함에 넣었습니다!${attachSummary}${memoSnippet}`,
       studentName: rec.studentName,
       grade: rec.grade,
@@ -1873,17 +1892,26 @@ export function triggerRemind(recordId: string): AbsenceRecord | null {
     saveAbsenceRecords(updated);
     const rec = updatedRecord as AbsenceRecord;
     const isFieldTrip = rec.type === 'FIELD_EXPERIENCE';
+    const isOfficialOther = rec.type === 'OFFICIAL_OTHER';
     const isPickedUp = rec.status === 'FORM_PICKED_UP';
     const isAttendedNotified = rec.status === 'ATTENDED_NOTIFIED';
 
     const studentTitle = isFieldTrip
       ? '🎒 [담임선생님 알림] 현장체험학습 보고서를 NEIS로 제출해주세요!'
+      : isOfficialOther
+      ? (isPickedUp
+          ? '🏆 [담임선생님 알림] 공결 증빙서류를 교실 제출함에 넣어주세요!'
+          : '🏆 [담임선생님 알림] 공결 증빙서류를 준비하여 제출해주세요!')
       : isPickedUp
       ? '✍️ [담임선생님 알림] 작성한 결석계를 교실 제출함에 넣어주세요!'
       : '📄 [담임선생님 알림] 결석신고서 서류 양식을 챙겨주세요!';
 
     const studentMessage = isFieldTrip
       ? `${rec.studentName} 학생! 현장체험학습은 종이 결석계가 아니에요. 복귀 후 7일 이내에 NEIS로 보고서를 제출해야 출석 인정이 됩니다. (일자별 사진 + 보호자 동반 사진 필수!)`
+      : isOfficialOther
+      ? (isPickedUp
+          ? `${rec.studentName} 학생! 준비한 [${rec.typeName}] 증빙서류를 교실 제출함에 넣고, 화면 아래 [제출 완료] 버튼을 눌러주세요!`
+          : `${rec.studentName} 학생! [${rec.typeName}] 관련 공결 증빙서류(대회 참가확인서, 수험표/면접확인서 등)를 준비하여 교실 제출함에 제출해주세요.`)
       : isPickedUp
       ? `${rec.studentName} 학생! 결석신고서에 부모님 서명과 증빙서류를 챙기셨나요? 작성을 마쳤다면 교실 제출함에 넣고, 화면 아래 [제출 완료] 버튼을 눌러주세요!`
       : `${rec.studentName} 학생! 아직 교실 앞 서류함에서 [${rec.typeName}] 서류 양식을 챙기지 않았어요. 쉬는 시간이나 점심시간에 서류함에서 양식을 1장 챙겨 가방에 넣어두세요! (집에서 부모님 서명 필요)`;
@@ -1892,11 +1920,15 @@ export function triggerRemind(recordId: string): AbsenceRecord | null {
       type: 'REMIND_ALERT',
       title: isFieldTrip 
         ? `🔔 [${rec.studentNum}번 ${rec.studentName}] 체험학습 리마인드 전송 완료` 
+        : isOfficialOther
+        ? `🔔 [${rec.studentNum}번 ${rec.studentName}] 공결 증빙서류 제출 안내 전송 완료`
         : isPickedUp
         ? `🔔 [${rec.studentNum}번 ${rec.studentName}] 제출함 투입 독려 전송 완료`
         : `🔔 [${rec.studentNum}번 ${rec.studentName}] 서류 양식 수령 안내 전송 완료`,
       message: isFieldTrip
         ? `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생에게 '보고서를 7일이내 NEIS로 제출' 리마인드를 전송했습니다.`
+        : isOfficialOther
+        ? `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생에게 [${rec.typeName}] 공결 증빙서류를 교실 제출함에 제출하라는 안내를 전송했습니다.`
         : isPickedUp
         ? `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생에게 작성 중인 [${rec.typeName}] 서류를 완성하여 교실 제출함에 넣어달라는 제출 독려 알림을 전송했습니다.`
         : `${rec.grade}학년 ${rec.classNum}반 ${rec.studentNum}번 ${rec.studentName} 학생에게 교실 서류함에서 [${rec.typeName}] 양식을 챙기라는 안내 알림을 전송했습니다.`,

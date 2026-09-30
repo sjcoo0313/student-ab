@@ -269,6 +269,23 @@ export function dispatchScheduledReminder(
       teacherMessage = `${rec.studentNum}번 ${rec.studentName} 학생에게 7일 이내 NEIS 보고서 제출 독려 핑을 전송했습니다.`;
       studentTitle = `🎒 [${slotLabel} 알림] 현장체험학습 보고서를 NEIS로 제출해주세요!`;
       studentMessage = `${rec.studentName} 학생! 현장체험학습은 종이 결석계가 아니에요. 복귀 후 7일 이내에 NEIS로 보고서를 제출해야 출석 인정이 됩니다. (일자별 사진 + 동행 보호자 사진 필수!)`;
+    } else if (rec.type === 'OFFICIAL_OTHER') {
+      if (rec.status === 'ATTENDED_NOTIFIED') {
+        teacherTitle = `⏰ [${slot.title} (${slot.time})] [${rec.studentNum}번 ${rec.studentName}] 공결 증빙서류 제출 독려`;
+        teacherMessage = `${rec.studentNum}번 ${rec.studentName} 학생에게 [${rec.typeName}] 증빙서류 제출 안내 핑을 전송했습니다.`;
+        studentTitle = `🏆 [${slotLabel} 알림] 공결 증빙서류를 준비해주세요!`;
+        studentMessage = `${rec.studentName} 학생! [${rec.typeName}] 관련 공결 증빙서류(대회 참가확인서, 수험표, 면접확인서 등)를 준비하여 교실 제출함에 넣어주세요.`;
+      } else if (rec.status === 'FORM_PICKED_UP') {
+        teacherTitle = `⏰ [${slot.title} (${slot.time})] [${rec.studentNum}번 ${rec.studentName}] 공결 증빙서류 제출함 투입 독려`;
+        teacherMessage = `${rec.studentNum}번 ${rec.studentName} 학생에게 [${rec.typeName}] 증빙서류를 제출함에 넣고 [제출 완료]를 누르라는 ${slot.title} 독려 핑을 전송했습니다.`;
+        studentTitle = `🏆 [${slotLabel} 알림] 공결 증빙서류를 제출함에 넣어주세요!`;
+        studentMessage = `${rec.studentName} 학생! [${rec.typeName}] 증빙서류(대회 참가확인서, 수험표 등)를 교실 제출함에 넣고 아래 [제출 완료] 버튼을 눌러주세요!`;
+      } else {
+        teacherTitle = `⏰ [${slot.title} (${slot.time})] [${rec.studentNum}번 ${rec.studentName}] 등교 확인 대기 안내`;
+        teacherMessage = `${rec.studentNum}번 ${rec.studentName} 학생에게 등교 확인 및 공결 증빙서류 제출 안내 ${slot.title} 핑을 전송했습니다.`;
+        studentTitle = `🏫 [${slotLabel} 알림] 등교 후 담임선생님께 확인받아주세요!`;
+        studentMessage = `${rec.studentName} 학생, 학교에 도착하면 담임선생님께 등교 확인을 받고 [${rec.typeName}] 증빙서류를 제출해주세요.`;
+      }
     } else if (rec.status === 'ATTENDED_NOTIFIED') {
       // 1단계 미이행: 서류 미수령
       teacherTitle = `⏰ [${slot.title} (${slot.time})] [${rec.studentNum}번 ${rec.studentName}] 서류 양식 수령 독려`;
@@ -372,7 +389,7 @@ export function dispatchScheduledReminder(
         target: 'MULTIPLE_STUDENTS',
         studentIds: targetStudentIds,
         payload: {
-          title: `⏰ [${slot.periodName || slot.title}] 결석신고서 챙기기 알림`,
+          title: `⏰ [${slot.periodName || slot.title}] 출결 증빙서류 안내 알림`,
           body: '담임선생님께서 서류 챙기기 및 제출 안내 알림을 보냈습니다. 확인해주세요!',
           url: '/',
         },
