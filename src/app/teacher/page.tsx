@@ -732,8 +732,8 @@ export default function TeacherDashboard() {
 
   return (
     <TeacherAuthGuard>
-      <main className="min-h-[calc(100vh-4.5rem)] bg-[#fbfaf9] py-6 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-6xl mx-auto space-y-5">
+      <main className="min-h-[calc(100vh-4.5rem)] bg-[#fbfaf9] py-5 px-2.5 sm:px-6 lg:px-8">
+        <div className="w-full max-w-[1400px] mx-auto space-y-5">
 
           {/* Top Header Card */}
           <div className="family-card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-5">
@@ -1786,20 +1786,21 @@ export default function TeacherDashboard() {
                 </div>
               </div>
 
-              {/* NEIS-Style Complete Attendance Table */}
+              {/* NEIS-Style Complete Attendance Table & Responsive View */}
               <div className="family-card p-0 overflow-hidden shadow-xs border border-[#e5d5c3]">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                {/* 💻 PC / Tablet Table View (md 이상 자동 맞춤 & 여유로운 폭 확보) */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left text-xs min-w-[860px]">
                     <thead className="bg-[#f8fafc] border-b border-[#cbd5e1] text-[#334155] font-bold">
                       <tr>
-                        <th className="py-2.5 px-3">일자</th>
-                        <th className="py-2.5 px-3">학번 / 성명</th>
-                        <th className="py-2.5 px-3">종류</th>
-                        <th className="py-2.5 px-3">구분</th>
-                        <th className="py-2.5 px-3">교시/기간</th>
-                        <th className="py-2.5 px-3">사유</th>
-                        <th className="py-2.5 px-3">결석계 서류상태</th>
-                        <th className="py-2.5 px-3 text-right">관리</th>
+                        <th className="py-2.5 px-3 w-[125px]">일자</th>
+                        <th className="py-2.5 px-3 w-[100px]">학번 / 성명</th>
+                        <th className="py-2.5 px-2.5 w-[60px] text-center">종류</th>
+                        <th className="py-2.5 px-2.5 w-[75px] text-center">구분</th>
+                        <th className="py-2.5 px-3 w-[85px]">교시/기간</th>
+                        <th className="py-2.5 px-3 min-w-[160px]">사유</th>
+                        <th className="py-2.5 px-3 w-[240px]">결석계 서류상태</th>
+                        <th className="py-2.5 px-3 pr-4 w-[130px] text-right">관리</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#f1f5f9]">
@@ -1820,7 +1821,7 @@ export default function TeacherDashboard() {
                               <td className="py-2.5 px-3 font-bold text-[#0f172a] whitespace-nowrap">
                                 {rec.studentNum}번 {rec.studentName}
                               </td>
-                              <td className="py-2.5 px-3 whitespace-nowrap">
+                              <td className="py-2.5 px-2.5 text-center whitespace-nowrap">
                                 <span className={`px-2 py-0.5 rounded-[4px] text-[11px] font-bold ${
                                   kind === '결석' ? 'bg-[#ffe4e6] text-[#e11d48]' :
                                   kind === '지각' ? 'bg-[#fef3c7] text-[#b45309]' :
@@ -1830,7 +1831,7 @@ export default function TeacherDashboard() {
                                   {kind}
                                 </span>
                               </td>
-                              <td className="py-2.5 px-3 whitespace-nowrap">
+                              <td className="py-2.5 px-2.5 text-center whitespace-nowrap">
                                 <span className={`px-2 py-0.5 rounded-[4px] text-[11px] font-semibold ${
                                   rec.category === '질병' ? 'bg-[#dbeafe] text-[#1e40af]' :
                                   rec.category === '미인정' ? 'bg-[#fee2e2] text-[#991b1b]' :
@@ -1872,7 +1873,7 @@ export default function TeacherDashboard() {
                                     <button
                                       type="button"
                                       onClick={() => handleRevertStatus(rec.id, 'SUBMITTED', '승인 취소 -> 제출함 대기로 되돌림')}
-                                      className="text-[10px] text-[#b45309] hover:bg-[#fef3c7] px-1.5 py-0.5 rounded border border-[#fde68a] transition-colors cursor-pointer inline-flex items-center gap-0.5 font-medium bg-white"
+                                      className="text-[10px] text-[#b45309] hover:bg-[#fef3c7] px-1.5 py-0.5 rounded border border-[#fde68a] transition-colors cursor-pointer inline-flex items-center gap-0.5 font-medium bg-white shrink-0"
                                       title="승인을 취소하고 4단계(제출함 투입/대기)로 되돌립니다."
                                     >
                                       <RotateCcw className="w-2.5 h-2.5 text-[#d97706]" />
@@ -1887,7 +1888,7 @@ export default function TeacherDashboard() {
                                     <button
                                       type="button"
                                       onClick={() => handleRevertStatus(rec.id, 'FORM_PICKED_UP', '3단계 작성중으로 되돌림')}
-                                      className="text-[10px] text-[#475569] hover:bg-[#f1f5f9] px-1.5 py-0.5 rounded border border-[#cbd5e1] transition-colors cursor-pointer inline-flex items-center gap-0.5 font-medium bg-white"
+                                      className="text-[10px] text-[#475569] hover:bg-[#f1f5f9] px-1.5 py-0.5 rounded border border-[#cbd5e1] transition-colors cursor-pointer inline-flex items-center gap-0.5 font-medium bg-white shrink-0"
                                       title="제출함 투입을 취소하고 3단계(서류 작성 중)로 되돌립니다."
                                     >
                                       <RotateCcw className="w-2.5 h-2.5 text-[#64748b]" />
@@ -1902,7 +1903,7 @@ export default function TeacherDashboard() {
                                     <button
                                       type="button"
                                       onClick={() => handleRevertStatus(rec.id, 'ATTENDED_NOTIFIED', '2단계 미수령으로 되돌림')}
-                                      className="text-[10px] text-[#475569] hover:bg-[#f1f5f9] px-1.5 py-0.5 rounded border border-[#cbd5e1] transition-colors cursor-pointer inline-flex items-center gap-0.5 font-medium bg-white"
+                                      className="text-[10px] text-[#475569] hover:bg-[#f1f5f9] px-1.5 py-0.5 rounded border border-[#cbd5e1] transition-colors cursor-pointer inline-flex items-center gap-0.5 font-medium bg-white shrink-0"
                                       title="서류 챙김을 취소하고 2단계(서류 미수령)로 되돌립니다."
                                     >
                                       <RotateCcw className="w-2.5 h-2.5 text-[#64748b]" />
@@ -1917,7 +1918,7 @@ export default function TeacherDashboard() {
                                     <button
                                       type="button"
                                       onClick={() => handleRevertStatus(rec.id, 'PENDING_ATTENDANCE', '등교대기로 되돌림')}
-                                      className="text-[10px] text-[#475569] hover:bg-[#f1f5f9] px-1.5 py-0.5 rounded border border-[#cbd5e1] transition-colors cursor-pointer inline-flex items-center gap-0.5 font-medium bg-white"
+                                      className="text-[10px] text-[#475569] hover:bg-[#f1f5f9] px-1.5 py-0.5 rounded border border-[#cbd5e1] transition-colors cursor-pointer inline-flex items-center gap-0.5 font-medium bg-white shrink-0"
                                       title="등교 확인을 취소하고 1단계(등교 대기)로 되돌립니다."
                                     >
                                       <RotateCcw className="w-2.5 h-2.5 text-[#64748b]" />
@@ -1930,7 +1931,7 @@ export default function TeacherDashboard() {
                                   </span>
                                 )}
                               </td>
-                              <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                              <td className="py-2.5 px-3 pr-4 text-right whitespace-nowrap">
                                 <div className="flex items-center justify-end space-x-1.5">
                                   <button
                                     type="button"
@@ -1958,6 +1959,163 @@ export default function TeacherDashboard() {
                       )}
                     </tbody>
                   </table>
+                </div>
+
+                {/* 📱 Mobile Card View (md 미만 모바일 전용 자동 맞춤 카드 뷰) */}
+                <div className="block md:hidden divide-y divide-[#f1f5f9]">
+                  {filteredRegisterRecords.length === 0 ? (
+                    <div className="py-12 text-center text-xs text-[#7e7e7d]">
+                      등록된 출결 내역이 없습니다.
+                    </div>
+                  ) : (
+                    filteredRegisterRecords.map((rec) => {
+                      const kind = rec.kind || '결석';
+                      return (
+                        <div key={rec.id} className="p-3.5 space-y-2 bg-white hover:bg-[#fcfbf9] transition-colors">
+                          {/* 1행: 학생 정보 & 일자 & 배지 */}
+                          <div className="flex items-center justify-between gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                              <span className="font-bold text-xs text-[#0f172a]">
+                                {rec.studentNum}번 {rec.studentName}
+                              </span>
+                              <span className="text-[11px] text-[#64748b]">
+                                {rec.startDate}{rec.endDate !== rec.startDate ? ` ~ ${rec.endDate}` : ''}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                kind === '결석' ? 'bg-[#ffe4e6] text-[#e11d48]' :
+                                kind === '지각' ? 'bg-[#fef3c7] text-[#b45309]' :
+                                kind === '조퇴' ? 'bg-[#e0f2fe] text-[#0284c7]' :
+                                'bg-[#f3e8ff] text-[#7c3aed]'
+                              }`}>
+                                {kind}
+                              </span>
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                                rec.category === '질병' ? 'bg-[#dbeafe] text-[#1e40af]' :
+                                rec.category === '미인정' ? 'bg-[#fee2e2] text-[#991b1b]' :
+                                rec.category === '출석인정' || rec.category === '출석 인정' ? 'bg-[#dcfce7] text-[#15803d]' :
+                                'bg-[#f1f5f9] text-[#475569]'
+                              }`}>
+                                {rec.category}
+                              </span>
+                              <span className="px-1.5 py-0.5 rounded text-[10px] bg-[#f1f5f9] text-[#64748b] font-medium">
+                                {rec.periodText
+                                  ? (rec.kind === '조퇴' && /^\d교시$/.test(rec.periodText) ? `${rec.periodText} 이후` : rec.periodText)
+                                  : `${rec.daysCount}일간`}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* 2행: 사유 및 메모 */}
+                          <div className="text-xs text-[#1e293b]">
+                            <div className="font-medium text-[#334155]">{rec.reason}</div>
+                            {(rec.studentMemo || rec.memo) && (
+                              <div className="text-[10px] text-[#b45309] bg-[#fffbeb] px-1.5 py-0.5 rounded border border-[#fef3c7] mt-1 inline-flex items-center gap-1 max-w-full">
+                                <MessageSquare className="w-2.5 h-2.5 text-[#d97706] shrink-0" />
+                                <span className="break-all">메모: {rec.studentMemo || rec.memo}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 3행: 서류 상태 및 수정/삭제 관리 버튼 */}
+                          <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#f1f5f9]">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {!rec.requiresDocument ? (
+                                <span className="text-[10px] text-[#64748b] bg-[#f1f5f9] px-2 py-0.5 rounded font-medium">
+                                  📋 출결 기록완료
+                                </span>
+                              ) : rec.status === 'APPROVED' ? (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] text-[#15803d] bg-[#dcfce7] px-1.5 py-0.5 rounded font-medium inline-flex items-center gap-0.5">
+                                    <span>✓ 서류 승인완료</span>
+                                    {rec.archivedFromBoard && (
+                                      <span className="bg-[#bbf7d0] text-[#166534] px-1 py-0.2 text-[8px] rounded font-bold">
+                                        보존
+                                      </span>
+                                    )}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRevertStatus(rec.id, 'SUBMITTED', '승인 취소 -> 제출함 대기로 되돌림')}
+                                    className="text-[10px] text-[#b45309] hover:bg-[#fef3c7] px-1.5 py-0.5 rounded border border-[#fde68a] transition-colors cursor-pointer inline-flex items-center gap-0.5 font-medium bg-white"
+                                  >
+                                    <RotateCcw className="w-2.5 h-2.5 text-[#d97706]" />
+                                    <span>↩ 취소</span>
+                                  </button>
+                                </div>
+                              ) : rec.status === 'SUBMITTED' ? (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] text-[#0284c7] bg-[#e0f2fe] px-1.5 py-0.5 rounded font-medium">
+                                    📨 제출함 대기
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRevertStatus(rec.id, 'FORM_PICKED_UP', '3단계 작성중으로 되돌림')}
+                                    className="text-[10px] text-[#475569] hover:bg-[#f1f5f9] px-1.5 py-0.5 rounded border border-[#cbd5e1] transition-colors cursor-pointer inline-flex items-center gap-0.5 font-medium bg-white"
+                                  >
+                                    <RotateCcw className="w-2.5 h-2.5 text-[#64748b]" />
+                                    <span>↩ 작성중</span>
+                                  </button>
+                                </div>
+                              ) : rec.status === 'FORM_PICKED_UP' ? (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] text-[#0284c7] bg-[#f0f9ff] px-1.5 py-0.5 rounded font-medium">
+                                    ✍️ 서류 작성중
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRevertStatus(rec.id, 'ATTENDED_NOTIFIED', '2단계 미수령으로 되돌림')}
+                                    className="text-[10px] text-[#475569] hover:bg-[#f1f5f9] px-1.5 py-0.5 rounded border border-[#cbd5e1] transition-colors cursor-pointer inline-flex items-center gap-0.5 font-medium bg-white"
+                                  >
+                                    <RotateCcw className="w-2.5 h-2.5 text-[#64748b]" />
+                                    <span>↩ 미수령</span>
+                                  </button>
+                                </div>
+                              ) : rec.status === 'ATTENDED_NOTIFIED' ? (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] text-[#b45309] bg-[#fef3c7] px-1.5 py-0.5 rounded font-medium">
+                                    ⚠️ 서류 미수령
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRevertStatus(rec.id, 'PENDING_ATTENDANCE', '등교대기로 되돌림')}
+                                    className="text-[10px] text-[#475569] hover:bg-[#f1f5f9] px-1.5 py-0.5 rounded border border-[#cbd5e1] transition-colors cursor-pointer inline-flex items-center gap-0.5 font-medium bg-white"
+                                  >
+                                    <RotateCcw className="w-2.5 h-2.5 text-[#64748b]" />
+                                    <span>↩ 등교대기</span>
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-[10px] text-[#64748b] bg-[#f8fafc] px-2 py-0.5 rounded font-medium border border-[#e2e8f0]">
+                                  ⏳ 1단계(등교 대기)
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditModal(rec)}
+                                className="text-[#475569] hover:text-[#0086fc] hover:bg-[#f1f5f9] px-2 py-1 rounded text-xs font-semibold transition-colors cursor-pointer inline-flex items-center gap-1 border border-[#e2e8f0]"
+                              >
+                                <Edit2 className="w-3 h-3 text-[#0086fc]" />
+                                <span>수정</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteRecord(rec.id, rec.studentName)}
+                                className="text-[#94a3b8] hover:text-[#e11d48] hover:bg-[#fef2f2] px-2 py-1 rounded text-xs font-semibold transition-colors cursor-pointer inline-flex items-center gap-1 border border-[#f1f5f9]"
+                              >
+                                <Trash2 className="w-3 h-3 text-[#e11d48]" />
+                                <span>{rec.status === 'APPROVED' ? (rec.archivedFromBoard ? '영구삭제' : '보드정리') : '삭제'}</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
             </div>
