@@ -72,6 +72,7 @@ export type RequiredDocCategoryKey =
   | 'MENSTRUAL'           // 🌸 생리인정 결석 학부모확인서
   | 'OFFICIAL_FAMILY'     // 🕊️ 경조사 증빙서류
   | 'OFFICIAL_INFECTIOUS' // 🏥 법정감염병 격리확인서 / 진단서
+  | 'OFFICIAL_OTHER'      // 🏆 공결 증빙서류 (대회·면접·시험 등)
   | 'TEACHER_OPINION';    // 📝 담임의견서 / 학부모확인서
 
 export const DOC_CATEGORIES_CONFIG: {
@@ -165,6 +166,21 @@ export const DOC_CATEGORIES_CONFIG: {
     requiredPapers: '보건소 격리통지서 또는 의사 소견서/진단서 (격리기간 명시)',
   },
   {
+    key: 'OFFICIAL_OTHER',
+    title: '공결 증빙서류 (대회·면접·시험 등)',
+    badgeTitle: '공결 증빙',
+    icon: '🏆',
+    colorTheme: {
+      bg: 'bg-[#eff6ff]',
+      border: 'border-[#bfdbfe]',
+      badge: 'bg-[#dbeafe] text-[#1d4ed8] border-[#bfdbfe]',
+      text: 'text-[#1d4ed8]',
+      headerBg: 'bg-[#dbeafe]/60',
+    },
+    desc: '대회 참가, 실기·면접 시험 등 학교장 인정 공결',
+    requiredPapers: '대회 참가확인서, 수험표/면접확인서, 공문 또는 주최측 증빙자료',
+  },
+  {
     key: 'TEACHER_OPINION',
     title: '담임의견서 / 사유 확인서',
     badgeTitle: '담임·사유 확인서',
@@ -189,6 +205,7 @@ export const getDocCategory = (r: AbsenceRecord): RequiredDocCategoryKey | null 
   if (r.type === 'MENSTRUAL') return 'MENSTRUAL';
   if (r.type === 'OFFICIAL_FAMILY') return 'OFFICIAL_FAMILY';
   if (r.type === 'OFFICIAL_INFECTIOUS') return 'OFFICIAL_INFECTIOUS';
+  if (r.type === 'OFFICIAL_OTHER') return 'OFFICIAL_OTHER';
   if (r.category === '질병') return 'MEDICAL';
   if (r.category === '출석인정' || r.category === '출석 인정') {
     const reasonText = (r.reason || '') + (r.typeName || '');
@@ -196,7 +213,7 @@ export const getDocCategory = (r: AbsenceRecord): RequiredDocCategoryKey | null 
     if (reasonText.includes('생리')) return 'MENSTRUAL';
     if (reasonText.includes('경조사') || reasonText.includes('결혼') || reasonText.includes('사망') || reasonText.includes('장례')) return 'OFFICIAL_FAMILY';
     if (reasonText.includes('감염병') || reasonText.includes('코로나') || reasonText.includes('독감') || reasonText.includes('격리')) return 'OFFICIAL_INFECTIOUS';
-    return 'TEACHER_OPINION';
+    return 'OFFICIAL_OTHER';
   }
   return 'TEACHER_OPINION';
 };
@@ -409,6 +426,9 @@ export default function TeacherDashboard() {
         } else if (newSpecialType === 'OFFICIAL_INFECTIOUS') {
           derivedType = 'OFFICIAL_INFECTIOUS';
           derivedTypeName = '법정 전염병 격리';
+        } else if (newSpecialType === 'OFFICIAL_OTHER') {
+          derivedType = 'OFFICIAL_OTHER';
+          derivedTypeName = '공결 (출석인정)';
         } else {
           derivedType = 'MENSTRUAL';
           derivedTypeName = '생리 인정결석';
@@ -2045,7 +2065,7 @@ export default function TeacherDashboard() {
                           type="text"
                           value={newReason}
                           onChange={(e) => setNewReason(e.target.value)}
-                          placeholder="사유를 입력하세요 (예: 감기몸살, 병원 진료, 생리통 등)"
+                          placeholder="사유를 입력하세요 (예: 대회 참가, 면접 시험, 감기몸살, 병원 진료 등)"
                           className="w-full bg-white border border-[#cbd5e1] rounded-[2px] px-2.5 py-1.5 text-xs text-[#0f172a] focus:outline-hidden focus:border-[#2563eb]"
                           required
                         />
@@ -2161,6 +2181,18 @@ export default function TeacherDashboard() {
                           }`}
                         >
                           🏥 법정 전염병
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewSpecialType('OFFICIAL_OTHER');
+                            setNewReason('공결');
+                          }}
+                          className={`p-1.5 text-xs rounded border text-left font-medium cursor-pointer col-span-2 ${
+                            newSpecialType === 'OFFICIAL_OTHER' ? 'bg-[#1e293b] text-white' : 'bg-white text-[#334155]'
+                          }`}
+                        >
+                          🏆 공결 (대회 참여·실기/면접 시험 등)
                         </button>
                       </div>
 

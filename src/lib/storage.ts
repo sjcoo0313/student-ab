@@ -1396,6 +1396,8 @@ export function createAbsenceRecord(data: {
       ? ['의사 진단서']
       : data.category === '질병'
       ? ['진료확인서', '학부모 의견서']
+      : data.type === 'OFFICIAL_OTHER'
+      ? ['기타']
       : [],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
