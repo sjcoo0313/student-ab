@@ -27,6 +27,8 @@ import {
   Archive,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   FolderCheck,
   Paperclip
 } from 'lucide-react';
@@ -232,6 +234,7 @@ export default function TeacherDashboard() {
   const [filterOnlySelectedDate, setFilterOnlySelectedDate] = useState(false);
 
   // Filters for Register Tab
+  const [selectedRegisterMonth, setSelectedRegisterMonth] = useState<string>(() => getTodayString().substring(0, 7));
   const [registerKindFilter, setRegisterKindFilter] = useState<string>('ALL');
   const [registerCategoryFilter, setRegisterCategoryFilter] = useState<string>('ALL');
 
@@ -640,7 +643,54 @@ export default function TeacherDashboard() {
     const pad = (n: number) => String(n).padStart(2, '0');
     const newDateStr = `${curr.getFullYear()}-${pad(curr.getMonth() + 1)}-${pad(curr.getDate())}`;
     setSelectedDashboardDate(newDateStr);
+    const newMonthStr = `${curr.getFullYear()}-${pad(curr.getMonth() + 1)}`;
+    if (selectedRegisterMonth !== 'ALL' && selectedRegisterMonth !== newMonthStr) {
+      setSelectedRegisterMonth(newMonthStr);
+    }
   };
+
+  const handleSelectMonth = (monthStr: string) => {
+    setSelectedRegisterMonth(monthStr);
+    if (monthStr !== 'ALL') {
+      const today = getTodayString();
+      if (today.startsWith(monthStr)) {
+        setSelectedDashboardDate(today);
+      } else {
+        setSelectedDashboardDate(`${monthStr}-01`);
+      }
+    }
+  };
+
+  const shiftRegisterMonth = (delta: number) => {
+    const baseMonth = selectedRegisterMonth === 'ALL' ? selectedDashboardDate.substring(0, 7) : selectedRegisterMonth;
+    const [y, m] = baseMonth.split('-').map(Number);
+    const target = new Date(y, m - 1 + delta, 1);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const newMonthStr = `${target.getFullYear()}-${pad(target.getMonth() + 1)}`;
+    handleSelectMonth(newMonthStr);
+  };
+
+  const formatMonthLabel = (mStr: string) => {
+    if (mStr === 'ALL') return '전체 기간 (모든 월)';
+    const parts = mStr.split('-').map(Number);
+    if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return mStr;
+    const [y, m] = parts;
+    return `${y}년 ${m}월`;
+  };
+
+  // 등록된 출결 기록에서 조회 가능한 연월 목록 자동 추출
+  const availableMonths = React.useMemo(() => {
+    const monthsSet = new Set<string>();
+    monthsSet.add(getTodayString().substring(0, 7));
+    if (selectedDashboardDate) {
+      monthsSet.add(selectedDashboardDate.substring(0, 7));
+    }
+    records.forEach(r => {
+      if (r.startDate) monthsSet.add(r.startDate.substring(0, 7));
+      if (r.endDate) monthsSet.add(r.endDate.substring(0, 7));
+    });
+    return Array.from(monthsSet).sort((a, b) => b.localeCompare(a));
+  }, [records, selectedDashboardDate]);
 
   // 1) 결석계 서류 회수 관리 탭 데이터 (requiresDocument !== false 대상)
   // 등교확인 대기, 서류 미수령, 서류 챙김, 제출함 투입은 날짜가 지나도 최종 승인(APPROVED)될 때까지 무조건 누적 유지!
@@ -668,8 +718,14 @@ export default function TeacherDashboard() {
       r.reason.includes(searchQuery);
     const matchesKind = registerKindFilter === 'ALL' || (r.kind || '결석') === registerKindFilter;
     const matchesCat = registerCategoryFilter === 'ALL' || r.category === registerCategoryFilter || (registerCategoryFilter === '출석인정' && r.category === '출석 인정');
+    
+    // 월별 필터링: 선택된 월(기본: 당월 10월)의 건만 표시하여 타 월 건 혼동 방지
+    const matchesMonth = selectedRegisterMonth === 'ALL' || 
+      (r.startDate || '').startsWith(selectedRegisterMonth) ||
+      (r.endDate && r.endDate.startsWith(selectedRegisterMonth));
+
     const matchesDate = !filterOnlySelectedDate || isDateInRange(selectedDashboardDate, r.startDate, r.endDate);
-    return matchesSearch && matchesKind && matchesCat && matchesDate;
+    return matchesSearch && matchesKind && matchesCat && matchesMonth && matchesDate;
   }).sort((a, b) => {
     // 1차: 최신 날짜 우선
     const dateComp = (b.startDate || '').localeCompare(a.startDate || '');
@@ -678,11 +734,16 @@ export default function TeacherDashboard() {
     return (Number(a.studentNum) || 0) - (Number(b.studentNum) || 0);
   });
 
-  // 전체 통계 카운트
-  const totalAbsenceCount = records.filter(r => (r.kind || '결석') === '결석').length;
-  const totalLateCount = records.filter(r => r.kind === '지각').length;
-  const totalEarlyCount = records.filter(r => r.kind === '조퇴').length;
-  const totalSkipCount = records.filter(r => r.kind === '결과').length;
+  // 선택된 월 기준 통계 카운트 (기본: 선택된 해당 월의 집계)
+  const monthTargetRecords = records.filter(r => {
+    if (selectedRegisterMonth === 'ALL') return true;
+    return (r.startDate || '').startsWith(selectedRegisterMonth) ||
+           (r.endDate && r.endDate.startsWith(selectedRegisterMonth));
+  });
+  const totalAbsenceCount = monthTargetRecords.filter(r => (r.kind || '결석') === '결석').length;
+  const totalLateCount = monthTargetRecords.filter(r => r.kind === '지각').length;
+  const totalEarlyCount = monthTargetRecords.filter(r => r.kind === '조퇴').length;
+  const totalSkipCount = monthTargetRecords.filter(r => r.kind === '결과').length;
 
   const todayCount = records.filter(r => isDateInRange(selectedDashboardDate, r.startDate, r.endDate)).length;
 
@@ -855,7 +916,13 @@ export default function TeacherDashboard() {
               </button>
               <button
                 type="button"
-                onClick={() => setSelectedDashboardDate(getTodayString())}
+                onClick={() => {
+                  const today = getTodayString();
+                  setSelectedDashboardDate(today);
+                  if (selectedRegisterMonth !== 'ALL') {
+                    setSelectedRegisterMonth(today.substring(0, 7));
+                  }
+                }}
                 className={`px-3 py-1.5 rounded-[6px] text-xs font-bold border transition-colors cursor-pointer ${
                   selectedDashboardDate === getTodayString()
                     ? 'bg-[#121212] text-white border-[#121212]'
@@ -883,7 +950,7 @@ export default function TeacherDashboard() {
                     : 'bg-[#fcfbf9] text-[#474645] border-[#f2f0ed] hover:border-[#e5d5c3]'
                 }`}
               >
-                {filterOnlySelectedDate ? '✓ 선택일만 필터링됨' : '전체 일자 보기'}
+                {filterOnlySelectedDate ? '✓ 선택일(당일)만 필터링됨' : (selectedRegisterMonth === 'ALL' ? '전체 기간 보기' : `${lMonth}월 전체 보기`)}
               </button>
             </div>
           </div>
@@ -1435,19 +1502,27 @@ export default function TeacherDashboard() {
               {/* Quick Summary Cards (종류별 집계) */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="bg-white p-3 rounded-[8px] border border-[#e5d5c3] shadow-2xs">
-                  <div className="text-[11px] text-[#7e7e7d] font-semibold">결석 합계</div>
+                  <div className="text-[11px] text-[#7e7e7d] font-semibold">
+                    {selectedRegisterMonth === 'ALL' ? '전체' : `${parseInt(selectedRegisterMonth.split('-')[1])}월`} 결석 합계
+                  </div>
                   <div className="text-xl font-bold text-[#e11d48] mt-1">{totalAbsenceCount}건</div>
                 </div>
                 <div className="bg-white p-3 rounded-[8px] border border-[#e5d5c3] shadow-2xs">
-                  <div className="text-[11px] text-[#7e7e7d] font-semibold">지각 합계</div>
+                  <div className="text-[11px] text-[#7e7e7d] font-semibold">
+                    {selectedRegisterMonth === 'ALL' ? '전체' : `${parseInt(selectedRegisterMonth.split('-')[1])}월`} 지각 합계
+                  </div>
                   <div className="text-xl font-bold text-[#d97706] mt-1">{totalLateCount}건</div>
                 </div>
                 <div className="bg-white p-3 rounded-[8px] border border-[#e5d5c3] shadow-2xs">
-                  <div className="text-[11px] text-[#7e7e7d] font-semibold">조퇴 합계</div>
+                  <div className="text-[11px] text-[#7e7e7d] font-semibold">
+                    {selectedRegisterMonth === 'ALL' ? '전체' : `${parseInt(selectedRegisterMonth.split('-')[1])}월`} 조퇴 합계
+                  </div>
                   <div className="text-xl font-bold text-[#0284c7] mt-1">{totalEarlyCount}건</div>
                 </div>
                 <div className="bg-white p-3 rounded-[8px] border border-[#e5d5c3] shadow-2xs">
-                  <div className="text-[11px] text-[#7e7e7d] font-semibold">결과 합계</div>
+                  <div className="text-[11px] text-[#7e7e7d] font-semibold">
+                    {selectedRegisterMonth === 'ALL' ? '전체' : `${parseInt(selectedRegisterMonth.split('-')[1])}월`} 결과 합계
+                  </div>
                   <div className="text-xl font-bold text-[#7c3aed] mt-1">{totalSkipCount}건</div>
                 </div>
               </div>
@@ -1733,56 +1808,137 @@ export default function TeacherDashboard() {
                 )}
               </div>
 
-              {/* Filter and Search Bar */}
-              <div className="family-card p-3.5 flex flex-col md:flex-row md:items-center md:justify-between gap-2.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-bold text-[#121212] flex items-center space-x-1">
-                    <Filter className="w-3.5 h-3.5 text-[#7e7e7d]" />
-                    <span>종류:</span>
-                  </span>
-                  {(['ALL', '결석', '지각', '조퇴', '결과'] as const).map((k) => (
-                    <button
-                      key={k}
-                      type="button"
-                      onClick={() => setRegisterKindFilter(k)}
-                      className={`text-xs px-2.5 py-1 rounded-[6px] font-medium border transition-colors cursor-pointer ${
-                        registerKindFilter === k
-                          ? 'bg-[#121212] text-white border-[#121212]'
-                          : 'bg-[#fcfbf9] text-[#474645] border-[#f2f0ed] hover:border-[#e5d5c3]'
-                      }`}
-                    >
-                      {k === 'ALL' ? '전체' : k}
-                    </button>
-                  ))}
+              {/* Filter and Search Bar with Month Selector */}
+              <div className="family-card p-3.5 space-y-3">
+                {/* 1행: 월 선택 및 월 이동 바 */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pb-2.5 border-b border-[#f2f0ed]">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-bold text-[#121212] flex items-center space-x-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-[#0086fc]" />
+                      <span>조회 월:</span>
+                    </span>
 
-                  <div className="h-4 w-px bg-[#f2f0ed] hidden sm:block mx-1"></div>
+                    {/* 월 이동 & 드롭다운 셀렉트 */}
+                    <div className="inline-flex items-center rounded-[6px] bg-[#f8fafc] border border-[#cbd5e1] p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => shiftRegisterMonth(-1)}
+                        title="이전 달로 이동"
+                        className="p-1 hover:bg-[#e2e8f0] rounded text-[#475569] transition-colors cursor-pointer"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                      </button>
 
-                  <span className="text-xs font-bold text-[#121212]">구분:</span>
-                  {(['ALL', '질병', '미인정', '기타', '출석인정'] as const).map((c) => (
+                      <select
+                        value={selectedRegisterMonth}
+                        onChange={(e) => handleSelectMonth(e.target.value)}
+                        className="bg-transparent text-xs font-bold text-[#0f172a] px-2 py-0.5 border-none focus:outline-hidden cursor-pointer"
+                      >
+                        {availableMonths.map((m) => (
+                          <option key={m} value={m}>
+                            {formatMonthLabel(m)}
+                          </option>
+                        ))}
+                        <option value="ALL">전체 기간 (모든 월)</option>
+                      </select>
+
+                      <button
+                        type="button"
+                        onClick={() => shiftRegisterMonth(1)}
+                        title="다음 달로 이동"
+                        className="p-1 hover:bg-[#e2e8f0] rounded text-[#475569] transition-colors cursor-pointer"
+                      >
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    {/* 이번 달 바로가기 버튼 */}
                     <button
-                      key={c}
                       type="button"
-                      onClick={() => setRegisterCategoryFilter(c)}
-                      className={`text-xs px-2.5 py-1 rounded-[6px] font-medium border transition-colors cursor-pointer ${
-                        registerCategoryFilter === c
+                      onClick={() => handleSelectMonth(getTodayString().substring(0, 7))}
+                      className={`text-[11px] px-2.5 py-1 rounded-[5px] font-semibold border transition-colors cursor-pointer ${
+                        selectedRegisterMonth === getTodayString().substring(0, 7)
                           ? 'bg-[#0086fc] text-white border-[#0086fc]'
-                          : 'bg-[#fcfbf9] text-[#474645] border-[#f2f0ed] hover:border-[#e5d5c3]'
+                          : 'bg-white text-[#475569] border-[#cbd5e1] hover:bg-[#f1f5f9]'
                       }`}
                     >
-                      {c === 'ALL' ? '전체' : c}
+                      이번 달 ({parseInt(getTodayString().split('-')[1])}월)
                     </button>
-                  ))}
+
+                    {selectedRegisterMonth !== 'ALL' && (
+                      <button
+                        type="button"
+                        onClick={() => handleSelectMonth('ALL')}
+                        className="text-[11px] px-2 py-1 rounded-[5px] text-[#64748b] hover:text-[#0f172a] hover:bg-[#f1f5f9] transition-colors cursor-pointer font-medium"
+                      >
+                        전체 월 보기
+                      </button>
+                    )}
+                  </div>
+
+                  {/* 해당 월 건수 배지 */}
+                  <div className="text-xs text-[#64748b]">
+                    {selectedRegisterMonth === 'ALL' ? (
+                      <span>전체 누적 내역: <strong className="text-[#0f172a] font-bold">{filteredRegisterRecords.length}건</strong></span>
+                    ) : (
+                      <span>
+                        <strong className="text-[#0086fc] font-bold">{formatMonthLabel(selectedRegisterMonth)}</strong> 내역: 총 <strong className="text-[#0f172a] font-bold">{filteredRegisterRecords.length}건</strong>
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                <div className="relative w-full md:w-56">
-                  <Search className="w-3.5 h-3.5 text-[#7e7e7d] absolute left-2.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="학생명, 번호, 사유 검색..."
-                    className="w-full pl-8 pr-3 py-1.5 text-xs bg-[#fbfaf9] border border-[#e5d5c3] rounded-[6px]"
-                  />
+                {/* 2행: 종류, 구분 필터 및 검색 */}
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-bold text-[#121212] flex items-center space-x-1">
+                      <Filter className="w-3.5 h-3.5 text-[#7e7e7d]" />
+                      <span>종류:</span>
+                    </span>
+                    {(['ALL', '결석', '지각', '조퇴', '결과'] as const).map((k) => (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => setRegisterKindFilter(k)}
+                        className={`text-xs px-2.5 py-1 rounded-[6px] font-medium border transition-colors cursor-pointer ${
+                          registerKindFilter === k
+                            ? 'bg-[#121212] text-white border-[#121212]'
+                            : 'bg-[#fcfbf9] text-[#474645] border-[#f2f0ed] hover:border-[#e5d5c3]'
+                        }`}
+                      >
+                        {k === 'ALL' ? '전체' : k}
+                      </button>
+                    ))}
+
+                    <div className="h-4 w-px bg-[#f2f0ed] hidden sm:block mx-1"></div>
+
+                    <span className="text-xs font-bold text-[#121212]">구분:</span>
+                    {(['ALL', '질병', '미인정', '기타', '출석인정'] as const).map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setRegisterCategoryFilter(c)}
+                        className={`text-xs px-2.5 py-1 rounded-[6px] font-medium border transition-colors cursor-pointer ${
+                          registerCategoryFilter === c
+                            ? 'bg-[#0086fc] text-white border-[#0086fc]'
+                            : 'bg-[#fcfbf9] text-[#474645] border-[#f2f0ed] hover:border-[#e5d5c3]'
+                        }`}
+                      >
+                        {c === 'ALL' ? '전체' : c}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="relative w-full md:w-56">
+                    <Search className="w-3.5 h-3.5 text-[#7e7e7d] absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="학생명, 번호, 사유 검색..."
+                      className="w-full pl-8 pr-3 py-1.5 text-xs bg-[#fbfaf9] border border-[#e5d5c3] rounded-[6px]"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1807,7 +1963,9 @@ export default function TeacherDashboard() {
                       {filteredRegisterRecords.length === 0 ? (
                         <tr>
                           <td colSpan={8} className="py-12 text-center text-xs text-[#7e7e7d]">
-                            등록된 출결 내역이 없습니다.
+                            {selectedRegisterMonth === 'ALL'
+                              ? '등록된 출결 내역이 없습니다.'
+                              : `${formatMonthLabel(selectedRegisterMonth)}에 등록된 출결 내역이 없습니다.`}
                           </td>
                         </tr>
                       ) : (
@@ -1965,7 +2123,9 @@ export default function TeacherDashboard() {
                 <div className="block md:hidden divide-y divide-[#f1f5f9]">
                   {filteredRegisterRecords.length === 0 ? (
                     <div className="py-12 text-center text-xs text-[#7e7e7d]">
-                      등록된 출결 내역이 없습니다.
+                      {selectedRegisterMonth === 'ALL'
+                        ? '등록된 출결 내역이 없습니다.'
+                        : `${formatMonthLabel(selectedRegisterMonth)}에 등록된 출결 내역이 없습니다.`}
                     </div>
                   ) : (
                     filteredRegisterRecords.map((rec) => {
