@@ -862,17 +862,17 @@ export default function StatisticsPage() {
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
+                    <table className="w-full text-left text-xs min-w-[980px]">
                       <thead>
                         <tr className="border-b border-[#f2f0ed] text-[#7e7e7d] font-semibold bg-[#fcfbf9]">
-                          <th className="py-3 px-3">학번/이름</th>
-                          <th className="py-3 px-3">종류</th>
-                          <th className="py-3 px-3">구분 / 세부유형</th>
-                          <th className="py-3 px-3">교시 / 기간</th>
-                          <th className="py-3 px-3">사유</th>
-                          <th className="py-3 px-3">동봉 증빙서류</th>
-                          <th className="py-3 px-3">진행 단계</th>
-                          <th className="py-3 px-3 text-center">리마인드</th>
+                          <th className="py-3 px-3 w-[110px] whitespace-nowrap">학번/이름</th>
+                          <th className="py-3 px-3 w-[70px] text-center whitespace-nowrap">종류</th>
+                          <th className="py-3 px-3 w-[160px] whitespace-nowrap">구분 / 세부유형</th>
+                          <th className="py-3 px-3 w-[110px] whitespace-nowrap">교시 / 기간</th>
+                          <th className="py-3 px-3 min-w-[240px] max-w-[380px]">사유</th>
+                          <th className="py-3 px-3 w-[150px] whitespace-nowrap">동봉 증빙서류</th>
+                          <th className="py-3 px-3 w-[150px] whitespace-nowrap">진행 단계</th>
+                          <th className="py-3 px-3 w-[80px] text-center whitespace-nowrap">리마인드</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[#f2f0ed]">
@@ -883,7 +883,7 @@ export default function StatisticsPage() {
                               <td className="py-3 px-3 font-bold text-[#121212] whitespace-nowrap">
                                 {r.studentNum}번 {r.studentName}
                               </td>
-                              <td className="py-3 px-3 whitespace-nowrap">
+                              <td className="py-3 px-3 text-center whitespace-nowrap">
                                 <span className={`badge-pill text-[10px] font-bold ${
                                   kind === '결석' ? 'badge-orange' :
                                   kind === '지각' ? 'badge-honey' :
@@ -920,11 +920,11 @@ export default function StatisticsPage() {
                                     : (r.daysCount > 1 ? `${r.daysCount}일간` : '전일')}
                                 </div>
                               </td>
-                              <td className="py-3 px-3 text-[#474645]">
-                                <div>{r.reason}</div>
+                              <td className="py-3 px-3 text-[#474645] min-w-[240px] max-w-[380px] break-keep leading-relaxed">
+                                <div className="font-medium text-[#1e293b]">{r.reason}</div>
                                 {r.memo && (
-                                  <div className="text-[10px] text-[#b45309] bg-[#fef3c7] px-2 py-0.5 rounded mt-1 inline-block">
-                                    💬 {r.memo}
+                                  <div className="text-[10px] text-[#b45309] bg-[#fef3c7] px-2 py-0.5 rounded mt-1 inline-flex items-center gap-1 border border-[#fde68a] max-w-full break-all">
+                                    💬 <span>{r.memo}</span>
                                   </div>
                                 )}
                               </td>

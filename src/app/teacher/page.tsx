@@ -1946,7 +1946,7 @@ export default function TeacherDashboard() {
               <div className="family-card p-0 overflow-hidden shadow-xs border border-[#e5d5c3]">
                 {/* 💻 PC / Tablet Table View (md 이상 자동 맞춤 & 여유로운 폭 확보) */}
                 <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-left text-xs min-w-[860px]">
+                  <table className="w-full text-left text-xs min-w-[900px]">
                     <thead className="bg-[#f8fafc] border-b border-[#cbd5e1] text-[#334155] font-bold">
                       <tr>
                         <th className="py-2.5 px-3 w-[125px]">일자</th>
@@ -1954,7 +1954,7 @@ export default function TeacherDashboard() {
                         <th className="py-2.5 px-2.5 w-[60px] text-center">종류</th>
                         <th className="py-2.5 px-2.5 w-[75px] text-center">구분</th>
                         <th className="py-2.5 px-3 w-[85px]">교시/기간</th>
-                        <th className="py-2.5 px-3 min-w-[160px]">사유</th>
+                        <th className="py-2.5 px-3 min-w-[200px]">사유</th>
                         <th className="py-2.5 px-3 w-[240px]">결석계 서류상태</th>
                         <th className="py-2.5 px-3 pr-4 w-[130px] text-right">관리</th>
                       </tr>
@@ -2004,7 +2004,7 @@ export default function TeacherDashboard() {
                                   ? (rec.kind === '조퇴' && /^\d교시$/.test(rec.periodText) ? `${rec.periodText} 이후` : rec.periodText)
                                   : `${rec.daysCount}일간`}
                               </td>
-                              <td className="py-2.5 px-3 text-[#1e293b] max-w-xs" title={rec.reason}>
+                              <td className="py-2.5 px-3 text-[#1e293b] min-w-[200px] max-w-sm" title={rec.reason}>
                                 <div className="truncate">{rec.reason}</div>
                                 {(rec.studentMemo || rec.memo) && (
                                   <div className="text-[10px] text-[#b45309] bg-[#fffbeb] px-1.5 py-0.5 rounded border border-[#fef3c7] mt-0.5 inline-flex items-center gap-1 max-w-full truncate">
