@@ -468,6 +468,10 @@ export default function TeacherDashboard() {
       ? `${newPeriodText} 이후`
       : newPeriodText;
 
+    const finalEffectiveDays = (newKind !== '결석' || newStartDate === newEndDate)
+      ? 1
+      : Math.max(1, Number(newDaysCount) || 1);
+
     if (editingRecordId) {
       const res = updateAbsenceRecord(editingRecordId, {
         student: targetStudent,
@@ -477,7 +481,7 @@ export default function TeacherDashboard() {
         typeName: derivedTypeName,
         startDate: newStartDate,
         endDate: newEndDate,
-        daysCount: Number(newDaysCount),
+        daysCount: finalEffectiveDays,
         periodText: finalPeriodText,
         reason: newReason,
         requiresDocument: newRequiresDocument,
@@ -495,7 +499,7 @@ export default function TeacherDashboard() {
         typeName: derivedTypeName,
         startDate: newStartDate,
         endDate: newEndDate,
-        daysCount: Number(newDaysCount),
+        daysCount: finalEffectiveDays,
         periodText: finalPeriodText,
         reason: newReason,
         requiresDocument: newRequiresDocument,
@@ -620,6 +624,11 @@ export default function TeacherDashboard() {
     setNewSpecialType(rec.type);
     setNewStartDate(rec.startDate);
     setNewEndDate(rec.endDate);
+    setNewDaysCount(
+      rec.startDate === rec.endDate || (rec.kind && rec.kind !== '결석')
+        ? 1
+        : Math.max(1, rec.daysCount || 1)
+    );
     let initialPeriod = rec.periodText || '전일';
     if ((rec.kind || '결석') === '조퇴' && initialPeriod && !initialPeriod.includes('이후') && !initialPeriod.includes('~') && /^\d교시$/.test(initialPeriod)) {
       initialPeriod = `${initialPeriod} 이후`;
@@ -2542,9 +2551,10 @@ export default function TeacherDashboard() {
                       startDate={newStartDate}
                       endDate={newEndDate}
                       onChange={(start, end, count) => {
+                        const resolvedCount = (newKind !== '결석' || start === end) ? 1 : count;
                         setNewStartDate(start);
                         setNewEndDate(end);
-                        setNewDaysCount(count);
+                        setNewDaysCount(resolvedCount);
                         if (newKind === '결석' && newCategory === '질병') {
                           const targetStudent = students.find(s => s.id === newStudentId);
                           const consecutive = targetStudent

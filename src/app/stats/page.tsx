@@ -22,7 +22,8 @@ import {
   LogOut,
   AlertCircle,
   Copy,
-  Check
+  Check,
+  X
 } from 'lucide-react';
 import { getStudents, getAbsenceRecords, subscribeToSyncEvents } from '@/lib/storage';
 import { exportAbsenceStatisticsToExcel } from '@/lib/exportExcel';
@@ -42,6 +43,18 @@ export default function StatisticsPage() {
   const [dailyFilterKind, setDailyFilterKind] = useState<'ALL' | AttendanceKind | 'PENDING_DOC' | 'UNRESOLVED_ALL'>('ALL');
   const [onlyShowChangedStudents, setOnlyShowChangedStudents] = useState(false);
   const [copiedStudentId, setCopiedStudentId] = useState<string | null>(null);
+  const [selectedStudentForDetail, setSelectedStudentForDetail] = useState<Student | null>(null);
+  const [detailFilterScope, setDetailFilterScope] = useState<'MONTH' | 'ALL'>('MONTH');
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedStudentForDetail(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const handleCopyRemarks = (id: string, text: string) => {
     if (!text || text === '-') return;
@@ -258,12 +271,19 @@ export default function StatisticsPage() {
   const monthlyStudentMap = sortedStudents.map(s => {
     const sRecords = currentMonthRecords.filter(r => r.studentId === s.id);
     
+    // 결석 일수 정규화 (시작일 === 종료일이거나 결석 외 항목은 1일/1회 보장)
+    const getEffectiveDays = (r: AbsenceRecord) => {
+      if ((r.kind || '결석') !== '결석') return 1;
+      if (!r.endDate || r.startDate === r.endDate) return 1;
+      return Math.max(1, r.daysCount || 1);
+    };
+
     // 1. 결석 (일수 기준)
     const absenceRecs = sRecords.filter(r => (r.kind || '결석') === '결석');
-    const absenceIllnessDays = absenceRecs.filter(r => isCatMatch(r.category, '질병')).reduce((acc, cur) => acc + (cur.daysCount || 1), 0);
-    const absenceUnexcusedDays = absenceRecs.filter(r => isCatMatch(r.category, '미인정')).reduce((acc, cur) => acc + (cur.daysCount || 1), 0);
-    const absenceOtherDays = absenceRecs.filter(r => isCatMatch(r.category, '기타')).reduce((acc, cur) => acc + (cur.daysCount || 1), 0);
-    const absenceApprovedDays = absenceRecs.filter(r => isCatMatch(r.category, '출석인정')).reduce((acc, cur) => acc + (cur.daysCount || 1), 0);
+    const absenceIllnessDays = absenceRecs.filter(r => isCatMatch(r.category, '질병')).reduce((acc, cur) => acc + getEffectiveDays(cur), 0);
+    const absenceUnexcusedDays = absenceRecs.filter(r => isCatMatch(r.category, '미인정')).reduce((acc, cur) => acc + getEffectiveDays(cur), 0);
+    const absenceOtherDays = absenceRecs.filter(r => isCatMatch(r.category, '기타')).reduce((acc, cur) => acc + getEffectiveDays(cur), 0);
+    const absenceApprovedDays = absenceRecs.filter(r => isCatMatch(r.category, '출석인정')).reduce((acc, cur) => acc + getEffectiveDays(cur), 0);
     const absenceTotalDays = absenceIllnessDays + absenceUnexcusedDays + absenceOtherDays + absenceApprovedDays;
 
     // 2. 지각 (회수 기준)
@@ -297,20 +317,21 @@ export default function StatisticsPage() {
     // 체험학습 누적 (해당 학생 전 기간)
     const allStudentRecs = records.filter(r => r.studentId === s.id);
     const fieldTripRecords = allStudentRecs.filter(r => r.type === 'FIELD_EXPERIENCE');
-    const fieldTripDays = fieldTripRecords.reduce((acc, cur) => acc + (cur.daysCount || 1), 0);
+    const fieldTripDays = fieldTripRecords.reduce((acc, cur) => acc + getEffectiveDays(cur), 0);
 
     // 미제출 서류 진행건수
     const pendingCount = sRecords.filter(r => r.requiresDocument !== false && r.status !== 'APPROVED').length;
 
     // 나이스 특기사항 텍스트 생성
     const remarkLines = sRecords.map(r => {
-      const dateText = r.endDate && r.endDate !== r.startDate
+      const isSingleDay = !r.endDate || r.endDate === r.startDate;
+      const dateText = !isSingleDay
         ? `${formatMMDD(r.startDate)}~${formatMMDD(r.endDate)}`
         : formatMMDD(r.startDate);
       const reasonText = r.reason || r.typeName || '사유 미기재';
       const kindText = r.kind || '결석';
       const catText = r.category === '출석 인정' ? '출석인정' : r.category;
-      const countText = kindText === '결석' ? `${r.daysCount || 1}일` : '1회';
+      const countText = kindText === '결석' ? `${getEffectiveDays(r)}일` : '1회';
       return `${dateText} ${reasonText} (${catText}${kindText} ${countText})`;
     });
     const remarksString = remarkLines.join('\n');
@@ -1356,6 +1377,9 @@ export default function StatisticsPage() {
                     </h3>
                     <p className="text-xs text-[#7e7e7d] mt-0.5">
                       결석(일수), 지각·조퇴·결과(회수)를 나이스(NEIS) 법정 4구분(질병·미인정·기타·인정)으로 분류하고, 특기사항 일자·사유를 자동 산출합니다.
+                      <span className="inline-block ml-2 text-[#0086fc] font-medium bg-[#eff6ff] px-2 py-0.5 rounded border border-[#bfdbfe]">
+                        💡 학생 번호/이름을 클릭하면 그동안의 출결 현황이 팝업으로 상세히 나타납니다.
+                      </span>
                     </p>
                   </div>
 
@@ -1478,11 +1502,24 @@ export default function StatisticsPage() {
                         return displayList.map((item) => (
                           <tr key={item.student.id} className="hover:bg-[#fcfbf9] transition-colors">
                             {/* 번호 / 이름 */}
-                            <td className="py-2.5 px-2 font-semibold text-[#7e7e7d] border-r border-[#cbd5e1] bg-[#f8fafc]/50">
+                            <td 
+                              onClick={() => setSelectedStudentForDetail(item.student)}
+                              className="py-2.5 px-2 font-semibold text-[#7e7e7d] border-r border-[#cbd5e1] bg-[#f8fafc]/50 cursor-pointer hover:bg-blue-100/70 hover:text-[#0086fc] transition-colors"
+                              title="클릭하여 출결 상세 이력 팝업 보기"
+                            >
                               {item.student.studentNum}번
                             </td>
-                            <td className="py-2.5 px-3 font-bold text-[#121212] border-r border-[#cbd5e1] text-left whitespace-nowrap">
-                              {item.student.name}
+                            <td 
+                              onClick={() => setSelectedStudentForDetail(item.student)}
+                              className="py-2.5 px-3 font-bold text-[#121212] border-r border-[#cbd5e1] text-left whitespace-nowrap cursor-pointer hover:bg-blue-50 hover:text-[#0086fc] transition-colors group"
+                              title="클릭하여 출결 상세 이력 팝업 보기"
+                            >
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="group-hover:underline underline-offset-2">{item.student.name}</span>
+                                <span className="text-[10px] text-[#94a3b8] group-hover:text-[#0086fc] opacity-60 group-hover:opacity-100 transition-opacity">
+                                  🔍
+                                </span>
+                              </div>
                             </td>
 
                             {/* 결석 4구분 (일수) */}
@@ -1750,6 +1787,291 @@ export default function StatisticsPage() {
           )}
 
         </div>
+
+        {/* 학생별 출결 상세 현황 팝업 모달 */}
+        {selectedStudentForDetail && (() => {
+          const student = selectedStudentForDetail;
+          
+          // 전 기간 해당 학생 레코드 (최신 날짜순)
+          const allStudentRecords = records
+            .filter(r => r.studentId === student.id)
+            .sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''));
+
+          // 선택 월 해당 학생 레코드
+          const monthStudentRecords = allStudentRecords.filter(r => {
+            const parts = (r.startDate || '').split('-').map(Number);
+            return parts[1] === selectedMonth;
+          });
+
+          const displayRecords = detailFilterScope === 'MONTH' ? monthStudentRecords : allStudentRecords;
+
+          const getEffectiveDays = (r: AbsenceRecord) => {
+            if ((r.kind || '결석') !== '결석') return 1;
+            if (!r.endDate || r.startDate === r.endDate) return 1;
+            return Math.max(1, r.daysCount || 1);
+          };
+
+          const absenceRecords = displayRecords.filter(r => (r.kind || '결석') === '결석');
+          const totalAbsenceDays = absenceRecords.reduce((acc, cur) => acc + getEffectiveDays(cur), 0);
+          const totalLateCount = displayRecords.filter(r => r.kind === '지각').length;
+          const totalEarlyCount = displayRecords.filter(r => r.kind === '조퇴').length;
+          const totalSkipCount = displayRecords.filter(r => r.kind === '결과').length;
+          const approvedAbsenceDays = absenceRecords.filter(r => isCatMatch(r.category, '출석인정')).reduce((acc, cur) => acc + getEffectiveDays(cur), 0);
+          const illnessAbsenceDays = absenceRecords.filter(r => isCatMatch(r.category, '질병')).reduce((acc, cur) => acc + getEffectiveDays(cur), 0);
+          const pendingDocsCount = displayRecords.filter(r => r.requiresDocument !== false && r.status !== 'APPROVED').length;
+
+          return (
+            <div 
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in"
+              onClick={() => setSelectedStudentForDetail(null)}
+            >
+              <div 
+                className="bg-white rounded-2xl shadow-2xl border border-[#cbd5e1] w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95"
+                onClick={e => e.stopPropagation()}
+              >
+                {/* Header */}
+                <div className="bg-[#1e293b] text-white px-6 py-4 flex items-center justify-between shrink-0">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 rounded-full bg-[#0086fc] text-white flex items-center justify-center font-bold text-base shadow-sm">
+                      {student.studentNum}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-bold tracking-tight text-white">
+                          {student.grade}학년 {student.classNum}반 {student.studentNum}번 {student.name}
+                        </h3>
+                        <span className="text-xs bg-white/20 text-white/90 px-2 py-0.5 rounded-full font-medium">
+                          출결 상세 이력 조회
+                        </span>
+                      </div>
+                      <p className="text-xs text-white/70 mt-0.5">
+                        학생: {student.phone || '미등록'} · 보호자: {student.parentPhone || '미등록'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedStudentForDetail(null)}
+                    className="text-white/70 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                    title="닫기 (ESC)"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Scope Tabs & Summary Metrics */}
+                <div className="p-4 border-b border-[#e2e8f0] bg-[#f8fafc] space-y-3 shrink-0">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div className="flex items-center space-x-1.5 bg-[#e2e8f0] p-1 rounded-lg self-start">
+                      <button
+                        type="button"
+                        onClick={() => setDetailFilterScope('MONTH')}
+                        className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                          detailFilterScope === 'MONTH'
+                            ? 'bg-white text-[#0f172a] shadow-xs'
+                            : 'text-[#64748b] hover:text-[#0f172a]'
+                        }`}
+                      >
+                        📅 {selectedMonth}월 출결 ({monthStudentRecords.length}건)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDetailFilterScope('ALL')}
+                        className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                          detailFilterScope === 'ALL'
+                            ? 'bg-white text-[#0f172a] shadow-xs'
+                            : 'text-[#64748b] hover:text-[#0f172a]'
+                        }`}
+                      >
+                        📚 전체 학기 누적 ({allStudentRecords.length}건)
+                      </button>
+                    </div>
+                    <div className="text-xs text-[#64748b] font-medium">
+                      {detailFilterScope === 'MONTH' ? `${selectedMonth}월 출결 현황` : '전체 학기 누적 현황'}
+                    </div>
+                  </div>
+
+                  {/* Summary Metric Chips */}
+                  <div className="grid grid-cols-4 sm:grid-cols-7 gap-2 text-center text-xs">
+                    <div className="bg-white border border-[#e2e8f0] rounded-lg p-2 shadow-2xs">
+                      <div className="text-[10px] text-[#64748b] font-semibold">총 결석</div>
+                      <div className={`text-base font-black ${totalAbsenceDays > 0 ? 'text-[#ff3e00]' : 'text-[#334155]'}`}>
+                        {totalAbsenceDays}<span className="text-xs font-medium">일</span>
+                      </div>
+                    </div>
+                    <div className="bg-white border border-[#e2e8f0] rounded-lg p-2 shadow-2xs">
+                      <div className="text-[10px] text-[#64748b] font-semibold">지각</div>
+                      <div className={`text-base font-black ${totalLateCount > 0 ? 'text-[#b45309]' : 'text-[#334155]'}`}>
+                        {totalLateCount}<span className="text-xs font-medium">회</span>
+                      </div>
+                    </div>
+                    <div className="bg-white border border-[#e2e8f0] rounded-lg p-2 shadow-2xs">
+                      <div className="text-[10px] text-[#64748b] font-semibold">조퇴</div>
+                      <div className={`text-base font-black ${totalEarlyCount > 0 ? 'text-[#0284c7]' : 'text-[#334155]'}`}>
+                        {totalEarlyCount}<span className="text-xs font-medium">회</span>
+                      </div>
+                    </div>
+                    <div className="bg-white border border-[#e2e8f0] rounded-lg p-2 shadow-2xs">
+                      <div className="text-[10px] text-[#64748b] font-semibold">결과</div>
+                      <div className={`text-base font-black ${totalSkipCount > 0 ? 'text-[#64748b]' : 'text-[#334155]'}`}>
+                        {totalSkipCount}<span className="text-xs font-medium">회</span>
+                      </div>
+                    </div>
+                    <div className="bg-white border border-[#e2e8f0] rounded-lg p-2 shadow-2xs">
+                      <div className="text-[10px] text-[#64748b] font-semibold">인정결석</div>
+                      <div className={`text-base font-black ${approvedAbsenceDays > 0 ? 'text-[#059669]' : 'text-[#334155]'}`}>
+                        {approvedAbsenceDays}<span className="text-xs font-medium">일</span>
+                      </div>
+                    </div>
+                    <div className="bg-white border border-[#e2e8f0] rounded-lg p-2 shadow-2xs">
+                      <div className="text-[10px] text-[#64748b] font-semibold">질병결석</div>
+                      <div className={`text-base font-black ${illnessAbsenceDays > 0 ? 'text-[#2563eb]' : 'text-[#334155]'}`}>
+                        {illnessAbsenceDays}<span className="text-xs font-medium">일</span>
+                      </div>
+                    </div>
+                    <div className="bg-white border border-[#e2e8f0] rounded-lg p-2 shadow-2xs">
+                      <div className="text-[10px] text-[#64748b] font-semibold">서류진행</div>
+                      <div className={`text-base font-black ${pendingDocsCount > 0 ? 'text-[#dc2626]' : 'text-[#059669]'}`}>
+                        {pendingDocsCount > 0 ? `${pendingDocsCount}건` : '완료'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Record List */}
+                <div className="p-4 overflow-y-auto space-y-3 divide-y divide-[#f1f5f9] flex-1">
+                  {displayRecords.length === 0 ? (
+                    <div className="py-12 text-center text-xs text-[#64748b] flex flex-col items-center justify-center space-y-2">
+                      <CheckCircle2 className="w-10 h-10 text-[#00ca48]" />
+                      <div className="text-sm font-bold text-[#1e293b]">
+                        {detailFilterScope === 'MONTH'
+                          ? `${selectedMonth}월에 등록된 출결 변동(결석·지각·조퇴·결과) 내역이 없습니다.`
+                          : '등록된 전체 출결 변동 내역이 없습니다.'}
+                      </div>
+                      <p className="text-[11px] text-[#94a3b8]">
+                        {detailFilterScope === 'MONTH'
+                          ? '모든 수업에 정상 출석하였습니다. 다른 달의 출결을 확인하려면 "전체 학기 누적"을 확인하세요.'
+                          : '해당 학생은 결석 및 지각·조퇴·결과 없는 개근 상태입니다.'}
+                      </p>
+                    </div>
+                  ) : (
+                    displayRecords.map(rec => {
+                      const kind = rec.kind || '결석';
+                      const effectiveDays = getEffectiveDays(rec);
+                      const isMultiDay = rec.endDate && rec.endDate !== rec.startDate;
+
+                      return (
+                        <div key={rec.id} className="pt-3 first:pt-0 space-y-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center space-x-2">
+                              <span className={`badge-pill text-xs font-bold px-2 py-0.5 rounded ${
+                                kind === '결석' ? 'bg-[#ffedd5] text-[#c2410c] border border-[#fed7aa]' :
+                                kind === '지각' ? 'bg-[#fef9c3] text-[#a16207] border border-[#fef08a]' :
+                                kind === '조퇴' ? 'bg-[#e0f2fe] text-[#0369a1] border border-[#bae6fd]' :
+                                'bg-[#f1f5f9] text-[#475569] border border-[#e2e8f0]'
+                              }`}>
+                                {kind}
+                              </span>
+                              <span className={`badge-pill text-xs font-medium px-2 py-0.5 rounded ${
+                                rec.category === '질병' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                                rec.category === '미인정' ? 'bg-red-50 text-red-700 border border-red-200' :
+                                (rec.category === '출석인정' || rec.category === '출석 인정') ? 'bg-green-50 text-green-700 border border-green-200' :
+                                'bg-gray-50 text-gray-700 border border-gray-200'
+                              }`}>
+                                {rec.category}
+                              </span>
+                              <span className="text-xs font-bold text-[#1e293b]">
+                                {rec.typeName}
+                              </span>
+                            </div>
+
+                            {/* Status badge */}
+                            <div>
+                              {rec.status === 'RECORDED' ? (
+                                <span className="badge-pill bg-[#f1f5f9] text-[#475569] border border-[#cbd5e1] text-[11px] font-semibold">
+                                  📋 출결 기록완료
+                                </span>
+                              ) : rec.status === 'APPROVED' ? (
+                                <span className="badge-pill bg-[#ecfdf5] text-[#047857] border border-[#a7f3d0] text-[11px] font-bold">
+                                  ✓ 서류 승인완료
+                                </span>
+                              ) : (
+                                <span className="badge-pill bg-[#fff1f2] text-[#be123c] border border-[#fecdd3] text-[11px] font-bold">
+                                  ⏳ 서류 진행중 ({rec.status === 'SUBMITTED' ? '제출확인대기' : rec.status === 'FORM_PICKED_UP' ? '결석계배부' : '등교대기'})
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Detail Card Content */}
+                          <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-xl p-3 text-xs space-y-1.5">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[#475569]">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold text-[#64748b] min-w-[55px]">일자/기간:</span>
+                                <span className="font-bold text-[#0f172a]">
+                                  {rec.startDate}{isMultiDay ? ` ~ ${rec.endDate} (${effectiveDays}일간)` : ` (${effectiveDays}일)`}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold text-[#64748b] min-w-[55px]">교시/상세:</span>
+                                <span className="text-[#0f172a]">
+                                  {rec.periodText || (kind === '결석' ? '전일' : '-')}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-start gap-1.5 pt-1 border-t border-[#f1f5f9]">
+                              <span className="font-semibold text-[#64748b] min-w-[55px]">사유:</span>
+                              <span className="text-[#0f172a] font-medium leading-relaxed">
+                                {rec.reason || '사유 미기재'}
+                              </span>
+                            </div>
+
+                            {/* 증빙서류 & 메모 */}
+                            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-[#f1f5f9] text-[11px]">
+                              <span className="font-semibold text-[#64748b]">증빙서류:</span>
+                              {rec.requiresDocument === false || rec.status === 'RECORDED' ? (
+                                <span className="text-[#94a3b8]">서류 불필요</span>
+                              ) : rec.attachments && rec.attachments.length > 0 ? (
+                                <span className="text-[#0284c7] font-semibold bg-[#e0f2fe] px-2 py-0.5 rounded">
+                                  📎 {rec.attachments.join(', ')}
+                                </span>
+                              ) : (
+                                <span className="text-[#e11d48] font-semibold bg-[#ffe4e6] px-2 py-0.5 rounded">
+                                  ⚠️ 미제출 (제출 대기)
+                                </span>
+                              )}
+
+                              {rec.memo && (
+                                <span className="ml-auto text-[#b45309] bg-[#fef3c7] border border-[#fde68a] px-2 py-0.5 rounded flex items-center gap-1">
+                                  💬 {rec.memo}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="bg-[#f8fafc] px-6 py-3 border-t border-[#e2e8f0] flex items-center justify-between shrink-0">
+                  <div className="text-[11px] text-[#64748b]">
+                    💡 학생 번호/이름을 클릭하면 언제든 출결 상세 기록을 확인하고 대조할 수 있습니다.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedStudentForDetail(null)}
+                    className="btn-light px-4 py-2 text-xs font-semibold rounded-lg border border-[#cbd5e1] hover:bg-white transition-colors cursor-pointer"
+                  >
+                    닫기
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </main>
     </TeacherAuthGuard>
   );
