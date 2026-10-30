@@ -273,7 +273,9 @@ export default function StatisticsPage() {
   const sortedStudents = [...students].sort((a, b) => (Number(a.studentNum) || 0) - (Number(b.studentNum) || 0));
 
   const monthlyStudentMap = sortedStudents.map(s => {
-    const sRecords = currentMonthRecords.filter(r => r.studentId === s.id);
+    const sRecords = currentMonthRecords
+      .filter(r => r.studentId === s.id)
+      .sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
     
     // 결석 일수 정규화 (시작일~종료일 사이의 수업일수 산출, 지각/조퇴/결과는 1회)
     const getEffectiveDays = (r: AbsenceRecord) => {
@@ -1799,10 +1801,10 @@ export default function StatisticsPage() {
         {selectedStudentForDetail && (() => {
           const student = selectedStudentForDetail;
           
-          // 전 기간 해당 학생 레코드 (최신 날짜순)
+          // 전 기간 해당 학생 레코드 (날짜 적은 순: 월초 -> 월말 오름차순 정렬)
           const allStudentRecords = records
             .filter(r => r.studentId === student.id)
-            .sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''));
+            .sort((a, b) => (a.startDate || '').localeCompare(b.startDate || '') || (a.createdAt || '').localeCompare(b.createdAt || ''));
 
           // 선택 월 해당 학생 레코드
           const monthStudentRecords = allStudentRecords.filter(r => {
@@ -1892,8 +1894,11 @@ export default function StatisticsPage() {
                         📚 전체 학기 누적 ({allStudentRecords.length}건)
                       </button>
                     </div>
-                    <div className="text-xs text-[#64748b] font-medium">
-                      {detailFilterScope === 'MONTH' ? `${selectedMonth}월 출결 현황` : '전체 학기 누적 현황'}
+                    <div className="flex items-center gap-2 text-xs text-[#64748b] font-medium">
+                      <span className="bg-[#e2e8f0] text-[#334155] px-2 py-0.5 rounded text-[11px] font-semibold">
+                        🗓️ 날짜 빠른 순(1일 ➡️ 31일)
+                      </span>
+                      <span>{detailFilterScope === 'MONTH' ? `${selectedMonth}월 출결 현황` : '전체 학기 누적 현황'}</span>
                     </div>
                   </div>
 

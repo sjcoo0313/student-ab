@@ -67,13 +67,13 @@ export function exportAbsenceStatisticsToExcel(
   const sortedStudents = [...students].sort((a, b) => (Number(a.studentNum) || 0) - (Number(b.studentNum) || 0));
 
   const studentStats = sortedStudents.map((s, idx) => {
-    // 해당 월 레코드 필터
+    // 해당 월 레코드 필터 (날짜 적은 순 오름차순 정렬)
     const monthRecords = records.filter(r => {
       if (r.studentId !== s.id) return false;
       if (!r.startDate) return false;
       const m = Number(r.startDate.split('-')[1]);
       return m === monthToUse;
-    });
+    }).sort((a, b) => (a.startDate || '').localeCompare(b.startDate || '') || (a.createdAt || '').localeCompare(b.createdAt || ''));
 
     const getEffectiveDays = (r: AbsenceRecord) => {
       if ((r.kind || '결석') !== '결석') return 1;
