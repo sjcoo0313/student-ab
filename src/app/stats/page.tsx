@@ -29,7 +29,7 @@ import { getStudents, getAbsenceRecords, subscribeToSyncEvents } from '@/lib/sto
 import { exportAbsenceStatisticsToExcel } from '@/lib/exportExcel';
 import { Student, AbsenceRecord, AttendanceKind, AttendanceCategory } from '@/types';
 import TeacherAuthGuard from '@/components/TeacherAuthGuard';
-import { getTodayString, formatKoreanDate } from '@/components/CalendarDatePicker';
+import { getTodayString, formatKoreanDate, calculateDaysCount } from '@/components/CalendarDatePicker';
 
 export default function StatisticsPage() {
   const [students, setStudents] = useState<Student[]>([]);
@@ -243,11 +243,15 @@ export default function StatisticsPage() {
   });
 
   const getMatrixCount = (k: AttendanceKind, c: AttendanceCategory) => {
-    return currentMonthRecords.filter(r => {
+    const matched = currentMonthRecords.filter(r => {
       const matchKind = (r.kind || '결석') === k;
       const matchCat = r.category === c || (c === '출석인정' && r.category === '출석 인정');
       return matchKind && matchCat;
-    }).length;
+    });
+    if (k === '결석') {
+      return matched.reduce((sum, r) => sum + calculateDaysCount(r.startDate, r.endDate || r.startDate), 0);
+    }
+    return matched.length;
   };
 
   const getTotalByCat = (c: AttendanceCategory) => {
@@ -271,11 +275,10 @@ export default function StatisticsPage() {
   const monthlyStudentMap = sortedStudents.map(s => {
     const sRecords = currentMonthRecords.filter(r => r.studentId === s.id);
     
-    // 결석 일수 정규화 (시작일 === 종료일이거나 결석 외 항목은 1일/1회 보장)
+    // 결석 일수 정규화 (시작일~종료일 사이의 수업일수 산출, 지각/조퇴/결과는 1회)
     const getEffectiveDays = (r: AbsenceRecord) => {
       if ((r.kind || '결석') !== '결석') return 1;
-      if (!r.endDate || r.startDate === r.endDate) return 1;
-      return Math.max(1, r.daysCount || 1);
+      return calculateDaysCount(r.startDate, r.endDate || r.startDate);
     };
 
     // 1. 결석 (일수 기준)
@@ -938,7 +941,10 @@ export default function StatisticsPage() {
                                 <div>
                                   {r.periodText
                                     ? (r.kind === '조퇴' && /^\d교시$/.test(r.periodText) ? `${r.periodText} 이후` : r.periodText)
-                                    : (r.daysCount > 1 ? `${r.daysCount}일간` : '전일')}
+                                    : (() => {
+                                        const dCount = (r.kind || '결석') === '결석' ? calculateDaysCount(r.startDate, r.endDate) : 1;
+                                        return dCount > 1 ? `${dCount}일간` : '전일';
+                                      })()}
                                 </div>
                               </td>
                               <td className="py-3 px-3 text-[#474645] min-w-[240px] max-w-[380px] break-keep leading-relaxed">
@@ -1295,7 +1301,7 @@ export default function StatisticsPage() {
                     <span>{selectedMonth}월 나이스(NEIS) 출결마감구분 4×4 집계 매트릭스</span>
                   </h3>
                   <p className="text-[11px] text-[#7e7e7d] mt-0.5">
-                    {selectedMonth}월 출결 마감 입력 시 필요한 종류(결석/지각/조퇴/결과) × 구분(질병/미인정/기타/출석인정) 월간 누적 건수입니다.
+                    {selectedMonth}월 출결 마감 규정에 따라 결석은 법정 수업일수(일), 지각·조퇴·결과는 발생 횟수(회)로 정확히 집계됩니다.
                   </p>
                 </div>
 
@@ -1318,25 +1324,26 @@ export default function StatisticsPage() {
                         const oth = getMatrixCount(k, '기타');
                         const app = getMatrixCount(k, '출석인정');
                         const rowTotal = ill + unex + oth + app;
+                        const unit = k === '결석' ? '일' : '회';
                         return (
                           <tr key={k} className="hover:bg-[#fcfbf9]">
                             <td className="py-2 px-3 font-bold text-left border-r border-[#cbd5e1] bg-[#f8fafc]">
-                              {k}
+                              {k} <span className="text-[10px] text-[#64748b] font-normal">({unit})</span>
                             </td>
                             <td className="py-2 px-3 border-r border-[#cbd5e1] font-semibold text-blue-700">
-                              {ill > 0 ? `${ill}건` : '-'}
+                              {ill > 0 ? `${ill}${unit}` : '-'}
                             </td>
                             <td className="py-2 px-3 border-r border-[#cbd5e1] font-semibold text-red-700">
-                              {unex > 0 ? `${unex}건` : '-'}
+                              {unex > 0 ? `${unex}${unit}` : '-'}
                             </td>
-                            <td className="py-2 px-3 border-r border-[#cbd5e1] font-semibold text-red-700">
-                              {oth > 0 ? `${oth}건` : '-'}
+                            <td className="py-2 px-3 border-r border-[#cbd5e1] font-semibold text-gray-700">
+                              {oth > 0 ? `${oth}${unit}` : '-'}
                             </td>
                             <td className="py-2 px-3 border-r border-[#cbd5e1] font-semibold text-green-700">
-                              {app > 0 ? `${app}건` : '-'}
+                              {app > 0 ? `${app}${unit}` : '-'}
                             </td>
                             <td className="py-2 px-3 font-bold bg-[#f1f5f9]">
-                              {rowTotal > 0 ? `${rowTotal}건` : '-'}
+                              {rowTotal > 0 ? `${rowTotal}${unit}` : '-'}
                             </td>
                           </tr>
                         );
@@ -1807,8 +1814,7 @@ export default function StatisticsPage() {
 
           const getEffectiveDays = (r: AbsenceRecord) => {
             if ((r.kind || '결석') !== '결석') return 1;
-            if (!r.endDate || r.startDate === r.endDate) return 1;
-            return Math.max(1, r.daysCount || 1);
+            return calculateDaysCount(r.startDate, r.endDate || r.startDate);
           };
 
           const absenceRecords = displayRecords.filter(r => (r.kind || '결석') === '결석');
@@ -2009,7 +2015,7 @@ export default function StatisticsPage() {
                               <div className="flex items-center gap-1.5">
                                 <span className="font-semibold text-[#64748b] min-w-[55px]">일자/기간:</span>
                                 <span className="font-bold text-[#0f172a]">
-                                  {rec.startDate}{isMultiDay ? ` ~ ${rec.endDate} (${effectiveDays}일간)` : ` (${effectiveDays}일)`}
+                                  {rec.startDate}{isMultiDay ? ` ~ ${rec.endDate} (${effectiveDays}일간)` : (kind === '결석' ? ` (${effectiveDays}일)` : '')}
                                 </span>
                               </div>
                               <div className="flex items-center gap-1.5">

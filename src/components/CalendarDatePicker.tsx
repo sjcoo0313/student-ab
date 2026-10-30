@@ -43,11 +43,20 @@ export const formatKoreanDate = (dateStr: string, includeDayOfWeek: boolean = tr
 };
 
 // 💡 학교 출결 규정: 토요일(6)과 일요일(0)은 수업일이 아니므로 결석 일수에서 제외
-export const calculateDaysCount = (start: string, end: string): number => {
-  if (!start || !end) return 1;
-  const s = new Date(start);
-  const e = new Date(end);
+export const calculateDaysCount = (start?: string, end?: string): number => {
+  if (!start) return 1;
+  const sStr = start.trim();
+  const eStr = (end && end.trim()) ? end.trim() : sStr;
+  if (sStr === eStr) return 1;
+
+  const startParts = sStr.split('-').map(Number);
+  const endParts = eStr.split('-').map(Number);
+  if (startParts.length < 3 || endParts.length < 3) return 1;
+
+  const s = new Date(startParts[0], startParts[1] - 1, startParts[2]);
+  const e = new Date(endParts[0], endParts[1] - 1, endParts[2]);
   if (isNaN(s.getTime()) || isNaN(e.getTime())) return 1;
+  if (s > e) return 1;
 
   let count = 0;
   const cur = new Date(s);
@@ -59,15 +68,20 @@ export const calculateDaysCount = (start: string, end: string): number => {
     }
     cur.setDate(cur.getDate() + 1);
   }
-  return count > 0 ? count : 1;
+  return Math.max(1, count);
 };
 
 // 선택된 범위 내 주말(토/일) 일수 계산
-export const calculateWeekendDaysCount = (start: string, end: string): number => {
+export const calculateWeekendDaysCount = (start?: string, end?: string): number => {
   if (!start || !end) return 0;
-  const s = new Date(start);
-  const e = new Date(end);
+  const startParts = start.split('-').map(Number);
+  const endParts = end.split('-').map(Number);
+  if (startParts.length < 3 || endParts.length < 3) return 0;
+
+  const s = new Date(startParts[0], startParts[1] - 1, startParts[2]);
+  const e = new Date(endParts[0], endParts[1] - 1, endParts[2]);
   if (isNaN(s.getTime()) || isNaN(e.getTime())) return 0;
+  if (s > e) return 0;
 
   let weekendCount = 0;
   const cur = new Date(s);

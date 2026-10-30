@@ -54,7 +54,7 @@ import {
 import { exportAbsenceStatisticsToExcel } from '@/lib/exportExcel';
 import { Student, AbsenceRecord, AbsenceStatus, AttendanceKind, AttendanceCategory, AbsenceType, VerificationMethod } from '@/types';
 import TeacherAuthGuard from '@/components/TeacherAuthGuard';
-import CalendarDatePicker, { getTodayString, formatKoreanDate } from '@/components/CalendarDatePicker';
+import CalendarDatePicker, { getTodayString, formatKoreanDate, calculateDaysCount } from '@/components/CalendarDatePicker';
 import ReminderSettingsModal from '@/components/ReminderSettingsModal';
 import { 
   getTodayReminderLog, 
@@ -468,9 +468,9 @@ export default function TeacherDashboard() {
       ? `${newPeriodText} 이후`
       : newPeriodText;
 
-    const finalEffectiveDays = (newKind !== '결석' || newStartDate === newEndDate)
-      ? 1
-      : Math.max(1, Number(newDaysCount) || 1);
+    const finalEffectiveDays = (newKind === '결석')
+      ? calculateDaysCount(newStartDate, newEndDate)
+      : 1;
 
     if (editingRecordId) {
       const res = updateAbsenceRecord(editingRecordId, {
@@ -625,9 +625,9 @@ export default function TeacherDashboard() {
     setNewStartDate(rec.startDate);
     setNewEndDate(rec.endDate);
     setNewDaysCount(
-      rec.startDate === rec.endDate || (rec.kind && rec.kind !== '결석')
-        ? 1
-        : Math.max(1, rec.daysCount || 1)
+      (rec.kind || '결석') === '결석'
+        ? calculateDaysCount(rec.startDate, rec.endDate)
+        : 1
     );
     let initialPeriod = rec.periodText || '전일';
     if ((rec.kind || '결석') === '조퇴' && initialPeriod && !initialPeriod.includes('이후') && !initialPeriod.includes('~') && /^\d교시$/.test(initialPeriod)) {

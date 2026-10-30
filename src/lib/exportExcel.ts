@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { AbsenceRecord, Student } from '@/types';
+import { calculateDaysCount } from './storage';
 
 export function exportAbsenceStatisticsToExcel(
   records: AbsenceRecord[],
@@ -21,7 +22,7 @@ export function exportAbsenceStatisticsToExcel(
     세부종류: r.typeName,
     시작일: r.startDate,
     종료일: r.endDate,
-    일수: r.daysCount,
+    일수: (r.kind || '결석') === '결석' ? calculateDaysCount(r.startDate, r.endDate || r.startDate) : 1,
     교시: r.periodText || '전일',
     사유: r.reason,
     서류알림여부: r.requiresDocument ? '서류제출알림(필수)' : '단순기록(서류불필요)',
@@ -74,12 +75,17 @@ export function exportAbsenceStatisticsToExcel(
       return m === monthToUse;
     });
 
+    const getEffectiveDays = (r: AbsenceRecord) => {
+      if ((r.kind || '결석') !== '결석') return 1;
+      return calculateDaysCount(r.startDate, r.endDate || r.startDate);
+    };
+
     // 1. 결석 (일수 기준)
     const absenceRecs = monthRecords.filter(r => (r.kind || '결석') === '결석');
-    const absenceIllnessDays = absenceRecs.filter(r => isCat(r.category, '질병')).reduce((sum, r) => sum + (r.daysCount || 1), 0);
-    const absenceUnexcusedDays = absenceRecs.filter(r => isCat(r.category, '미인정')).reduce((sum, r) => sum + (r.daysCount || 1), 0);
-    const absenceOtherDays = absenceRecs.filter(r => isCat(r.category, '기타')).reduce((sum, r) => sum + (r.daysCount || 1), 0);
-    const absenceApprovedDays = absenceRecs.filter(r => isCat(r.category, '출석인정')).reduce((sum, r) => sum + (r.daysCount || 1), 0);
+    const absenceIllnessDays = absenceRecs.filter(r => isCat(r.category, '질병')).reduce((sum, r) => sum + getEffectiveDays(r), 0);
+    const absenceUnexcusedDays = absenceRecs.filter(r => isCat(r.category, '미인정')).reduce((sum, r) => sum + getEffectiveDays(r), 0);
+    const absenceOtherDays = absenceRecs.filter(r => isCat(r.category, '기타')).reduce((sum, r) => sum + getEffectiveDays(r), 0);
+    const absenceApprovedDays = absenceRecs.filter(r => isCat(r.category, '출석인정')).reduce((sum, r) => sum + getEffectiveDays(r), 0);
     const absenceTotalDays = absenceIllnessDays + absenceUnexcusedDays + absenceOtherDays + absenceApprovedDays;
 
     // 2. 지각 (회수 기준)
@@ -113,7 +119,7 @@ export function exportAbsenceStatisticsToExcel(
     // 체험학습 누적 (해당 학생 전체)
     const allStudentRecs = records.filter(r => r.studentId === s.id);
     const fieldTripRecords = allStudentRecs.filter(r => r.type === 'FIELD_EXPERIENCE');
-    const totalFieldTripDays = fieldTripRecords.reduce((acc, cur) => acc + (cur.daysCount || 1), 0);
+    const totalFieldTripDays = fieldTripRecords.reduce((acc, cur) => acc + getEffectiveDays(cur), 0);
 
     // 미제출 서류 진행건수
     const pendingDocCount = monthRecords.filter(r => r.requiresDocument !== false && r.status !== 'APPROVED').length;
@@ -126,7 +132,7 @@ export function exportAbsenceStatisticsToExcel(
       const reasonText = r.reason || r.typeName || '사유 미기재';
       const kindText = r.kind || '결석';
       const catText = r.category === '출석 인정' ? '출석인정' : r.category;
-      const countText = kindText === '결석' ? `${r.daysCount || 1}일` : '1회';
+      const countText = kindText === '결석' ? `${getEffectiveDays(r)}일` : '1회';
       return `${dateText} ${reasonText} (${catText}${kindText} ${countText})`;
     }).join('\n');
 

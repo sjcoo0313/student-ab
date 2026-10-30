@@ -158,6 +158,35 @@ function getFormattedDate(offsetDays = 0): string {
   return `${year}-${month}-${day}`;
 }
 
+// 💡 학교 출결 규정: 시작일과 종료일 사이의 수업일수(토요일 및 일요일 제외) 계산
+export function calculateDaysCount(start?: string, end?: string): number {
+  if (!start) return 1;
+  const sStr = start.trim();
+  const eStr = (end && end.trim()) ? end.trim() : sStr;
+  if (sStr === eStr) return 1;
+
+  const startParts = sStr.split('-').map(Number);
+  const endParts = eStr.split('-').map(Number);
+  if (startParts.length < 3 || endParts.length < 3) return 1;
+
+  const s = new Date(startParts[0], startParts[1] - 1, startParts[2]);
+  const e = new Date(endParts[0], endParts[1] - 1, endParts[2]);
+  if (isNaN(s.getTime()) || isNaN(e.getTime())) return 1;
+  if (s > e) return 1;
+
+  let count = 0;
+  const cur = new Date(s);
+  while (cur <= e) {
+    const dayOfWeek = cur.getDay();
+    // 토요일(6) 및 일요일(0) 제외
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      count++;
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return Math.max(1, count);
+}
+
 export const INITIAL_RECORDS: AbsenceRecord[] = [
   {
     id: 'rec-20260917-std-30204',
@@ -1094,12 +1123,19 @@ export function getAbsenceRecords(): AbsenceRecord[] {
         updated.memo = updated.memo.replace('일자별 사진(2장)', '날짜마다 1장씩 사진').replace('사진(2장)', '날짜마다 1장씩 사진');
       }
 
-      // 단일 날짜(시작일 === 종료일)이거나 결석이 아닌 경우(지각, 조퇴, 결과) 일수는 1일이어야 하므로 2일 이상으로 잘못 저장된 레코드 자동 교정
-      const isSingleDay = !updated.endDate || updated.startDate === updated.endDate;
-      const isNotAbsence = updated.kind && updated.kind !== '결석';
-      if ((isSingleDay || isNotAbsence) && updated.daysCount !== 1) {
-        changed = true;
-        updated.daysCount = 1;
+      // 결석 레코드는 시작일~종료일 기준 실제 수업일수(주말 제외)로 자동 검증 및 정화, 결석 외(지각/조퇴/결과)는 1회로 자동 정화
+      const kind = updated.kind || '결석';
+      if (kind === '결석') {
+        const correctDays = calculateDaysCount(updated.startDate, updated.endDate || updated.startDate);
+        if (updated.daysCount !== correctDays) {
+          changed = true;
+          updated.daysCount = correctDays;
+        }
+      } else {
+        if (updated.daysCount !== 1) {
+          changed = true;
+          updated.daysCount = 1;
+        }
       }
 
       // 교사가 수동으로 [다시 알림]을 보낸 적이 없는 건인데, 타이머나 구버전 등교 확인에 의해 허위로 카운트된 경우 0으로 자동 정화
@@ -1364,9 +1400,9 @@ export function createAbsenceRecord(data: {
     }
   }
 
-  const isSingleDay = !data.endDate || data.startDate === data.endDate;
-  const isNotAbsence = data.kind && data.kind !== '결석';
-  const actualDaysCount = (isSingleDay || isNotAbsence) ? 1 : Math.max(1, data.daysCount || 1);
+  const actualDaysCount = (data.kind || '결석') === '결석'
+    ? calculateDaysCount(data.startDate, data.endDate || data.startDate)
+    : 1;
 
   // 💡 연속 3일 이상 질병결석 여부 자동 판별 (지정 일수 3일 이상 or 연속된 질병결석 레코드 합산 3일 이상)
   const consecutiveDays = (data.kind || '결석') === '결석' && data.category === '질병'
@@ -1484,10 +1520,9 @@ export function updateAbsenceRecord(recordId: string, updates: {
       }
 
       const newEndDate = updates.endDate !== undefined ? updates.endDate : r.endDate;
-      const rawDaysCount = updates.daysCount !== undefined ? updates.daysCount : r.daysCount;
-      const isSingleDay = !newEndDate || newStartDate === newEndDate;
-      const isNotAbsence = newKind && newKind !== '결석';
-      const newDaysCount = (isSingleDay || isNotAbsence) ? 1 : Math.max(1, rawDaysCount || 1);
+      const newDaysCount = (newKind || '결석') === '결석'
+        ? calculateDaysCount(newStartDate, newEndDate || newStartDate)
+        : 1;
 
       let finalType = updates.type !== undefined ? updates.type : r.type;
       let finalTypeName = updates.typeName !== undefined ? updates.typeName : r.typeName;
